@@ -1,0 +1,14 @@
+﻿<Window x:Class="CloudyWing.SchemaExporter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:CloudyWing.SchemaExporter"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Grid>
+        <Label Content="選擇連線字串：" HorizontalAlignment="Left" Margin="100,50,0,0" VerticalAlignment="Top" Width="100"/>
+        <ComboBox HorizontalAlignment="Left" Margin="200,50,0,0" VerticalAlignment="Top" ItemsSource="{Binding Connections}" SelectedItem="{Binding Connection}" DisplayMemberPath="Name" />
+        <Button Content="送出" HorizontalAlignment="Left" Margin="100,250,0,0" VerticalAlignment="Top" Width="50" Command="{Binding SubmitCommand}"/>
+    </Grid>
+</Window>
