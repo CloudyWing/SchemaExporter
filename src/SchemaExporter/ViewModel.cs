@@ -37,9 +37,14 @@ namespace CloudyWing.SchemaExporter {
                 SELECT t.name AS TableName, 
                        c.name AS ColumnName,
                        CASE 
-                           WHEN st.name IN ('char', 'varchar', 'nvarchar', 'nchar') THEN st.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length AS VARCHAR(MAX)) END + ')'
+                           WHEN st.name IN ('char', 'varchar', 'nchar', 'nvarchar') THEN st.name + '(' + 
+                                CASE 
+                                    WHEN c.max_length = -1 THEN 'MAX' 
+                                    WHEN st.name IN ('nchar', 'nvarchar') THEN CAST(c.max_length / 2 AS VARCHAR(MAX)) 
+                                    ELSE CAST(c.max_length AS VARCHAR(MAX)) 
+                                END + ')'
                            WHEN st.name IN ('decimal', 'numeric') THEN st.name + '(' + CAST(c.precision AS VARCHAR(MAX)) + ',' + CAST(c.scale AS VARCHAR(MAX)) + ')'
-                           WHEN st.name = 'datetime2' THEN st.name + '(' + CAST(c.scale AS VARCHAR(MAX)) + ')'
+                           WHEN st.name IN ('datetime2', 'datetimeoffset', 'time') THEN st.name + '(' + CAST(c.scale AS VARCHAR(MAX)) + ')'
                            WHEN st.name IN ('binary', 'varbinary') THEN st.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length AS VARCHAR(MAX)) END + ')'
                            WHEN st.name = 'xml' THEN st.name
                            ELSE st.name
@@ -61,9 +66,14 @@ namespace CloudyWing.SchemaExporter {
                 SELECT v.name AS TableName, 
                        c.name AS ColumnName,
                        CASE 
-                           WHEN st.name IN ('char', 'varchar', 'nvarchar', 'nchar') THEN st.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length AS VARCHAR(MAX)) END + ')'
+                           WHEN st.name IN ('char', 'varchar', 'nchar', 'nvarchar') THEN st.name + '(' + 
+                                CASE 
+                                    WHEN c.max_length = -1 THEN 'MAX' 
+                                    WHEN st.name IN ('nchar', 'nvarchar') THEN CAST(c.max_length / 2 AS VARCHAR(MAX)) 
+                                    ELSE CAST(c.max_length AS VARCHAR(MAX)) 
+                                END + ')'
                            WHEN st.name IN ('decimal', 'numeric') THEN st.name + '(' + CAST(c.precision AS VARCHAR(MAX)) + ',' + CAST(c.scale AS VARCHAR(MAX)) + ')'
-                           WHEN st.name = 'datetime2' THEN st.name + '(' + CAST(c.scale AS VARCHAR(MAX)) + ')'
+                           WHEN st.name IN ('datetime2', 'datetimeoffset', 'time') THEN st.name + '(' + CAST(c.scale AS VARCHAR(MAX)) + ')'
                            WHEN st.name IN ('binary', 'varbinary') THEN st.name + '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(c.max_length AS VARCHAR(MAX)) END + ')'
                            WHEN st.name = 'xml' THEN st.name
                            ELSE st.name
@@ -84,51 +94,51 @@ namespace CloudyWing.SchemaExporter {
                 ORDER BY TableName, column_id";
 
         private const string QueryIndexesSql = @"
-            SELECT 
-            TableName = t.name,
-            IndexName = ind.name,
-            IsPrimaryKey = CASE WHEN ind.is_primary_key = 1 THEN 'Yes' ELSE 'No' END,
-            IsClustered = CASE WHEN ind.type_desc = 'CLUSTERED' THEN 'Yes' ELSE 'No' END,
-            IsUnique = CASE WHEN ind.is_unique = 1 THEN 'Yes' ELSE 'No' END,
-            IsForeignKey = 'No',
-            Columns = STUFF((SELECT '\n' + COL_NAME(ic.object_id, ic.column_id) 
-                             FROM sys.index_columns ic 
-                             WHERE ind.object_id = ic.object_id AND ind.index_id = ic.index_id 
-                             ORDER BY ic.index_column_id 
-                             FOR XML PATH('')), 1, 2, ''),
-            OtherColumns = STUFF((SELECT ',\n' + COL_NAME(inc.object_id, inc.column_id) 
-                                  FROM sys.index_columns inc 
-                                  WHERE ind.object_id = inc.object_id AND ind.index_id = inc.index_id AND inc.is_included_column = 1
-                                  ORDER BY inc.key_ordinal 
-                                  FOR XML PATH('')), 1, 2, '')
-        FROM sys.indexes ind
-        INNER JOIN sys.tables t ON ind.object_id = t.object_id
-        WHERE t.is_ms_shipped = 0 AND ind.name IS NOT NULL
-        UNION
-        SELECT 
-            TableName = OBJECT_NAME(fkc.parent_object_id),
-            IndexName = (SELECT name FROM sys.foreign_keys WHERE object_id = fkc.constraint_object_id),
-            IsPrimaryKey = 'No',
-            IsClustered = 'No',
-            IsUnique = 'No',
-            IsForeignKey = 'Yes',
-            Columns = STUFF((SELECT '\n' + COL_NAME(fkc.parent_object_id, fkc.parent_column_id) 
-                             FROM sys.foreign_key_columns fkc1
-                             WHERE fkc1.constraint_object_id = fkc.constraint_object_id 
-                             ORDER BY fkc1.constraint_column_id 
-                             FOR XML PATH('')), 1, 2, ''),
-            OtherColumns = CONCAT(
-                                OBJECT_NAME(fkc.referenced_object_id), 
-                                ':\n', 
-                                STUFF((SELECT ',\n' + COL_NAME(fkc2.referenced_object_id, fkc2.referenced_column_id) 
-                                       FROM sys.foreign_key_columns fkc2 
-                                       WHERE fkc.constraint_object_id = fkc2.constraint_object_id 
-                                       FOR XML PATH('')), 1, 3, '')
-                            )
-        FROM sys.foreign_key_columns fkc
-        INNER JOIN sys.tables t ON fkc.parent_object_id = t.object_id
-        WHERE t.is_ms_shipped = 0
-        ORDER BY TableName, IndexName";
+                SELECT 
+                TableName = t.name,
+                IndexName = ind.name,
+                IsPrimaryKey = CASE WHEN ind.is_primary_key = 1 THEN 'Yes' ELSE 'No' END,
+                IsClustered = CASE WHEN ind.type_desc = 'CLUSTERED' THEN 'Yes' ELSE 'No' END,
+                IsUnique = CASE WHEN ind.is_unique = 1 THEN 'Yes' ELSE 'No' END,
+                IsForeignKey = 'No',
+                Columns = STUFF((SELECT '\n' + COL_NAME(ic.object_id, ic.column_id) 
+                                 FROM sys.index_columns ic 
+                                 WHERE ind.object_id = ic.object_id AND ind.index_id = ic.index_id 
+                                 ORDER BY ic.index_column_id 
+                                 FOR XML PATH('')), 1, 2, ''),
+                OtherColumns = STUFF((SELECT ',\n' + COL_NAME(inc.object_id, inc.column_id) 
+                                      FROM sys.index_columns inc 
+                                      WHERE ind.object_id = inc.object_id AND ind.index_id = inc.index_id AND inc.is_included_column = 1
+                                      ORDER BY inc.key_ordinal 
+                                      FOR XML PATH('')), 1, 2, '')
+                FROM sys.indexes ind
+                INNER JOIN sys.tables t ON ind.object_id = t.object_id
+                WHERE t.is_ms_shipped = 0 AND ind.name IS NOT NULL
+                UNION
+                SELECT 
+                    TableName = OBJECT_NAME(fkc.parent_object_id),
+                    IndexName = (SELECT name FROM sys.foreign_keys WHERE object_id = fkc.constraint_object_id),
+                    IsPrimaryKey = 'No',
+                    IsClustered = 'No',
+                    IsUnique = 'No',
+                    IsForeignKey = 'Yes',
+                    Columns = STUFF((SELECT '\n' + COL_NAME(fkc.parent_object_id, fkc.parent_column_id) 
+                                     FROM sys.foreign_key_columns fkc1
+                                     WHERE fkc1.constraint_object_id = fkc.constraint_object_id 
+                                     ORDER BY fkc1.constraint_column_id 
+                                     FOR XML PATH('')), 1, 2, ''),
+                    OtherColumns = CONCAT(
+                                        OBJECT_NAME(fkc.referenced_object_id), 
+                                        ':\n', 
+                                        STUFF((SELECT ',\n' + COL_NAME(fkc2.referenced_object_id, fkc2.referenced_column_id) 
+                                               FROM sys.foreign_key_columns fkc2 
+                                               WHERE fkc.constraint_object_id = fkc2.constraint_object_id 
+                                               FOR XML PATH('')), 1, 3, '')
+                                    )
+                FROM sys.foreign_key_columns fkc
+                INNER JOIN sys.tables t ON fkc.parent_object_id = t.object_id
+                WHERE t.is_ms_shipped = 0
+                ORDER BY TableName, IndexName"; 
 
         private readonly SchemaOptions schemaOptions;
 
