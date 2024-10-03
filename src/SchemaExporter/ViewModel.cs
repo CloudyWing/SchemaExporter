@@ -138,7 +138,7 @@ namespace CloudyWing.SchemaExporter {
                 FROM sys.foreign_key_columns fkc
                 INNER JOIN sys.tables t ON fkc.parent_object_id = t.object_id
                 WHERE t.is_ms_shipped = 0
-                ORDER BY TableName, IndexName"; 
+                ORDER BY TableName, IndexName";
 
         private readonly SchemaOptions schemaOptions;
 
@@ -174,8 +174,9 @@ namespace CloudyWing.SchemaExporter {
         }
 
         private static void BuildTableListSheet(ExporterBase exporter, IEnumerable<TableInfo> tables) {
-            CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle
-                .CloneAndSetHorizontalAlignment(CloudyWing.SpreadsheetExporter.HorizontalAlignment.Left);
+            CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
+                HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
+            };
 
             RecordSetTemplate<TableInfo> template = new(tables) {
                 RecordHeight = Constants.AutoFiteRowHeight
@@ -195,11 +196,13 @@ namespace CloudyWing.SchemaExporter {
         }
 
         private static void BuildColumnListSheet(ExporterBase exporter, IEnumerable<ColumnInfo> columns) {
-            CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle
-                .CloneAndSetHorizontalAlignment(CloudyWing.SpreadsheetExporter.HorizontalAlignment.Left);
+            CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
+                HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
+            };
             CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles
-                .FieldStyle
-                .CloneAndSetHorizontalAlignment(CloudyWing.SpreadsheetExporter.HorizontalAlignment.Center);
+                .FieldStyle with {
+                HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center
+            };
 
             RecordSetTemplate<ColumnInfo> template = new(columns) {
                 RecordHeight = Constants.AutoFiteRowHeight
@@ -244,9 +247,12 @@ namespace CloudyWing.SchemaExporter {
             IEnumerable<ColumnInfo> columns, IEnumerable<IndexInfo> indexes) {
             CellStyle defaultGridStyle = SpreadsheetManager.DefaultCellStyles.GridCellStyle;
             CellFont defaultFont = SpreadsheetManager.DefaultCellStyles.GridCellStyle.Font;
-            CellStyle headerLabelStyle = defaultGridStyle
-                .CloneAndSetHorizontalAlignment(CloudyWing.SpreadsheetExporter.HorizontalAlignment.Right)
-                .CloneAndSetFont(defaultFont.CloneAndSetStyle(defaultFont.Style | CloudyWing.SpreadsheetExporter.FontStyles.IsBold));
+            CellStyle headerLabelStyle = defaultGridStyle with {
+                HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Right,
+                Font = defaultFont with {
+                    Style = defaultFont.Style | SpreadsheetExporter.FontStyles.IsBold
+                }
+            };
 
             GridTemplate headerTemplate = new();
             headerTemplate.CreateRow()
@@ -261,8 +267,9 @@ namespace CloudyWing.SchemaExporter {
             sheeter.AddTemplate(headerTemplate);
 
             CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles
-                .FieldStyle
-                .CloneAndSetHorizontalAlignment(CloudyWing.SpreadsheetExporter.HorizontalAlignment.Center);
+                .FieldStyle with {
+                HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center
+            };
 
             RecordSetTemplate<ColumnInfo> columnsTemplate = new(columns);
             columnsTemplate.Columns.Add("欄位名稱", x => x.ColumnName);

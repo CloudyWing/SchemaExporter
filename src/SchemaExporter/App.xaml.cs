@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Drawing;
+using System.IO;
 using System.Windows;
 using CloudyWing.SpreadsheetExporter;
 using CloudyWing.SpreadsheetExporter.Config;
@@ -10,36 +11,37 @@ namespace CloudyWing.SchemaExporter {
     /// <summary>
     /// Interaction logic for App.xaml
     /// </summary>
-    public partial class App : Application
-    {
-        protected override void OnStartup(StartupEventArgs e)
-        {
+    public partial class App : Application {
+        protected override void OnStartup(StartupEventArgs e) {
             SpreadsheetManager.SetExporter(() => new ExcelExporter());
-            SpreadsheetManager.DefaultCellStyles = new CellStyleConfiguration(x =>
-            {
+            SpreadsheetManager.DefaultCellStyles = new CellStyleConfiguration(x => {
                 CellStyle cellStyle = new(
                     SpreadsheetExporter.HorizontalAlignment.Center,
                     SpreadsheetExporter.VerticalAlignment.Middle,
                     false, true,
-                    null,
-                    new CellFont("微軟正黑體", 10, null, SpreadsheetExporter.FontStyles.None),
+                    Color.Empty,
+                    new CellFont("微軟正黑體", 10, Color.Empty, SpreadsheetExporter.FontStyles.None),
                     null,
                     false
                 );
 
-                CellFont headerFont = cellStyle.Font
-                    .CloneAndSetStyle(cellStyle.Font.Style | SpreadsheetExporter.FontStyles.IsBold);
+                CellFont headerFont = cellStyle.Font with {
+                    Style = cellStyle.Font.Style | SpreadsheetExporter.FontStyles.IsBold
+                };
 
                 x.CellStyle = cellStyle;
-                x.GridCellStyle = cellStyle
-                    .CloneAndSetHorizontalAlignment(SpreadsheetExporter.HorizontalAlignment.Left);
-                x.HeaderStyle = cellStyle
-                    .CloneAndSetFont(headerFont)
-                    .CloneAndSetHorizontalAlignment(SpreadsheetExporter.HorizontalAlignment.Center)
-                    .CloneAndSetBorder(true);
-                x.FieldStyle = cellStyle
-                    .CloneAndSetHorizontalAlignment(SpreadsheetExporter.HorizontalAlignment.Left)
-                    .CloneAndSetBorder(true);
+                x.GridCellStyle = cellStyle with {
+                    HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
+                };
+                x.HeaderStyle = cellStyle with {
+                    Font = headerFont,
+                    HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center,
+                    HasBorder = true
+                };
+                x.FieldStyle = cellStyle with {
+                    HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left,
+                    HasBorder = true
+                };
             });
 
             IConfigurationBuilder builder = new ConfigurationBuilder()
@@ -57,8 +59,7 @@ namespace CloudyWing.SchemaExporter {
             mainWindow.Show();
         }
 
-        private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
-        {
+        private static void ConfigureServices(IServiceCollection services, IConfiguration configuration) {
             services.Configure<SchemaOptions>(configuration.GetSection(SchemaOptions.OptionsName));
             services.AddTransient<MainWindow>();
             services.AddTransient<ViewModel>();
