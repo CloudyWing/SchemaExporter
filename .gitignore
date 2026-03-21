@@ -364,3 +364,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# AI 工具設定資料夾（保留 CLAUDE.md、RULE*.md 等文件）
+.claude/
+.cursor/
+.aider/
+.continue/
+.copilot/
+.cody/
+.windsurfRules
