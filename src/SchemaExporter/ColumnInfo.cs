@@ -1,19 +1,23 @@
 namespace CloudyWing.SchemaExporter {
     internal sealed class ColumnInfo {
-        public string TableName { get; set; }
+        public string SchemaName { get; init; } = "";
 
-        public string ColumnName { get; set; }
+        public string TableName { get; init; } = "";
 
-        public string ColumnType { get; set; }
+        public string ColumnName { get; init; } = "";
 
-        public string IsNullable { get; set; }
+        public string ColumnType { get; init; } = "";
 
-        public string ColumnDefault { get; set; }
+        public string IsNullable { get; init; } = "";
 
-        public string IsPrimaryKey { get; set; }
+        public string ColumnDefault { get; init; } = "";
 
-        public string IsIdentity { get; set; }
+        public string IsPrimaryKey { get; init; } = "";
 
-        public string ColumnDescription { get; set; }
+        public string IsIdentity { get; init; } = "";
+
+        public string ColumnDescription { get; init; } = "";
+
+        public int ColumnOrder { get; init; }
     }
 }

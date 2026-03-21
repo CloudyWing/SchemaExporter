@@ -1,7 +1,11 @@
-﻿namespace CloudyWing.SchemaExporter {
-    public class SchemaConnection {
-        public string Name { get; set; }
+#nullable enable
 
-        public string ConnectionString { get; set; }
-    }
+namespace CloudyWing.SchemaExporter;
+
+public class SchemaConnection {
+    public string Name { get; set; } = "";
+
+    public DatabaseType DatabaseType { get; set; } = DatabaseType.SqlServer;
+
+    public string ConnectionString { get; set; } = "";
 }
