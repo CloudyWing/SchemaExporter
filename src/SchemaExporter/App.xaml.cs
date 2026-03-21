@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.IO;
 using System.Windows;
 using CloudyWing.SpreadsheetExporter;
@@ -13,7 +13,7 @@ namespace CloudyWing.SchemaExporter {
     /// </summary>
     public partial class App : Application {
         protected override void OnStartup(StartupEventArgs e) {
-            SpreadsheetManager.SetExporter(() => new ExcelExporter());
+            SpreadsheetManager.SetExporter(() => new NpoiExcelExporter());
             SpreadsheetManager.DefaultCellStyles = new CellStyleConfiguration(x => {
                 CellStyle cellStyle = new(
                     SpreadsheetExporter.HorizontalAlignment.Center,
