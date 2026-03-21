@@ -163,7 +163,7 @@ namespace CloudyWing.SchemaExporter {
             IEnumerable<ColumnInfo> columns = conn.Query<ColumnInfo>(QueryColumnsSql);
             IEnumerable<IndexInfo> indexes = conn.Query<IndexInfo>(QueryIndexesSql);
 
-            ExporterBase exporter = SpreadsheetManager.CreateExporter();
+            ISpreadsheetExporter exporter = SpreadsheetManager.CreateExporter();
             BuildTableListSheet(exporter, tables);
             BuildColumnListSheet(exporter, columns);
             BuildTableDetailSheets(exporter, tables, columns, indexes);
@@ -173,13 +173,13 @@ namespace CloudyWing.SchemaExporter {
             MessageBox.Show($"檔案「{filePath}」產出成功");
         }
 
-        private static void BuildTableListSheet(ExporterBase exporter, IEnumerable<TableInfo> tables) {
+        private static void BuildTableListSheet(ISpreadsheetExporter exporter, IEnumerable<TableInfo> tables) {
             CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
                 HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
             };
 
             RecordSetTemplate<TableInfo> template = new(tables) {
-                RecordHeight = Constants.AutoFiteRowHeight
+                RecordHeight = Constants.AutoFitRowHeight
             };
             template.Columns.Add("Schema", x => x.SchemaName);
             template.Columns.Add("名稱", x => x.TableName, fieldStyleGenerator: x => itemStyle);
@@ -195,7 +195,7 @@ namespace CloudyWing.SchemaExporter {
             sheeter.SetColumnWidth(3, 50D);
         }
 
-        private static void BuildColumnListSheet(ExporterBase exporter, IEnumerable<ColumnInfo> columns) {
+        private static void BuildColumnListSheet(ISpreadsheetExporter exporter, IEnumerable<ColumnInfo> columns) {
             CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
                 HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
             };
@@ -205,7 +205,7 @@ namespace CloudyWing.SchemaExporter {
             };
 
             RecordSetTemplate<ColumnInfo> template = new(columns) {
-                RecordHeight = Constants.AutoFiteRowHeight
+                RecordHeight = Constants.AutoFitRowHeight
             };
             template.Columns.Add("資料表名稱", x => x.TableName);
             template.Columns.Add("欄位名稱", x => x.ColumnName);
@@ -230,7 +230,7 @@ namespace CloudyWing.SchemaExporter {
         }
 
         private static void BuildTableDetailSheets(
-            ExporterBase exporter, IEnumerable<TableInfo> tables,
+            ISpreadsheetExporter exporter, IEnumerable<TableInfo> tables,
             IEnumerable<ColumnInfo> columns, IEnumerable<IndexInfo> indexes) {
             foreach (TableInfo table in tables) {
                 Sheeter sheeter = exporter.CreateSheeter(table.SheeterName);
@@ -260,7 +260,7 @@ namespace CloudyWing.SchemaExporter {
                 .CreateCell(table.SchemaName, 2)
                 .CreateCell("資料表名稱：", cellStyle: headerLabelStyle)
                 .CreateCell(table.TableName, 3)
-                .CreateRow(Constants.AutoFiteRowHeight)
+                .CreateRow(Constants.AutoFitRowHeight)
                 .CreateCell("資料表描述：", cellStyle: headerLabelStyle)
                 .CreateCell(table.TableDescription, 6);
 
@@ -286,7 +286,7 @@ namespace CloudyWing.SchemaExporter {
                 sheeter.AddTemplate(new GridTemplate().CreateRow());
 
                 RecordSetTemplate<IndexInfo> indexesTemplate = new(indexes) {
-                    RecordHeight = Constants.AutoFiteRowHeight
+                    RecordHeight = Constants.AutoFitRowHeight
                 };
 
                 indexesTemplate.Columns.Add("索引名稱", x => x.IndexName);
@@ -309,54 +309,5 @@ namespace CloudyWing.SchemaExporter {
             sheeter.SetColumnWidth(6, 50D);
         }
 
-        private class TableInfo {
-            public string SchemaName { get; set; }
-
-            public string TableName { get; set; }
-
-            public string SheeterName => TableName.Length > 31
-                    ? TableName[..31]
-                    : TableName;
-
-            public string TableType { get; set; }
-
-            public string TableDescription { get; set; }
-        }
-
-        public class ColumnInfo {
-            public string TableName { get; set; }
-
-            public string ColumnName { get; set; }
-
-            public string ColumnType { get; set; }
-
-            public string IsNullable { get; set; }
-
-            public string ColumnDefault { get; set; }
-
-            public string IsPrimaryKey { get; set; }
-
-            public string IsIdentity { get; set; }
-
-            public string ColumnDescription { get; set; }
-        }
-
-        public class IndexInfo {
-            public string TableName { get; set; }
-
-            public string IndexName { get; set; }
-
-            public string IsPrimaryKey { get; set; }
-
-            public string IsClustered { get; set; }
-
-            public string IsUnique { get; set; }
-
-            public string IsForeignKey { get; set; }
-
-            public string Columns { get; set; }
-
-            public string OtherColumns { get; set; }
-        }
     }
 }
