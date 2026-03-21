@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
 /// <summary>
 /// 表示 schema 差異文件的統計摘要。

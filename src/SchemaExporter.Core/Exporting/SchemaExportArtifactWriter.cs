@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 namespace CloudyWing.SchemaExporter.Core.Exporting;

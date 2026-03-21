@@ -1,3 +1,6 @@
+using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
+
 namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>

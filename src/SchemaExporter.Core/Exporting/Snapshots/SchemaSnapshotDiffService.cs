@@ -1,8 +1,9 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 
 /// <summary>
 /// 提供結構描述快照的可重用載入、比較與格式化支援。

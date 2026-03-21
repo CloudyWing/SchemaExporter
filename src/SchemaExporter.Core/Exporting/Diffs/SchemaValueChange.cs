@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
 /// <summary>
 /// 表示單一屬性在差異文件中的前後值。

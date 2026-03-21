@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
 /// <summary>
 /// Specifies the type of change detected between two schema snapshots.

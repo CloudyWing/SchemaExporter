@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;

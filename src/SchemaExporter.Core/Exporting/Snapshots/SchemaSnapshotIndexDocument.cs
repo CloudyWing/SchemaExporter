@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 
 /// <summary>
 /// 表示資料庫索引的快照文件。

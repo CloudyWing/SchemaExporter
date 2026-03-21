@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 
 /// <summary>
 /// 表示已序列化的結構描述快照文件。

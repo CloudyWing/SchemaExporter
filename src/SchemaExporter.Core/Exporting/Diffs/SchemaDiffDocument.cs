@@ -1,4 +1,4 @@
-namespace CloudyWing.SchemaExporter.Core.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
 /// <summary>
 /// 表示兩份 schema snapshot 之間的差異文件。
