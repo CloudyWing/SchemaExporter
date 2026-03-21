@@ -1,5 +1,3 @@
-#nullable enable
-
 using System.Data.Common;
 using Dapper;
 using Oracle.ManagedDataAccess.Client;
@@ -161,6 +159,120 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
         ORDER BY SchemaName, ObjectName, IndexName;
     """;
 
+    private const string QueryRoutinesSql = """
+        SELECT
+            p.owner AS SchemaName,
+            CASE
+                WHEN p.procedure_name IS NULL THEN ''
+                ELSE p.object_name
+            END AS ContainerName,
+            CASE
+                WHEN p.procedure_name IS NULL THEN p.object_name
+                ELSE p.procedure_name
+            END AS RoutineName,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM all_arguments ret
+                    WHERE ret.owner = p.owner
+                        AND NVL(ret.package_name, ' ') = NVL(CASE WHEN p.procedure_name IS NULL THEN NULL ELSE p.object_name END, ' ')
+                        AND ret.object_name = CASE WHEN p.procedure_name IS NULL THEN p.object_name ELSE p.procedure_name END
+                        AND ret.subprogram_id = p.subprogram_id
+                        AND ret.position = 0
+                        AND ret.data_level = 0
+                ) THEN 'FUNCTION'
+                ELSE 'PROCEDURE'
+            END AS RoutineType,
+            NVL(p.overload, '') AS OverloadIdentifier,
+            NVL((
+                SELECT LISTAGG(
+                    TRIM(
+                        NVL(arg.argument_name, '(unnamed)') || ' '
+                        || NVL(arg.in_out, 'IN') || ' '
+                        || CASE
+                            WHEN arg.data_type IN ('CHAR', 'NCHAR', 'VARCHAR2', 'NVARCHAR2') THEN
+                                arg.data_type || '(' || arg.char_length || ')'
+                            WHEN arg.data_type = 'NUMBER' AND arg.data_precision IS NOT NULL AND arg.data_scale IS NOT NULL THEN
+                                arg.data_type || '(' || arg.data_precision || ',' || arg.data_scale || ')'
+                            WHEN arg.data_type = 'NUMBER' AND arg.data_precision IS NOT NULL THEN
+                                arg.data_type || '(' || arg.data_precision || ')'
+                            WHEN arg.data_type = 'RAW' THEN
+                                arg.data_type || '(' || arg.data_length || ')'
+                            WHEN arg.data_type LIKE 'TIMESTAMP%' AND arg.data_scale IS NOT NULL THEN
+                                arg.data_type || '(' || arg.data_scale || ')'
+                            WHEN arg.data_type IS NOT NULL THEN
+                                arg.data_type
+                            WHEN arg.type_owner IS NOT NULL AND arg.type_name IS NOT NULL AND arg.type_subname IS NOT NULL THEN
+                                arg.type_owner || '.' || arg.type_name || '.' || arg.type_subname
+                            WHEN arg.type_owner IS NOT NULL AND arg.type_name IS NOT NULL THEN
+                                arg.type_owner || '.' || arg.type_name
+                            ELSE NVL(arg.pls_type, '')
+                        END
+                    ),
+                    ', '
+                ) WITHIN GROUP (ORDER BY arg.position, arg.sequence)
+                FROM all_arguments arg
+                WHERE arg.owner = p.owner
+                    AND NVL(arg.package_name, ' ') = NVL(CASE WHEN p.procedure_name IS NULL THEN NULL ELSE p.object_name END, ' ')
+                    AND arg.object_name = CASE WHEN p.procedure_name IS NULL THEN p.object_name ELSE p.procedure_name END
+                    AND arg.subprogram_id = p.subprogram_id
+                    AND arg.data_level = 0
+                    AND arg.position > 0
+            ), '') AS ParameterSignature,
+            NVL((
+                SELECT MAX(
+                    CASE
+                        WHEN arg.data_type IN ('CHAR', 'NCHAR', 'VARCHAR2', 'NVARCHAR2') THEN
+                            arg.data_type || '(' || arg.char_length || ')'
+                        WHEN arg.data_type = 'NUMBER' AND arg.data_precision IS NOT NULL AND arg.data_scale IS NOT NULL THEN
+                            arg.data_type || '(' || arg.data_precision || ',' || arg.data_scale || ')'
+                        WHEN arg.data_type = 'NUMBER' AND arg.data_precision IS NOT NULL THEN
+                            arg.data_type || '(' || arg.data_precision || ')'
+                        WHEN arg.data_type = 'RAW' THEN
+                            arg.data_type || '(' || arg.data_length || ')'
+                        WHEN arg.data_type LIKE 'TIMESTAMP%' AND arg.data_scale IS NOT NULL THEN
+                            arg.data_type || '(' || arg.data_scale || ')'
+                        WHEN arg.data_type IS NOT NULL THEN
+                            arg.data_type
+                        WHEN arg.type_owner IS NOT NULL AND arg.type_name IS NOT NULL AND arg.type_subname IS NOT NULL THEN
+                            arg.type_owner || '.' || arg.type_name || '.' || arg.type_subname
+                        WHEN arg.type_owner IS NOT NULL AND arg.type_name IS NOT NULL THEN
+                            arg.type_owner || '.' || arg.type_name
+                        ELSE NVL(arg.pls_type, '')
+                    END
+                )
+                FROM all_arguments arg
+                WHERE arg.owner = p.owner
+                    AND NVL(arg.package_name, ' ') = NVL(CASE WHEN p.procedure_name IS NULL THEN NULL ELSE p.object_name END, ' ')
+                    AND arg.object_name = CASE WHEN p.procedure_name IS NULL THEN p.object_name ELSE p.procedure_name END
+                    AND arg.subprogram_id = p.subprogram_id
+                    AND arg.data_level = 0
+                    AND arg.position = 0
+            ), '') AS ReturnType,
+            '' AS RoutineDescription,
+            NVL((
+                SELECT XMLCAST(
+                    XMLAGG(XMLELEMENT(e, src.text) ORDER BY src.line).EXTRACT('//text()') AS CLOB
+                )
+                FROM all_source src
+                WHERE src.owner = p.owner
+                    AND src.name = p.object_name
+                    AND src.type = CASE
+                        WHEN p.procedure_name IS NULL THEN p.object_type
+                        ELSE 'PACKAGE'
+                    END
+            ), TO_CLOB('')) AS RoutineDefinition
+        FROM all_procedures p
+        WHERE p.owner NOT IN ('SYS', 'SYSTEM')
+            AND (p.object_type IN ('PROCEDURE', 'FUNCTION') OR p.procedure_name IS NOT NULL)
+        ORDER BY
+            p.owner,
+            CASE WHEN p.procedure_name IS NULL THEN '' ELSE p.object_name END,
+            CASE WHEN p.procedure_name IS NULL THEN p.object_name ELSE p.procedure_name END,
+            NVL(p.overload, ''),
+            p.subprogram_id;
+        """;
+
     public DatabaseType DatabaseType => DatabaseType.Oracle;
 
     public async Task<DatabaseSchemaExport> LoadSchemaAsync(
@@ -187,11 +299,17 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
                 new CommandDefinition(QueryIndexesSql, cancellationToken: cancellationToken)
             ).ConfigureAwait(false)
         ];
+        IReadOnlyList<DatabaseRoutineSchema> routines = [
+            ..await connection.QueryAsync<DatabaseRoutineSchema>(
+                new CommandDefinition(QueryRoutinesSql, cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
 
         return new DatabaseSchemaExport {
             Objects = objects,
             Columns = columns,
-            Indexes = indexes
+            Indexes = indexes,
+            Routines = routines
         };
     }
 }

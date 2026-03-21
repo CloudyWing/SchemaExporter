@@ -1,5 +1,3 @@
-#nullable enable
-
 using System.Data.Common;
 using Dapper;
 using Microsoft.Data.SqlClient;
@@ -164,6 +162,92 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         ORDER BY SchemaName, ObjectName, IndexName;
     """;
 
+    private const string QueryRoutinesSql = """
+        SELECT
+            s.name AS SchemaName,
+            CAST('' AS nvarchar(128)) AS ContainerName,
+            o.name AS RoutineName,
+            CASE o.type
+                WHEN 'P' THEN 'PROCEDURE'
+                WHEN 'FN' THEN 'FUNCTION'
+                WHEN 'IF' THEN 'FUNCTION'
+                WHEN 'TF' THEN 'FUNCTION'
+            END AS RoutineType,
+            CAST('' AS nvarchar(40)) AS OverloadIdentifier,
+            COALESCE(STUFF((
+                SELECT ', ' + CONCAT(
+                    p.name,
+                    ' ',
+                    CASE
+                        WHEN st.is_user_defined = 1 THEN SCHEMA_NAME(st.schema_id) + '.' + st.name
+                        WHEN st.name IN ('char', 'varchar', 'nchar', 'nvarchar') THEN
+                            st.name + '('
+                            + CASE
+                                WHEN p.max_length = -1 THEN 'MAX'
+                                WHEN st.name IN ('nchar', 'nvarchar') THEN CAST(p.max_length / 2 AS varchar(10))
+                                ELSE CAST(p.max_length AS varchar(10))
+                            END + ')'
+                        WHEN st.name IN ('decimal', 'numeric') THEN
+                            st.name + '(' + CAST(p.precision AS varchar(10)) + ',' + CAST(p.scale AS varchar(10)) + ')'
+                        WHEN st.name IN ('datetime2', 'datetimeoffset', 'time') THEN
+                            st.name + '(' + CAST(p.scale AS varchar(10)) + ')'
+                        WHEN st.name IN ('binary', 'varbinary') THEN
+                            st.name + '(' + CASE WHEN p.max_length = -1 THEN 'MAX' ELSE CAST(p.max_length AS varchar(10)) END + ')'
+                        ELSE st.name
+                    END,
+                    CASE WHEN p.is_output = 1 THEN ' OUTPUT' ELSE '' END,
+                    CASE WHEN p.is_readonly = 1 THEN ' READONLY' ELSE '' END
+                )
+                FROM sys.parameters AS p
+                INNER JOIN sys.types AS st ON st.user_type_id = p.user_type_id
+                WHERE p.object_id = o.object_id
+                    AND p.parameter_id > 0
+                ORDER BY p.parameter_id
+                FOR XML PATH(''), TYPE
+            ).value('.', 'nvarchar(max)'), 1, 2, ''), '') AS ParameterSignature,
+            CASE
+                WHEN o.type IN ('IF', 'TF') THEN 'TABLE'
+                WHEN o.type = 'FN' THEN COALESCE((
+                    SELECT TOP (1)
+                        CASE
+                            WHEN st.is_user_defined = 1 THEN SCHEMA_NAME(st.schema_id) + '.' + st.name
+                            WHEN st.name IN ('char', 'varchar', 'nchar', 'nvarchar') THEN
+                                st.name + '('
+                                + CASE
+                                    WHEN p.max_length = -1 THEN 'MAX'
+                                    WHEN st.name IN ('nchar', 'nvarchar') THEN CAST(p.max_length / 2 AS varchar(10))
+                                    ELSE CAST(p.max_length AS varchar(10))
+                                END + ')'
+                            WHEN st.name IN ('decimal', 'numeric') THEN
+                                st.name + '(' + CAST(p.precision AS varchar(10)) + ',' + CAST(p.scale AS varchar(10)) + ')'
+                            WHEN st.name IN ('datetime2', 'datetimeoffset', 'time') THEN
+                                st.name + '(' + CAST(p.scale AS varchar(10)) + ')'
+                            WHEN st.name IN ('binary', 'varbinary') THEN
+                                st.name + '(' + CASE WHEN p.max_length = -1 THEN 'MAX' ELSE CAST(p.max_length AS varchar(10)) END + ')'
+                            ELSE st.name
+                        END
+                    FROM sys.parameters AS p
+                    INNER JOIN sys.types AS st ON st.user_type_id = p.user_type_id
+                    WHERE p.object_id = o.object_id
+                        AND p.parameter_id = 0
+                ), '')
+                ELSE ''
+            END AS ReturnType,
+            COALESCE(CAST(ep.value AS nvarchar(max)), '') AS RoutineDescription,
+            COALESCE(sm.definition, '') AS RoutineDefinition
+        FROM sys.objects AS o
+        INNER JOIN sys.schemas AS s ON s.schema_id = o.schema_id
+        LEFT JOIN sys.extended_properties AS ep
+            ON ep.class = 1
+            AND ep.major_id = o.object_id
+            AND ep.minor_id = 0
+            AND ep.name = 'MS_Description'
+        LEFT JOIN sys.sql_modules AS sm ON sm.object_id = o.object_id
+        WHERE o.type IN ('P', 'FN', 'IF', 'TF')
+            AND o.is_ms_shipped = 0
+        ORDER BY s.name, o.type, o.name;
+        """;
+
     public DatabaseType DatabaseType => DatabaseType.SqlServer;
 
     public async Task<DatabaseSchemaExport> LoadSchemaAsync(
@@ -190,11 +274,17 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
                 new CommandDefinition(QueryIndexesSql, cancellationToken: cancellationToken)
             ).ConfigureAwait(false)
         ];
+        IReadOnlyList<DatabaseRoutineSchema> routines = [
+            ..await connection.QueryAsync<DatabaseRoutineSchema>(
+                new CommandDefinition(QueryRoutinesSql, cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
 
         return new DatabaseSchemaExport {
             Objects = objects,
             Columns = columns,
-            Indexes = indexes
+            Indexes = indexes,
+            Routines = routines
         };
     }
 }

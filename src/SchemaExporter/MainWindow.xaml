@@ -3,12 +3,158 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:CloudyWing.SchemaExporter"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <Label Content="選擇連線字串：" HorizontalAlignment="Left" Margin="100,50,0,0" VerticalAlignment="Top" Width="100"/>
-        <ComboBox HorizontalAlignment="Left" Margin="200,50,0,0" VerticalAlignment="Top" ItemsSource="{Binding Connections}" SelectedItem="{Binding Connection}" DisplayMemberPath="Name" />
-        <Button Content="送出" HorizontalAlignment="Left" Margin="100,250,0,0" VerticalAlignment="Top" Width="50" Command="{Binding SubmitCommand}"/>
+        Title="Schema Exporter"
+        Height="640"
+        Width="980"
+        MinHeight="560"
+        MinWidth="900">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="120" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Grid.Column="0"
+                   Margin="0,0,12,12"
+                   VerticalAlignment="Center"
+                   Text="連線設定：" />
+        <ComboBox Grid.Row="0"
+                  Grid.Column="1"
+                  Margin="0,0,12,12"
+                  DisplayMemberPath="Name"
+                  ItemsSource="{Binding Connections}"
+                  SelectedItem="{Binding Connection}"
+                  IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBooleanConverter}}" />
+
+        <TextBlock Grid.Row="1"
+                   Grid.Column="0"
+                   Margin="0,0,12,12"
+                   VerticalAlignment="Center"
+                   Text="匯出路徑：" />
+        <TextBox Grid.Row="1"
+                 Grid.Column="1"
+                 Margin="0,0,12,12"
+                 Text="{Binding OutputPath, UpdateSourceTrigger=PropertyChanged}"
+                 IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBooleanConverter}}" />
+        <Button Grid.Row="1"
+                Grid.Column="2"
+                MinWidth="110"
+                Padding="12,6"
+                Margin="0,0,0,12"
+                Content="開啟資料夾"
+                Command="{Binding OpenOutputFolderCommand}" />
+
+        <TextBlock Grid.Row="2"
+                   Grid.Column="0"
+                   Margin="0,0,12,12"
+                   VerticalAlignment="Center"
+                   Text="匯出設定檔：" />
+        <ComboBox Grid.Row="2"
+                  Grid.Column="1"
+                  Margin="0,0,12,12"
+                  DisplayMemberPath="Name"
+                  ItemsSource="{Binding ExportProfiles}"
+                  SelectedItem="{Binding SelectedProfile}"
+                  IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBooleanConverter}}" />
+
+        <TextBlock Grid.Row="3"
+                   Grid.Column="0"
+                   Margin="0,0,12,12"
+                   VerticalAlignment="Top"
+                   Text="結果選項：" />
+        <TextBlock Grid.Row="3"
+                   Grid.Column="1"
+                   Grid.ColumnSpan="2"
+                   Margin="0,0,0,12"
+                   Text="{Binding ResultOptionsSummary}"
+                   TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="4"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    Margin="0,0,0,12">
+            <Button Width="90"
+                    Padding="12,6"
+                    Content="匯出"
+                    Command="{Binding SubmitCommand}" />
+            <Button Width="90"
+                    Padding="12,6"
+                    Margin="12,0,0,0"
+                    Content="取消"
+                    Command="{Binding CancelExportCommand}" />
+        </StackPanel>
+
+        <Border Grid.Row="5"
+                Grid.Column="0"
+                Grid.ColumnSpan="3"
+                Padding="12"
+                Margin="0,0,0,12"
+                Background="#FFF7F7F7"
+                BorderBrush="#FFD0D0D0"
+                BorderThickness="1"
+                CornerRadius="4">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock FontWeight="Bold"
+                           Text="匯出狀態" />
+                <TextBlock Grid.Row="1"
+                           Margin="0,8,0,8"
+                           Text="{Binding StatusMessage}"
+                           TextWrapping="Wrap" />
+                <ProgressBar Grid.Row="2"
+                             Height="18"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding ProgressPercent}" />
+            </Grid>
+        </Border>
+
+        <GroupBox Grid.Row="6"
+                  Grid.Column="0"
+                  Grid.ColumnSpan="3"
+                  Header="匯出診斷">
+            <DataGrid ItemsSource="{Binding Diagnostics}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      IsReadOnly="True"
+                      HeadersVisibility="Column">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="嚴重性"
+                                        Binding="{Binding SeverityText}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="類別"
+                                        Binding="{Binding CategoryText}"
+                                        Width="140" />
+                    <DataGridTextColumn Header="支援層級"
+                                        Binding="{Binding SupportLevelText}"
+                                        Width="130" />
+                    <DataGridTextColumn Header="影響物件"
+                                        Binding="{Binding AffectedObject}"
+                                        Width="250" />
+                    <DataGridTextColumn Header="訊息"
+                                        Binding="{Binding Message}"
+                                        Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </GroupBox>
     </Grid>
 </Window>

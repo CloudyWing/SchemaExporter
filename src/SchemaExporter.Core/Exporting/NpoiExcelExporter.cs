@@ -1,5 +1,3 @@
-#nullable enable
-
 using System.Drawing;
 using System.IO;
 using CloudyWing.SpreadsheetExporter;
@@ -9,7 +7,7 @@ using NPOI.XSSF.UserModel;
 using SpreadsheetHorizontalAlignment = CloudyWing.SpreadsheetExporter.HorizontalAlignment;
 using SpreadsheetVerticalAlignment = CloudyWing.SpreadsheetExporter.VerticalAlignment;
 
-namespace CloudyWing.SchemaExporter;
+namespace CloudyWing.SchemaExporter.Exporting;
 
 /// <summary>
 /// Exports spreadsheets to XLSX files through NPOI.

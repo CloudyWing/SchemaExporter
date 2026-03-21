@@ -6,6 +6,8 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/SchemaExporter.Core/SchemaExporter.Core.csproj" />
     <Project Path="src/SchemaExporter/SchemaExporter.csproj" />
+    <Project Path="src/SchemaExporter.Cli/SchemaExporter.Cli.csproj" />
   </Folder>
 </Solution>

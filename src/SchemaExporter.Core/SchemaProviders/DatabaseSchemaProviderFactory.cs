@@ -1,5 +1,3 @@
-#nullable enable
-
 namespace CloudyWing.SchemaExporter.SchemaProviders;
 
 internal sealed class DatabaseSchemaProviderFactory : IDatabaseSchemaProviderFactory {

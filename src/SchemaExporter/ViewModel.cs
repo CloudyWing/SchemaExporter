@@ -1,257 +1,348 @@
 #nullable enable
 
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
-using CloudyWing.SchemaExporter.SchemaProviders;
-using CloudyWing.SpreadsheetExporter;
-using CloudyWing.SpreadsheetExporter.Templates.Grid;
-using CloudyWing.SpreadsheetExporter.Templates.RecordSet;
+using CloudyWing.SchemaExporter.Exporting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Options;
 
 namespace CloudyWing.SchemaExporter;
 
+/// <summary>
+/// Main UI-facing coordinator for schema export operations.
+/// </summary>
 public partial class ViewModel : ObservableObject {
     private readonly SchemaOptions schemaOptions;
-    private readonly IDatabaseSchemaProviderFactory providerFactory;
+    private readonly SchemaExportOrchestrator exportOrchestrator;
+    private CancellationTokenSource? currentExportCancellation;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     private SchemaConnection? connection;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
+    private ExportProfile? selectedProfile;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
+    private string outputPath = "";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CancelExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
+    private bool isExporting;
+
+    [ObservableProperty]
+    private string statusMessage = "請選擇連線並確認匯出設定。";
+
+    [ObservableProperty]
+    private int progressPercent;
+
+    [ObservableProperty]
+    private string? lastOutputFilePath;
+
+    [ObservableProperty]
+    private string? lastManifestFilePath;
+
+    /// <summary>
+    /// Gets the configured connections.
+    /// </summary>
     public ObservableCollection<SchemaConnection> Connections { get; }
 
-    public ViewModel(
-        IOptions<SchemaOptions> schemaAccessor,
-        IDatabaseSchemaProviderFactory providerFactory
-    ) {
-        ArgumentNullException.ThrowIfNull(schemaAccessor, nameof(schemaAccessor));
-        ArgumentNullException.ThrowIfNull(providerFactory, nameof(providerFactory));
+    /// <summary>
+    /// Gets the configured export profiles.
+    /// </summary>
+    public ObservableCollection<ExportProfile> ExportProfiles { get; }
 
-        schemaOptions = schemaAccessor.Value;
-        this.providerFactory = providerFactory;
+    /// <summary>
+    /// Gets the diagnostics from the most recent export attempt.
+    /// </summary>
+    public ObservableCollection<ExportDiagnostic> Diagnostics { get; } = [];
 
-        Connections = new ObservableCollection<SchemaConnection>(schemaOptions.Connections);
-        Connection = Connections.FirstOrDefault();
+    /// <summary>
+    /// Gets a localized summary of the configured result options.
+    /// </summary>
+    public string ResultOptionsSummary {
+        get {
+            List<string> segments = [];
+            if (schemaOptions.ExportResultOptions.UseTimestamp) {
+                segments.Add($"檔名加上時間戳記（{schemaOptions.ExportResultOptions.TimestampFormat}）");
+            }
+
+            segments.Add($"檔案衝突處理：{GetOverwriteStrategyText(schemaOptions.ExportResultOptions.OverwriteStrategy)}");
+
+            if (schemaOptions.ExportResultOptions.GenerateManifest) {
+                segments.Add("產生 manifest");
+            }
+
+            if (schemaOptions.ExportResultOptions.GenerateJsonSidecar) {
+                segments.Add("產生 JSON sidecar");
+            }
+
+            if (schemaOptions.ExportResultOptions.GenerateMarkdownSidecar) {
+                segments.Add("產生 Markdown sidecar");
+            }
+
+            if (schemaOptions.ExportResultOptions.GenerateSchemaSnapshot) {
+                segments.Add("產生 schema snapshot");
+            }
+
+            if (!string.IsNullOrWhiteSpace(schemaOptions.ExportResultOptions.DiffSourceSnapshotPath)) {
+                segments.Add("比對既有 schema snapshot");
+            }
+
+            if (schemaOptions.ExportResultOptions.OpenOutputFolder) {
+                segments.Add("完成後自動開啟輸出資料夾");
+            }
+
+            return segments.Count == 0
+                ? "使用預設結果選項"
+                : string.Join("、", segments);
+        }
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ViewModel"/> class.
+    /// </summary>
+    /// <param name="schemaAccessor">The schema options accessor.</param>
+    /// <param name="exportOrchestrator">The export orchestrator.</param>
+    public ViewModel(
+        IOptions<SchemaOptions> schemaAccessor,
+        SchemaExportOrchestrator exportOrchestrator
+    ) {
+        ArgumentNullException.ThrowIfNull(schemaAccessor, nameof(schemaAccessor));
+        ArgumentNullException.ThrowIfNull(exportOrchestrator, nameof(exportOrchestrator));
+
+        schemaOptions = schemaAccessor.Value;
+        this.exportOrchestrator = exportOrchestrator;
+
+        ExportProfiles = new ObservableCollection<ExportProfile>(
+            schemaOptions.ExportProfiles.Count > 0
+                ? schemaOptions.ExportProfiles
+                : [new ExportProfile { Name = "Default" }]
+        );
+
+        Connections = new ObservableCollection<SchemaConnection>(schemaOptions.Connections);
+        OutputPath = schemaOptions.ExportPath;
+        Connection = Connections.FirstOrDefault();
+        SelectedProfile = ResolveConnectionProfile(Connection);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSubmit))]
     private async Task SubmitAsync() {
         if (Connection is null) {
             MessageBox.Show("請先選擇連線設定。", "匯出驗證", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(schemaOptions.ExportPath)) {
-            MessageBox.Show("請先設定匯出路徑。", "匯出驗證", MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (SelectedProfile is null) {
+            MessageBox.Show("請先選擇匯出設定檔。", "匯出驗證", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        DatabaseSchemaExport schemaExport;
+        IsExporting = true;
+        ProgressPercent = 0;
+        StatusMessage = "正在準備匯出...";
+        LastOutputFilePath = null;
+        LastManifestFilePath = null;
+        Diagnostics.Clear();
+        currentExportCancellation = new CancellationTokenSource();
+
         try {
-            schemaExport = await providerFactory.LoadSchemaAsync(Connection.DatabaseType, Connection.ConnectionString);
+            Progress<ExportProgress> progress = new(UpdateProgress);
+
+            ExportResult result = await exportOrchestrator.ExportAsync(
+                Connection,
+                OutputPath,
+                SelectedProfile,
+                schemaOptions.ExportResultOptions,
+                progress,
+                currentExportCancellation.Token
+            );
+
+            LastOutputFilePath = result.OutputFilePath;
+            LastManifestFilePath = result.ManifestFilePath;
+
+            foreach (ExportDiagnostic diagnostic in result.Diagnostics) {
+                Diagnostics.Add(diagnostic);
+            }
+
+            int warningCount = result.Diagnostics.Count(x => x.Severity == DiagnosticSeverity.Warning);
+            StatusMessage = warningCount > 0
+                ? $"匯出完成，但有 {warningCount} 個警告，請確認下方診斷資訊。"
+                : "匯出完成。";
+            ProgressPercent = 100;
+
+            ShowExportSuccessDialog(result);
+        } catch (OperationCanceledException) {
+            StatusMessage = "匯出已取消。";
+            MessageBox.Show("匯出作業已取消。", "匯出取消", MessageBoxButton.OK, MessageBoxImage.Information);
+        } catch (ExportValidationException ex) {
+            StatusMessage = ex.Message;
+            MessageBox.Show(ex.Message, "匯出驗證", MessageBoxButton.OK, MessageBoxImage.Warning);
+        } catch (ExportConnectionException ex) {
+            StatusMessage = ex.Message;
+            MessageBox.Show(ex.Message, "連線錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+        } catch (ExportOutputException ex) {
+            StatusMessage = ex.Message;
+            MessageBox.Show(ex.Message, "輸出錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
         } catch (Exception ex) {
-            MessageBox.Show($"載入資料庫結構失敗：{ex.Message}", "匯出失敗", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
+            StatusMessage = "匯出時發生未預期的錯誤。";
+            MessageBox.Show(
+                $"匯出時發生未預期的錯誤：{ex.Message}",
+                "未預期錯誤",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+        } finally {
+            IsExporting = false;
+            currentExportCancellation?.Dispose();
+            currentExportCancellation = null;
         }
-
-        IEnumerable<TableInfo> tables = schemaExport.Objects
-            .Select(x => new TableInfo {
-                SchemaName = x.SchemaName,
-                TableName = x.ObjectName,
-                TableType = x.ObjectType,
-                TableDescription = x.ObjectDescription
-            })
-            .OrderBy(x => x.SchemaName)
-            .ThenBy(x => x.TableName)
-            .ToArray();
-
-        IEnumerable<ColumnInfo> columns = schemaExport.Columns
-            .Select(x => new ColumnInfo {
-                SchemaName = x.SchemaName,
-                TableName = x.ObjectName,
-                ColumnName = x.ColumnName,
-                ColumnType = x.ColumnType,
-                IsNullable = x.IsNullable,
-                ColumnDefault = x.ColumnDefault,
-                IsPrimaryKey = x.IsPrimaryKey,
-                IsIdentity = x.IsIdentity,
-                ColumnDescription = x.ColumnDescription,
-                ColumnOrder = x.ColumnOrder
-            })
-            .OrderBy(x => x.SchemaName)
-            .ThenBy(x => x.TableName)
-            .ThenBy(x => x.ColumnOrder)
-            .ToArray();
-
-        IEnumerable<IndexInfo> indexes = schemaExport.Indexes
-            .Select(x => new IndexInfo {
-                SchemaName = x.SchemaName,
-                TableName = x.ObjectName,
-                IndexName = x.IndexName,
-                IsPrimaryKey = x.IsPrimaryKey,
-                IsClustered = x.IsClustered,
-                IsUnique = x.IsUnique,
-                IsForeignKey = x.IsForeignKey,
-                Columns = x.Columns,
-                OtherColumns = x.OtherColumns
-            })
-            .OrderBy(x => x.SchemaName)
-            .ThenBy(x => x.TableName)
-            .ThenBy(x => x.IndexName)
-            .ToArray();
-
-        ISpreadsheetExporter exporter = SpreadsheetManager.CreateExporter();
-        BuildTableListSheet(exporter, tables);
-        BuildColumnListSheet(exporter, columns);
-        BuildTableDetailSheets(exporter, tables, columns, indexes);
-
-        Directory.CreateDirectory(schemaOptions.ExportPath);
-        string filePath = Path.Combine(schemaOptions.ExportPath, $"TableSchema_{Connection.Name}{exporter.FileNameExtension}");
-        exporter.ExportFile(filePath);
-
-        MessageBox.Show($"檔案「{filePath}」產出成功");
     }
 
-    private static void BuildTableListSheet(ISpreadsheetExporter exporter, IEnumerable<TableInfo> tables) {
-        CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
-            HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left
-        };
-
-        RecordSetTemplate<TableInfo> template = new(tables) {
-            RecordHeight = Constants.AutoFitRowHeight
-        };
-        template.Columns.Add("Schema", x => x.SchemaName);
-        template.Columns.Add("名稱", x => x.TableName, fieldStyleGenerator: x => itemStyle);
-        template.Columns.Add("類型", x => x.TableType, fieldStyleGenerator: x => itemStyle);
-        template.Columns.Add("描述", x => x.TableDescription, fieldStyleGenerator: x => itemStyle);
-
-        Sheeter sheeter = exporter.CreateSheeter("資料表清單");
-        sheeter.AddTemplates(template);
-
-        sheeter.SetColumnWidth(0, 16D);
-        sheeter.SetColumnWidth(1, 40D);
-        sheeter.SetColumnWidth(2, 15D);
-        sheeter.SetColumnWidth(3, 50D);
+    private bool CanSubmit() {
+        return !IsExporting
+            && Connection is not null
+            && SelectedProfile is not null
+            && !string.IsNullOrWhiteSpace(OutputPath);
     }
 
-    private static void BuildColumnListSheet(ISpreadsheetExporter exporter, IEnumerable<ColumnInfo> columns) {
-        CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
-            HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center
-        };
-
-        RecordSetTemplate<ColumnInfo> template = new(columns) {
-            RecordHeight = Constants.AutoFitRowHeight
-        };
-        template.Columns.Add("Schema", x => x.SchemaName);
-        template.Columns.Add("資料表名稱", x => x.TableName);
-        template.Columns.Add("欄位名稱", x => x.ColumnName);
-        template.Columns.Add("欄位型別", x => x.ColumnType);
-        template.Columns.Add("預設值", x => x.ColumnDefault);
-        template.Columns.Add("是否允許 Null", x => x.IsNullable, fieldStyleGenerator: _ => centerFieldStyle);
-        template.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
-        template.Columns.Add("是否為 Identity", x => x.IsIdentity, fieldStyleGenerator: _ => centerFieldStyle);
-        template.Columns.Add("描述", x => x.ColumnDescription);
-
-        Sheeter sheeter = exporter.CreateSheeter("資料表欄位清單");
-        sheeter.AddTemplates(template);
-
-        sheeter.SetColumnWidth(0, 16D);
-        sheeter.SetColumnWidth(1, 36D);
-        sheeter.SetColumnWidth(2, 28D);
-        sheeter.SetColumnWidth(3, 30D);
-        sheeter.SetColumnWidth(4, 15D);
-        sheeter.SetColumnWidth(5, 15D);
-        sheeter.SetColumnWidth(6, 15D);
-        sheeter.SetColumnWidth(7, 15D);
-        sheeter.SetColumnWidth(8, 50D);
+    [RelayCommand(CanExecute = nameof(CanCancelExport))]
+    private void CancelExport() {
+        currentExportCancellation?.Cancel();
+        StatusMessage = "正在取消匯出作業...";
     }
 
-    private static void BuildTableDetailSheets(
-        ISpreadsheetExporter exporter,
-        IEnumerable<TableInfo> tables,
-        IEnumerable<ColumnInfo> columns,
-        IEnumerable<IndexInfo> indexes
-    ) {
-        foreach (TableInfo table in tables) {
-            Sheeter sheeter = exporter.CreateSheeter(table.SheeterName);
-            BuildTableDetailSheet(
-                sheeter,
-                table,
-                columns.Where(x => x.SchemaName == table.SchemaName && x.TableName == table.TableName),
-                indexes.Where(x => x.SchemaName == table.SchemaName && x.TableName == table.TableName)
+    private bool CanCancelExport() {
+        return IsExporting && currentExportCancellation is not null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenOutputFolder))]
+    private void OpenOutputFolder() {
+        try {
+            if (string.IsNullOrWhiteSpace(OutputPath)) {
+                throw new ExportValidationException("請先輸入匯出資料夾路徑。");
+            }
+
+            string trimmedPath = OutputPath.Trim();
+            if (!Path.IsPathFullyQualified(trimmedPath)) {
+                throw new ExportValidationException($"匯出資料夾必須使用絕對路徑：{trimmedPath}");
+            }
+
+            string normalizedPath = Path.GetFullPath(trimmedPath);
+            Directory.CreateDirectory(normalizedPath);
+
+            Process.Start(new ProcessStartInfo {
+                FileName = normalizedPath,
+                UseShellExecute = true
+            });
+        } catch (ExportValidationException ex) {
+            MessageBox.Show(ex.Message, "輸出資料夾", MessageBoxButton.OK, MessageBoxImage.Warning);
+        } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException) {
+            MessageBox.Show(
+                $"無法開啟輸出資料夾：{ex.Message}",
+                "輸出資料夾",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
             );
         }
     }
 
-    private static void BuildTableDetailSheet(
-        Sheeter sheeter,
-        TableInfo table,
-        IEnumerable<ColumnInfo> columns,
-        IEnumerable<IndexInfo> indexes
-    ) {
-        CellStyle defaultGridStyle = SpreadsheetManager.DefaultCellStyles.GridCellStyle;
-        CellFont defaultFont = SpreadsheetManager.DefaultCellStyles.GridCellStyle.Font;
-        CellStyle headerLabelStyle = defaultGridStyle with {
-            HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Right,
-            Font = defaultFont with {
-                Style = defaultFont.Style | SpreadsheetExporter.FontStyles.IsBold
-            }
-        };
-
-        GridTemplate headerTemplate = new();
-        headerTemplate.CreateRow()
-            .CreateCell("Schema：", cellStyle: headerLabelStyle)
-            .CreateCell(table.SchemaName, 2)
-            .CreateCell("資料表名稱：", cellStyle: headerLabelStyle)
-            .CreateCell(table.TableName, 3)
-            .CreateRow(Constants.AutoFitRowHeight)
-            .CreateCell("資料表描述：", cellStyle: headerLabelStyle)
-            .CreateCell(table.TableDescription, 6);
-
-        sheeter.AddTemplate(headerTemplate);
-
-        CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
-            HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center
-        };
-
-        RecordSetTemplate<ColumnInfo> columnsTemplate = new(columns);
-        columnsTemplate.Columns.Add("欄位名稱", x => x.ColumnName);
-        columnsTemplate.Columns.Add("欄位型別", x => x.ColumnType);
-        columnsTemplate.Columns.Add("預設值", x => x.ColumnDefault);
-        columnsTemplate.Columns.Add("是否允許 Null", x => x.IsNullable, fieldStyleGenerator: _ => centerFieldStyle);
-        columnsTemplate.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
-        columnsTemplate.Columns.Add("是否為 Identity", x => x.IsIdentity, fieldStyleGenerator: _ => centerFieldStyle);
-        columnsTemplate.Columns.Add("描述", x => x.ColumnDescription);
-
-        sheeter.AddTemplate(columnsTemplate);
-
-        if (indexes.Any()) {
-            sheeter.AddTemplate(new GridTemplate().CreateRow());
-
-            RecordSetTemplate<IndexInfo> indexesTemplate = new(indexes) {
-                RecordHeight = Constants.AutoFitRowHeight
-            };
-
-            indexesTemplate.Columns.Add("索引名稱", x => x.IndexName);
-            indexesTemplate.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
-            indexesTemplate.Columns.Add("是否為叢集索引", x => x.IsClustered, fieldStyleGenerator: _ => centerFieldStyle);
-            indexesTemplate.Columns.Add("是否為唯一索引", x => x.IsUnique, fieldStyleGenerator: _ => centerFieldStyle);
-            indexesTemplate.Columns.Add("是否為外鍵", x => x.IsForeignKey, fieldStyleGenerator: _ => centerFieldStyle);
-            indexesTemplate.Columns.Add("欄位", x => x.Columns, x => x.UseValue(v => v.Value?.Replace("\n", Environment.NewLine)));
-            indexesTemplate.Columns.Add("Include/外鍵 欄位", x => x.OtherColumns, x => x.UseValue(v => v.Value?.Replace("\n", Environment.NewLine)));
-
-            sheeter.AddTemplate(indexesTemplate);
-        }
-
-        sheeter.SetColumnWidth(0, 40D);
-        sheeter.SetColumnWidth(1, 15D);
-        sheeter.SetColumnWidth(2, 15D);
-        sheeter.SetColumnWidth(3, 15D);
-        sheeter.SetColumnWidth(4, 15D);
-        sheeter.SetColumnWidth(5, 25D);
-        sheeter.SetColumnWidth(6, 50D);
+    private bool CanOpenOutputFolder() {
+        return !IsExporting && !string.IsNullOrWhiteSpace(OutputPath);
     }
 
+    partial void OnConnectionChanged(SchemaConnection? value) {
+        SelectedProfile = ResolveConnectionProfile(value);
+    }
+
+    private ExportProfile ResolveConnectionProfile(SchemaConnection? connection) {
+        ExportProfile fallbackProfile = ExportProfiles.First();
+
+        if (connection is null || string.IsNullOrWhiteSpace(connection.ExportProfileName)) {
+            return fallbackProfile;
+        }
+
+        ExportProfile? matchedProfile = ExportProfiles.FirstOrDefault(x =>
+            string.Equals(x.Name, connection.ExportProfileName, StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (matchedProfile is not null) {
+            return matchedProfile;
+        }
+
+        if (!IsExporting) {
+            StatusMessage = $"連線「{connection.Name}」指定的匯出設定檔不存在，已改用「{fallbackProfile.Name}」。";
+        }
+
+        return fallbackProfile;
+    }
+
+    private void UpdateProgress(ExportProgress progress) {
+        StatusMessage = progress.Message;
+        ProgressPercent = progress.PercentComplete ?? ProgressPercent;
+    }
+
+    private static void ShowExportSuccessDialog(ExportResult result) {
+        int warningCount = result.Diagnostics.Count(x => x.Severity == DiagnosticSeverity.Warning);
+        int infoCount = result.Diagnostics.Count(x => x.Severity == DiagnosticSeverity.Info);
+
+        StringBuilder messageBuilder = new();
+        messageBuilder.AppendLine("檔案已成功匯出：");
+        messageBuilder.AppendLine(result.OutputFilePath);
+
+        if (!string.IsNullOrWhiteSpace(result.ManifestFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("Manifest：");
+            messageBuilder.AppendLine(result.ManifestFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.JsonSidecarFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("JSON Sidecar：");
+            messageBuilder.AppendLine(result.JsonSidecarFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.MarkdownSidecarFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("Markdown Sidecar：");
+            messageBuilder.AppendLine(result.MarkdownSidecarFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.SnapshotFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("Schema Snapshot：");
+            messageBuilder.AppendLine(result.SnapshotFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.DiffFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("Schema Diff：");
+            messageBuilder.AppendLine(result.DiffFilePath);
+        }
+
+        if (warningCount > 0 || infoCount > 0) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine($"診斷資訊：{warningCount} 個警告、{infoCount} 個資訊");
+        }
+
+        MessageBox.Show(messageBuilder.ToString(), "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private static string GetOverwriteStrategyText(OverwriteStrategy overwriteStrategy) {
+        return overwriteStrategy switch {
+            OverwriteStrategy.Overwrite => "直接覆寫",
+            OverwriteStrategy.AppendSuffix => "自動附加編號",
+            OverwriteStrategy.Fail => "發現重複檔名時中止",
+            _ => overwriteStrategy.ToString()
+        };
+    }
 }
