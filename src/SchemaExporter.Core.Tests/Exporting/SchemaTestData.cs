@@ -1,6 +1,6 @@
 using System.Text.Json;
-using CloudyWing.SchemaExporter.Exporting;
-using CloudyWing.SchemaExporter.SchemaProviders;
+using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;
 
@@ -170,3 +170,4 @@ internal static class SchemaTestData {
         await File.WriteAllTextAsync(path, json);
     }
 }
+

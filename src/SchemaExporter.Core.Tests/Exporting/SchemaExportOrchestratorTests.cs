@@ -1,6 +1,6 @@
+using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Core.Tests.Infrastructure;
-using CloudyWing.SchemaExporter.Exporting;
-using CloudyWing.SchemaExporter.SchemaProviders;
 using CloudyWing.SpreadsheetExporter;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -16,7 +16,6 @@ public sealed class SchemaExportOrchestratorTests {
 
     [Test]
     public void ExportAsync_WhenConnectionNameIsMissing_ThrowsValidationException() {
-        // Arrange
         using TempDirectoryScope directory = new();
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
@@ -25,20 +24,18 @@ public sealed class SchemaExportOrchestratorTests {
             DatabaseType = DatabaseType.SqlServer
         };
 
-        // Act
         ExportValidationException? exception = Assert.ThrowsAsync<ExportValidationException>(
             async () => await sut.ExportAsync(connection, directory.Path, CreateProfile(), new ExportResultOptions())
         );
 
-        // Assert
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.Message, Does.Contain("連線名稱"));
-        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(default, default!, default);
+        ExportValidationException assertedException = exception ?? throw new AssertionException("Expected an ExportValidationException.");
+        Assert.That(assertedException.Message, Does.Contain("連線名稱"));
+        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public void ExportAsync_WhenConnectionStringIsMissing_ThrowsValidationException() {
-        // Arrange
         using TempDirectoryScope directory = new();
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
@@ -48,20 +45,18 @@ public sealed class SchemaExportOrchestratorTests {
             ConnectionString = "   "
         };
 
-        // Act
         ExportValidationException? exception = Assert.ThrowsAsync<ExportValidationException>(
             async () => await sut.ExportAsync(connection, directory.Path, CreateProfile(), new ExportResultOptions())
         );
 
-        // Assert
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.Message, Does.Contain("ConnectionString"));
-        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(default, default!, default);
+        ExportValidationException assertedException = exception ?? throw new AssertionException("Expected an ExportValidationException.");
+        Assert.That(assertedException.Message, Does.Contain("ConnectionString"));
+        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public void ExportAsync_WhenSchemaLoadingFails_WrapsKnownProviderExceptions() {
-        // Arrange
         using TempDirectoryScope directory = new();
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
@@ -70,25 +65,23 @@ public sealed class SchemaExportOrchestratorTests {
         providerFactory.LoadSchemaAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
             .Returns<Task<DatabaseSchemaExport>>(_ => throw new TimeoutException("database timed out"));
 
-        // Act
         ExportConnectionException? exception = Assert.ThrowsAsync<ExportConnectionException>(
             async () => await sut.ExportAsync(connection, directory.Path, CreateProfile(), new ExportResultOptions())
         );
 
-        // Assert
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.InnerException, Is.TypeOf<TimeoutException>());
-        Assert.That(exception.Message, Does.Contain("無法載入"));
+        ExportConnectionException assertedException = exception ?? throw new AssertionException("Expected an ExportConnectionException.");
+        Assert.That(assertedException.InnerException, Is.TypeOf<TimeoutException>());
+        Assert.That(assertedException.Message, Does.Contain("無法載入"));
     }
 
     [Test]
     public void ExportAsync_WhenOutputAlreadyExistsAndOverwriteStrategyIsFail_ThrowsOutputException() {
-        // Arrange
         using TempDirectoryScope directory = new();
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
         SchemaConnection connection = CreateConnection();
-        string outputPath = System.IO.Path.Combine(
+        string outputPath = Path.Combine(
             directory.Path,
             $"TableSchema_{connection.Name}{SpreadsheetManager.CreateExporter().FileNameExtension}"
         );
@@ -101,19 +94,17 @@ public sealed class SchemaExportOrchestratorTests {
             OverwriteStrategy = OverwriteStrategy.Fail
         };
 
-        // Act
         ExportOutputException? exception = Assert.ThrowsAsync<ExportOutputException>(
             async () => await sut.ExportAsync(connection, directory.Path, CreateProfile(), resultOptions)
         );
 
-        // Assert
         Assert.That(exception, Is.Not.Null);
-        Assert.That(exception!.Message, Does.Contain("輸出檔案已存在"));
+        ExportOutputException assertedException = exception ?? throw new AssertionException("Expected an ExportOutputException.");
+        Assert.That(assertedException.Message, Does.Contain("輸出檔案已存在"));
     }
 
     [Test]
     public async Task ExportAsync_WhenArtifactsAreEnabled_CreatesExpectedFilesAndDiffOutput() {
-        // Arrange
         using TempDirectoryScope directory = new();
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
@@ -137,10 +128,8 @@ public sealed class SchemaExportOrchestratorTests {
             DiffSourceSnapshotPath = baselineSnapshotPath
         };
 
-        // Act
         ExportResult result = await sut.ExportAsync(connection, directory.Path, CreateProfile(), resultOptions);
 
-        // Assert
         Assert.That(result.OutputFilePath, Does.EndWith(SpreadsheetManager.CreateExporter().FileNameExtension));
         Assert.That(File.Exists(result.OutputFilePath), Is.True);
         Assert.That(result.ManifestFilePath, Is.Not.Null);
@@ -148,15 +137,20 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(result.MarkdownSidecarFilePath, Is.Not.Null);
         Assert.That(result.SnapshotFilePath, Is.Not.Null);
         Assert.That(result.DiffFilePath, Is.Not.Null);
-        Assert.That(File.Exists(result.ManifestFilePath!), Is.True);
-        Assert.That(File.Exists(result.JsonSidecarFilePath!), Is.True);
-        Assert.That(File.Exists(result.MarkdownSidecarFilePath!), Is.True);
-        Assert.That(File.Exists(result.SnapshotFilePath!), Is.True);
-        Assert.That(File.Exists(result.DiffFilePath!), Is.True);
+        string manifestFilePath = result.ManifestFilePath ?? throw new AssertionException("Expected a manifest file path.");
+        string jsonSidecarFilePath = result.JsonSidecarFilePath ?? throw new AssertionException("Expected a JSON sidecar file path.");
+        string markdownSidecarFilePath = result.MarkdownSidecarFilePath ?? throw new AssertionException("Expected a Markdown sidecar file path.");
+        string snapshotFilePath = result.SnapshotFilePath ?? throw new AssertionException("Expected a snapshot file path.");
+        string diffFilePath = result.DiffFilePath ?? throw new AssertionException("Expected a diff file path.");
+        Assert.That(File.Exists(manifestFilePath), Is.True);
+        Assert.That(File.Exists(jsonSidecarFilePath), Is.True);
+        Assert.That(File.Exists(markdownSidecarFilePath), Is.True);
+        Assert.That(File.Exists(snapshotFilePath), Is.True);
+        Assert.That(File.Exists(diffFilePath), Is.True);
         Assert.That(result.Diagnostics.Any(x => x.Category == ExportDiagnosticCategory.Execution), Is.True);
 
-        string diffJson = await File.ReadAllTextAsync(result.DiffFilePath!);
-        string markdownSidecar = await File.ReadAllTextAsync(result.MarkdownSidecarFilePath!);
+        string diffJson = await File.ReadAllTextAsync(diffFilePath);
+        string markdownSidecar = await File.ReadAllTextAsync(markdownSidecarFilePath);
 
         Assert.That(diffJson, Does.Contain("\"AddedColumns\": 1"));
         Assert.That(diffJson, Does.Contain("\"ModifiedObjects\": 1"));
@@ -190,3 +184,4 @@ public sealed class SchemaExportOrchestratorTests {
         };
     }
 }
+

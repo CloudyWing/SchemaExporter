@@ -1,20 +1,20 @@
-using CloudyWing.SchemaExporter.Exporting;
-using CloudyWing.SchemaExporter.SchemaProviders;
+using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CloudyWing.SchemaExporter;
+namespace CloudyWing.SchemaExporter.Core;
 
 /// <summary>
-/// Provides dependency injection helpers for the shared schema exporter core services.
+/// 提供結構描述匯出核心服務的相依性注入輔助方法。
 /// </summary>
 public static class ServiceCollectionExtensions {
     /// <summary>
-    /// Registers the shared schema exporter services and binds the schema configuration section.
+    /// 註冊結構描述匯出核心服務，並繫結結構描述組態區段。
     /// </summary>
-    /// <param name="services">The service collection to update.</param>
-    /// <param name="configuration">The application configuration root.</param>
-    /// <returns>The updated service collection.</returns>
+    /// <param name="services">要更新的服務集合。</param>
+    /// <param name="configuration">應用程式組態根物件。</param>
+    /// <returns>已更新的服務集合。</returns>
     public static IServiceCollection AddSchemaExporterCore(this IServiceCollection services, IConfiguration configuration) {
         ArgumentNullException.ThrowIfNull(services, nameof(services));
         ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
@@ -31,3 +31,4 @@ public static class ServiceCollectionExtensions {
         return services;
     }
 }
+

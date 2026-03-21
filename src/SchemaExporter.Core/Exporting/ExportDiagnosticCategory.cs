@@ -1,43 +1,42 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Classifies diagnostics by workflow area.
+/// 依工作流程區域分類診斷。
 /// </summary>
 public enum ExportDiagnosticCategory {
     /// <summary>
-    /// General export information.
+    /// 一般匯出資訊。
     /// </summary>
     General = 0,
 
     /// <summary>
-    /// Filtering-related information.
+    /// 篩選相關資訊。
     /// </summary>
     Filtering = 1,
 
     /// <summary>
-    /// File or sheet naming adjustments.
+    /// 檔案或工作表命名調整。
     /// </summary>
     Naming = 2,
 
     /// <summary>
-    /// View support-level information.
+    /// 檢視表支援層級資訊。
     /// </summary>
     ViewSupport = 3,
 
     /// <summary>
-    /// Connection/configuration resolution information.
+    /// 連線/設定解析資訊。
     /// </summary>
     Configuration = 4,
 
     /// <summary>
-    /// Routine documentation support information.
+    /// 程序文件支援資訊。
     /// </summary>
     RoutineSupport = 5,
 
     /// <summary>
-    /// Execution timing and summary information.
+    /// 執行時間與摘要資訊。
     /// </summary>
     Execution = 6
 }
+

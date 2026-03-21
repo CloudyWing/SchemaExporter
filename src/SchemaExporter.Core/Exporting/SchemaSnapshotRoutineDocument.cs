@@ -1,13 +1,52 @@
-#nullable enable
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
+
+/// <summary>
+/// 表示資料庫程序的快照文件。
+/// </summary>
 public sealed class SchemaSnapshotRoutineDocument {
+    /// <summary>
+    /// 取得結構描述名稱。
+    /// </summary>
     public string SchemaName { get; init; } = "";
+
+    /// <summary>
+    /// 取得容器名稱（例如 Oracle 的套件名稱）。
+    /// </summary>
     public string ContainerName { get; init; } = "";
+
+    /// <summary>
+    /// 取得程序名稱。
+    /// </summary>
     public string RoutineName { get; init; } = "";
+
+    /// <summary>
+    /// 取得程序類型（例如 procedure、function）。
+    /// </summary>
     public string RoutineType { get; init; } = "";
+
+    /// <summary>
+    /// 取得多載識別碼。
+    /// </summary>
     public string OverloadIdentifier { get; init; } = "";
+
+    /// <summary>
+    /// 取得參數簽章。
+    /// </summary>
     public string ParameterSignature { get; init; } = "";
+
+    /// <summary>
+    /// 取得回傳類型。
+    /// </summary>
     public string ReturnType { get; init; } = "";
+
+    /// <summary>
+    /// 取得程序描述。
+    /// </summary>
     public string RoutineDescription { get; init; } = "";
+
+    /// <summary>
+    /// 取得程序定義主體。
+    /// </summary>
     public string RoutineDefinition { get; init; } = "";
 }
+

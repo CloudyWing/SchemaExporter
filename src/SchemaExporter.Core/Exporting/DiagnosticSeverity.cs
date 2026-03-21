@@ -1,18 +1,17 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Defines the severity levels for export diagnostics.
+/// 定義匯出診斷的嚴重性層級。
 /// </summary>
 public enum DiagnosticSeverity {
     /// <summary>
-    /// Informational message about export behavior.
+    /// 關於匯出行為的資訊訊息。
     /// </summary>
     Info = 0,
 
     /// <summary>
-    /// Warning about potential issues or limitations.
+    /// 關於潛在問題或限制的警告。
     /// </summary>
     Warning = 1
 }
+

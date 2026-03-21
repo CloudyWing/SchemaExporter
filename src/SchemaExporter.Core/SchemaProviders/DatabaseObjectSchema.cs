@@ -1,33 +1,32 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 /// <summary>
-/// Represents a provider-neutral database object.
+/// 表示與提供者無關的資料庫物件。
 /// </summary>
 public sealed class DatabaseObjectSchema {
     /// <summary>
-    /// Gets or sets the schema name.
+    /// 取得或設定結構描述名稱。
     /// </summary>
     public string SchemaName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the object name.
+    /// 取得或設定物件名稱。
     /// </summary>
     public string ObjectName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the object type.
+    /// 取得或設定物件類型。
     /// </summary>
     public string ObjectType { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the object description.
+    /// 取得或設定物件描述。
     /// </summary>
     public string ObjectDescription { get; set; } = "";
 
     /// <summary>
-    /// Gets the object key.
+    /// 取得物件索引鍵。
     /// </summary>
     public DatabaseObjectKey ObjectKey => new(SchemaName, ObjectName, ObjectType);
 }
+

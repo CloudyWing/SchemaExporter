@@ -1,11 +1,10 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 /// <summary>
-/// Identifies a database object using schema, name, and type.
+/// 使用結構描述、名稱和類型識別資料庫物件。
 /// </summary>
-/// <param name="SchemaName">The database schema name.</param>
-/// <param name="ObjectName">The database object name.</param>
-/// <param name="ObjectType">The provider-specific object type.</param>
+/// <param name="SchemaName">資料庫結構描述名稱。</param>
+/// <param name="ObjectName">資料庫物件名稱。</param>
+/// <param name="ObjectType">提供者特定的物件類型。</param>
 public readonly record struct DatabaseObjectKey(string SchemaName, string ObjectName, string ObjectType);
+

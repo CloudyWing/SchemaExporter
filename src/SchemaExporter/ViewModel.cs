@@ -1,11 +1,10 @@
-#nullable enable
-
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
-using CloudyWing.SchemaExporter.Exporting;
+using CloudyWing.SchemaExporter.Core;
+using CloudyWing.SchemaExporter.Core.Exporting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Options;
@@ -13,61 +12,85 @@ using Microsoft.Extensions.Options;
 namespace CloudyWing.SchemaExporter;
 
 /// <summary>
-/// Main UI-facing coordinator for schema export operations.
+/// 提供桌面介面使用的 schema 匯出作業協調器。
 /// </summary>
 public partial class ViewModel : ObservableObject {
     private readonly SchemaOptions schemaOptions;
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private CancellationTokenSource? currentExportCancellation;
 
+    /// <summary>
+    /// 取得或設定目前選取的連線設定。
+    /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
-    private SchemaConnection? connection;
+    public partial SchemaConnection? Connection { get; set; }
 
+    /// <summary>
+    /// 取得或設定目前選取的匯出設定檔。
+    /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
-    private ExportProfile? selectedProfile;
+    public partial ExportProfile? SelectedProfile { get; set; }
 
+    /// <summary>
+    /// 取得或設定匯出資料夾路徑。
+    /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
-    private string outputPath = "";
+    public partial string OutputPath { get; set; } = "";
 
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否正在執行匯出作業。
+    /// </summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelExportCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
-    private bool isExporting;
-
-    [ObservableProperty]
-    private string statusMessage = "請選擇連線並確認匯出設定。";
-
-    [ObservableProperty]
-    private int progressPercent;
-
-    [ObservableProperty]
-    private string? lastOutputFilePath;
-
-    [ObservableProperty]
-    private string? lastManifestFilePath;
+    public partial bool IsExporting { get; set; }
 
     /// <summary>
-    /// Gets the configured connections.
+    /// 取得或設定目前顯示的狀態訊息。
+    /// </summary>
+    [ObservableProperty]
+    public partial string StatusMessage { get; set; } = "請選擇連線並確認匯出設定。";
+
+    /// <summary>
+    /// 取得或設定目前進度百分比。
+    /// </summary>
+    [ObservableProperty]
+    public partial int ProgressPercent { get; set; }
+
+    /// <summary>
+    /// 取得或設定最近一次輸出的活頁簿檔案路徑。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? LastOutputFilePath { get; set; }
+
+    /// <summary>
+    /// 取得或設定最近一次產生的 manifest 檔案路徑。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? LastManifestFilePath { get; set; }
+
+    /// <summary>
+    /// 取得可用的連線設定集合。
     /// </summary>
     public ObservableCollection<SchemaConnection> Connections { get; }
 
     /// <summary>
-    /// Gets the configured export profiles.
+    /// 取得可用的匯出設定檔集合。
     /// </summary>
     public ObservableCollection<ExportProfile> ExportProfiles { get; }
 
     /// <summary>
-    /// Gets the diagnostics from the most recent export attempt.
+    /// 取得最近一次匯出作業的診斷資訊集合。
     /// </summary>
     public ObservableCollection<ExportDiagnostic> Diagnostics { get; } = [];
 
     /// <summary>
-    /// Gets a localized summary of the configured result options.
+    /// 取得目前結果選項的摘要說明。
     /// </summary>
     public string ResultOptionsSummary {
         get {
@@ -109,10 +132,10 @@ public partial class ViewModel : ObservableObject {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ViewModel"/> class.
+    /// 初始化 <see cref="ViewModel"/> 類別的新執行個體。
     /// </summary>
-    /// <param name="schemaAccessor">The schema options accessor.</param>
-    /// <param name="exportOrchestrator">The export orchestrator.</param>
+    /// <param name="schemaAccessor">Schema 設定存取器。</param>
+    /// <param name="exportOrchestrator">匯出流程協調器。</param>
     public ViewModel(
         IOptions<SchemaOptions> schemaAccessor,
         SchemaExportOrchestrator exportOrchestrator
@@ -346,3 +369,4 @@ public partial class ViewModel : ObservableObject {
         };
     }
 }
+

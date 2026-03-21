@@ -1,29 +1,28 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter;
+namespace CloudyWing.SchemaExporter.Core;
 
 /// <summary>
-/// Represents a named database connection used for schema export.
+/// 表示用於結構描述匯出的具名資料庫連線。
 /// </summary>
 public class SchemaConnection {
     /// <summary>
-    /// Gets or sets the display name shown in the UI.
+    /// 取得或設定在 UI 中顯示的名稱。
     /// </summary>
     public string Name { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the database provider type. Defaults to SQL Server when omitted from configuration.
+    /// 取得或設定資料庫提供者類型。省略時預設為 SQL Server。
     /// </summary>
     public DatabaseType DatabaseType { get; set; } = DatabaseType.SqlServer;
 
     /// <summary>
-    /// Gets or sets the database connection string.
+    /// 取得或設定資料庫連接字串。
     /// </summary>
     public string ConnectionString { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the name of the export profile to use for this connection.
-    /// If null or empty, the default profile is used.
+    /// 取得或設定此連線使用的匯出設定檔名稱。
+    /// 若為 null 或空白，則使用預設設定檔。
     /// </summary>
     public string? ExportProfileName { get; set; }
 }
+

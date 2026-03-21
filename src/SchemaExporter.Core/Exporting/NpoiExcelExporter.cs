@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.IO;
 using CloudyWing.SpreadsheetExporter;
 using NPOI.SS.UserModel;
 using NPOI.SS.Util;
@@ -7,7 +6,7 @@ using NPOI.XSSF.UserModel;
 using SpreadsheetHorizontalAlignment = CloudyWing.SpreadsheetExporter.HorizontalAlignment;
 using SpreadsheetVerticalAlignment = CloudyWing.SpreadsheetExporter.VerticalAlignment;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
 /// Exports spreadsheets to XLSX files through NPOI.
@@ -15,8 +14,8 @@ namespace CloudyWing.SchemaExporter.Exporting;
 internal sealed class NpoiExcelExporter : ExporterBase {
     private const int ExcelColumnWidthUnit = 256;
 
-    private static readonly IReadOnlyDictionary<DataValidationOperator, int> ValidationOperatorMap =
-        new Dictionary<DataValidationOperator, int> {
+    private static readonly Dictionary<DataValidationOperator, int> ValidationOperatorMap =
+        new() {
             [DataValidationOperator.Between] = OperatorType.BETWEEN,
             [DataValidationOperator.NotBetween] = OperatorType.NOT_BETWEEN,
             [DataValidationOperator.Equal] = OperatorType.EQUAL,
@@ -27,8 +26,8 @@ internal sealed class NpoiExcelExporter : ExporterBase {
             [DataValidationOperator.LessThanOrEqual] = OperatorType.LESS_OR_EQUAL
         };
 
-    private static readonly IReadOnlyDictionary<SpreadsheetHorizontalAlignment, NPOI.SS.UserModel.HorizontalAlignment> HorizontalAlignmentMap =
-        new Dictionary<SpreadsheetHorizontalAlignment, NPOI.SS.UserModel.HorizontalAlignment> {
+    private static readonly Dictionary<SpreadsheetHorizontalAlignment, NPOI.SS.UserModel.HorizontalAlignment> HorizontalAlignmentMap =
+        new() {
             [SpreadsheetHorizontalAlignment.General] = NPOI.SS.UserModel.HorizontalAlignment.General,
             [SpreadsheetHorizontalAlignment.Left] = NPOI.SS.UserModel.HorizontalAlignment.Left,
             [SpreadsheetHorizontalAlignment.Center] = NPOI.SS.UserModel.HorizontalAlignment.Center,
@@ -36,16 +35,16 @@ internal sealed class NpoiExcelExporter : ExporterBase {
             [SpreadsheetHorizontalAlignment.Justify] = NPOI.SS.UserModel.HorizontalAlignment.Justify
         };
 
-    private static readonly IReadOnlyDictionary<SpreadsheetVerticalAlignment, NPOI.SS.UserModel.VerticalAlignment> VerticalAlignmentMap =
-        new Dictionary<SpreadsheetVerticalAlignment, NPOI.SS.UserModel.VerticalAlignment> {
+    private static readonly Dictionary<SpreadsheetVerticalAlignment, NPOI.SS.UserModel.VerticalAlignment> VerticalAlignmentMap =
+        new() {
             [SpreadsheetVerticalAlignment.Top] = NPOI.SS.UserModel.VerticalAlignment.Top,
             [SpreadsheetVerticalAlignment.Middle] = NPOI.SS.UserModel.VerticalAlignment.Center,
             [SpreadsheetVerticalAlignment.Bottom] = NPOI.SS.UserModel.VerticalAlignment.Bottom
         };
 
-    private readonly IDictionary<CellStyle, ICellStyle> cellStyles = new Dictionary<CellStyle, ICellStyle>();
-    private readonly IDictionary<CellFont, IFont> fonts = new Dictionary<CellFont, IFont>();
-    private readonly object syncLock = new();
+    private readonly Dictionary<CellStyle, ICellStyle> cellStyles = [];
+    private readonly Dictionary<CellFont, IFont> fonts = [];
+    private readonly Lock syncLock = new();
     private XSSFWorkbook? workbook;
 
     /// <inheritdoc />
@@ -146,7 +145,7 @@ internal sealed class NpoiExcelExporter : ExporterBase {
         }
 
         sheet.PrintSetup.Landscape = context.PageSettings.PageOrientation == PageOrientation.Landscape;
-        sheet.PrintSetup.PaperSize = (short)context.PageSettings.PaperSize;
+        sheet.PrintSetup.PaperSize = (short)(int)context.PageSettings.PaperSize;
         sheet.ForceFormulaRecalculation = true;
 
         OnSheetCreated(new SheetCreatedEventArgs(sheet, context));
@@ -430,10 +429,12 @@ internal sealed class NpoiExcelExporter : ExporterBase {
     }
 
     private static XSSFColor CreateColor(Color color) {
-        XSSFColor xssfColor = new();
-        xssfColor.RGB = [color.R, color.G, color.B];
+        XSSFColor xssfColor = new() {
+            RGB = [color.R, color.G, color.B]
+        };
         return xssfColor;
     }
 
     private XSSFWorkbook Workbook => workbook ?? throw new InvalidOperationException("Workbook has not been initialized.");
 }
+

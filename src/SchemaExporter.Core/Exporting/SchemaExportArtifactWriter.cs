@@ -1,14 +1,15 @@
-#nullable enable
-
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using CloudyWing.SchemaExporter.SchemaProviders;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
-public sealed partial class SchemaExportOrchestrator {
-    private static async Task<ArtifactOutputs> WriteArtifactsAsync(
+/// <summary>
+/// 負責寫入次要匯出成品，包含資訊清單、附屬檔案、快照與差異比對結果。
+/// </summary>
+internal static class SchemaExportArtifactWriter {
+    internal static async Task<ArtifactOutputs> WriteArtifactsAsync(
         string outputFilePath,
         SchemaConnection connection,
         ExportProfile profile,
@@ -62,9 +63,16 @@ public sealed partial class SchemaExportOrchestrator {
         };
     }
 
-    private static SchemaSnapshotDocument BuildSnapshot(string outputFilePath, SchemaConnection connection, ExportProfile profile, FilteredSchemaExport filteredExport, IReadOnlyCollection<ExportDiagnostic> diagnostics) {
+    private static SchemaSnapshotDocument BuildSnapshot(
+        string outputFilePath,
+        SchemaConnection connection,
+        ExportProfile profile,
+        FilteredSchemaExport filteredExport,
+        IReadOnlyCollection<ExportDiagnostic> diagnostics
+    ) {
         ILookup<DatabaseObjectKey, DatabaseColumnSchema> columnsByObject = filteredExport.Columns.ToLookup(x => x.ObjectKey);
         ILookup<DatabaseObjectKey, DatabaseIndexSchema> indexesByObject = filteredExport.Indexes.ToLookup(x => x.ObjectKey);
+
         return new SchemaSnapshotDocument {
             SchemaVersion = 2,
             ExportedAt = DateTimeOffset.Now,
@@ -90,25 +98,32 @@ public sealed partial class SchemaExportOrchestrator {
                 ObjectName = databaseObject.ObjectName,
                 ObjectType = databaseObject.ObjectType,
                 ObjectDescription = databaseObject.ObjectDescription,
-                Columns = columnsByObject[databaseObject.ObjectKey].OrderBy(x => x.ColumnOrder).ThenBy(x => x.ColumnName, StringComparer.OrdinalIgnoreCase).Select(x => new SchemaSnapshotColumnDocument {
-                    ColumnName = x.ColumnName,
-                    ColumnType = x.ColumnType,
-                    IsNullable = x.IsNullable,
-                    ColumnDefault = x.ColumnDefault,
-                    IsPrimaryKey = x.IsPrimaryKey,
-                    IsIdentity = x.IsIdentity,
-                    ColumnDescription = x.ColumnDescription,
-                    ColumnOrder = x.ColumnOrder
-                }).ToList(),
-                Indexes = indexesByObject[databaseObject.ObjectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).Select(x => new SchemaSnapshotIndexDocument {
-                    IndexName = x.IndexName,
-                    IsPrimaryKey = x.IsPrimaryKey,
-                    IsClustered = x.IsClustered,
-                    IsUnique = x.IsUnique,
-                    IsForeignKey = x.IsForeignKey,
-                    Columns = x.Columns,
-                    OtherColumns = x.OtherColumns
-                }).ToList()
+                Columns = columnsByObject[databaseObject.ObjectKey]
+                    .OrderBy(x => x.ColumnOrder)
+                    .ThenBy(x => x.ColumnName, StringComparer.OrdinalIgnoreCase)
+                    .Select(x => new SchemaSnapshotColumnDocument {
+                        ColumnName = x.ColumnName,
+                        ColumnType = x.ColumnType,
+                        IsNullable = x.IsNullable,
+                        ColumnDefault = x.ColumnDefault,
+                        IsPrimaryKey = x.IsPrimaryKey,
+                        IsIdentity = x.IsIdentity,
+                        ColumnDescription = x.ColumnDescription,
+                        ColumnOrder = x.ColumnOrder
+                    })
+                    .ToList(),
+                Indexes = indexesByObject[databaseObject.ObjectKey]
+                    .OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase)
+                    .Select(x => new SchemaSnapshotIndexDocument {
+                        IndexName = x.IndexName,
+                        IsPrimaryKey = x.IsPrimaryKey,
+                        IsClustered = x.IsClustered,
+                        IsUnique = x.IsUnique,
+                        IsForeignKey = x.IsForeignKey,
+                        Columns = x.Columns,
+                        OtherColumns = x.OtherColumns
+                    })
+                    .ToList()
             }).ToList(),
             Routines = filteredExport.Routines.Select(x => new SchemaSnapshotRoutineDocument {
                 SchemaName = x.SchemaName,
@@ -127,7 +142,10 @@ public sealed partial class SchemaExportOrchestrator {
     private static async Task<SchemaSnapshotDocument> LoadSnapshotAsync(string snapshotPath, CancellationToken cancellationToken) {
         try {
             string json = await File.ReadAllTextAsync(snapshotPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
             if (snapshot is null) {
                 throw new ExportValidationException($"無法讀取 schema snapshot 檔案：{snapshotPath}");
             }
@@ -142,7 +160,12 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static SchemaDiffDocument BuildDiff(SchemaSnapshotDocument previousSnapshot, SchemaSnapshotDocument currentSnapshot, string leftSnapshotPath, string rightSnapshotPath) {
+    private static SchemaDiffDocument BuildDiff(
+        SchemaSnapshotDocument previousSnapshot,
+        SchemaSnapshotDocument currentSnapshot,
+        string leftSnapshotPath,
+        string rightSnapshotPath
+    ) {
         List<SchemaDiffEntry> objectChanges = BuildChangeEntries(
             previousSnapshot.Objects,
             currentSnapshot.Objects,
@@ -223,48 +246,82 @@ public sealed partial class SchemaExportOrchestrator {
         };
     }
 
-    private static List<SchemaDiffEntry> BuildChangeEntries<T>(IEnumerable<T> previousItems, IEnumerable<T> currentItems, Func<T, string> keySelector, Func<T, string> identifierSelector, Func<T, IReadOnlyDictionary<string, string?>> valueSelector) {
+    private static List<SchemaDiffEntry> BuildChangeEntries<T>(
+        IEnumerable<T> previousItems,
+        IEnumerable<T> currentItems,
+        Func<T, string> keySelector,
+        Func<T, string> identifierSelector,
+        Func<T, IReadOnlyDictionary<string, string?>> valueSelector
+    ) where T : notnull {
         Dictionary<string, T> previousMap = previousItems.ToDictionary(keySelector, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, T> currentMap = currentItems.ToDictionary(keySelector, StringComparer.OrdinalIgnoreCase);
-        SortedSet<string> allKeys = [..previousMap.Keys, ..currentMap.Keys];
+        SortedSet<string> allKeys = [.. previousMap.Keys, .. currentMap.Keys];
         List<SchemaDiffEntry> entries = [];
+
         foreach (string key in allKeys) {
             bool hasPrevious = previousMap.TryGetValue(key, out T? previousItem);
             bool hasCurrent = currentMap.TryGetValue(key, out T? currentItem);
+
             if (!hasPrevious && hasCurrent) {
-                IReadOnlyDictionary<string, SchemaValueChange> propertyChanges = BuildAddedOrRemovedChanges(valueSelector(currentItem!), true);
-                entries.Add(new SchemaDiffEntry { ChangeType = SchemaChangeType.Added, Identifier = identifierSelector(currentItem!), PropertyChanges = new Dictionary<string, SchemaValueChange>(propertyChanges) });
-                continue;
-            }
-            if (hasPrevious && !hasCurrent) {
-                IReadOnlyDictionary<string, SchemaValueChange> propertyChanges = BuildAddedOrRemovedChanges(valueSelector(previousItem!), false);
-                entries.Add(new SchemaDiffEntry { ChangeType = SchemaChangeType.Removed, Identifier = identifierSelector(previousItem!), PropertyChanges = new Dictionary<string, SchemaValueChange>(propertyChanges) });
+                T ensuredCurrentItem = currentItem ?? throw new InvalidOperationException("Expected a current item for an added diff entry.");
+                IReadOnlyDictionary<string, SchemaValueChange> propertyChanges = BuildAddedOrRemovedChanges(valueSelector(ensuredCurrentItem), true);
+                entries.Add(new SchemaDiffEntry {
+                    ChangeType = SchemaChangeType.Added,
+                    Identifier = identifierSelector(ensuredCurrentItem),
+                    PropertyChanges = new Dictionary<string, SchemaValueChange>(propertyChanges)
+                });
                 continue;
             }
 
-            IReadOnlyDictionary<string, string?> previousValues = valueSelector(previousItem!);
-            IReadOnlyDictionary<string, string?> currentValues = valueSelector(currentItem!);
+            if (hasPrevious && !hasCurrent) {
+                T ensuredPreviousItem = previousItem ?? throw new InvalidOperationException("Expected a previous item for a removed diff entry.");
+                IReadOnlyDictionary<string, SchemaValueChange> propertyChanges = BuildAddedOrRemovedChanges(valueSelector(ensuredPreviousItem), false);
+                entries.Add(new SchemaDiffEntry {
+                    ChangeType = SchemaChangeType.Removed,
+                    Identifier = identifierSelector(ensuredPreviousItem),
+                    PropertyChanges = new Dictionary<string, SchemaValueChange>(propertyChanges)
+                });
+                continue;
+            }
+
+            T ensuredPreviousItemForComparison = previousItem ?? throw new InvalidOperationException("Expected a previous item for a modified diff entry.");
+            T ensuredCurrentItemForComparison = currentItem ?? throw new InvalidOperationException("Expected a current item for a modified diff entry.");
+            IReadOnlyDictionary<string, string?> previousValues = valueSelector(ensuredPreviousItemForComparison);
+            IReadOnlyDictionary<string, string?> currentValues = valueSelector(ensuredCurrentItemForComparison);
             IReadOnlyDictionary<string, SchemaValueChange> differences = BuildModifiedChanges(previousValues, currentValues);
             if (differences.Count == 0) {
                 continue;
             }
 
-            entries.Add(new SchemaDiffEntry { ChangeType = SchemaChangeType.Modified, Identifier = identifierSelector(currentItem!), PropertyChanges = new Dictionary<string, SchemaValueChange>(differences) });
+            entries.Add(new SchemaDiffEntry {
+                ChangeType = SchemaChangeType.Modified,
+                Identifier = identifierSelector(ensuredCurrentItemForComparison),
+                PropertyChanges = new Dictionary<string, SchemaValueChange>(differences)
+            });
         }
 
         return entries;
     }
 
-    private static IReadOnlyDictionary<string, SchemaValueChange> BuildAddedOrRemovedChanges(IReadOnlyDictionary<string, string?> values, bool isAdded) {
+    private static IReadOnlyDictionary<string, SchemaValueChange> BuildAddedOrRemovedChanges(
+        IReadOnlyDictionary<string, string?> values,
+        bool isAdded
+    ) {
         Dictionary<string, SchemaValueChange> changes = [];
         foreach ((string propertyName, string? value) in values) {
-            changes[propertyName] = isAdded ? new SchemaValueChange { Current = value } : new SchemaValueChange { Previous = value };
+            changes[propertyName] = isAdded
+                ? new SchemaValueChange { Current = value }
+                : new SchemaValueChange { Previous = value };
         }
+
         return changes;
     }
 
-    private static IReadOnlyDictionary<string, SchemaValueChange> BuildModifiedChanges(IReadOnlyDictionary<string, string?> previousValues, IReadOnlyDictionary<string, string?> currentValues) {
-        SortedSet<string> propertyNames = [..previousValues.Keys, ..currentValues.Keys];
+    private static IReadOnlyDictionary<string, SchemaValueChange> BuildModifiedChanges(
+        IReadOnlyDictionary<string, string?> previousValues,
+        IReadOnlyDictionary<string, string?> currentValues
+    ) {
+        SortedSet<string> propertyNames = [.. previousValues.Keys, .. currentValues.Keys];
         Dictionary<string, SchemaValueChange> changes = [];
         foreach (string propertyName in propertyNames) {
             previousValues.TryGetValue(propertyName, out string? previousValue);
@@ -275,6 +332,7 @@ public sealed partial class SchemaExportOrchestrator {
 
             changes[propertyName] = new SchemaValueChange { Previous = previousValue, Current = currentValue };
         }
+
         return changes;
     }
 
@@ -322,7 +380,9 @@ public sealed partial class SchemaExportOrchestrator {
             markdown.AppendLine("| Severity | Category | Affected Object | Message |");
             markdown.AppendLine("| --- | --- | --- | --- |");
             foreach (SchemaSnapshotDiagnostic diagnostic in snapshot.Diagnostics) {
-                markdown.AppendLine($"| {EscapeMarkdown(diagnostic.Severity)} | {EscapeMarkdown(diagnostic.Category)} | {EscapeMarkdown(diagnostic.AffectedObject ?? "")} | {EscapeMarkdown(diagnostic.Message)} |");
+                markdown.AppendLine(
+                    $"| {EscapeMarkdown(diagnostic.Severity)} | {EscapeMarkdown(diagnostic.Category)} | {EscapeMarkdown(diagnostic.AffectedObject ?? "")} | {EscapeMarkdown(diagnostic.Message)} |"
+                );
             }
         }
 
@@ -330,7 +390,9 @@ public sealed partial class SchemaExportOrchestrator {
         markdown.AppendLine("## Objects");
         foreach (SchemaSnapshotObjectDocument databaseObject in snapshot.Objects) {
             markdown.AppendLine();
-            markdown.AppendLine($"### {EscapeMarkdown(databaseObject.SchemaName)}.{EscapeMarkdown(databaseObject.ObjectName)} ({EscapeMarkdown(databaseObject.ObjectType)})");
+            markdown.AppendLine(
+                $"### {EscapeMarkdown(databaseObject.SchemaName)}.{EscapeMarkdown(databaseObject.ObjectName)} ({EscapeMarkdown(databaseObject.ObjectType)})"
+            );
             if (!string.IsNullOrWhiteSpace(databaseObject.ObjectDescription)) {
                 markdown.AppendLine();
                 markdown.AppendLine(EscapeMarkdown(databaseObject.ObjectDescription));
@@ -342,7 +404,9 @@ public sealed partial class SchemaExportOrchestrator {
             markdown.AppendLine("| Order | Name | Type | Nullable | PK | Identity | Default | Description |");
             markdown.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (SchemaSnapshotColumnDocument column in databaseObject.Columns) {
-                markdown.AppendLine($"| {column.ColumnOrder} | {EscapeMarkdown(column.ColumnName)} | {EscapeMarkdown(column.ColumnType)} | {EscapeMarkdown(column.IsNullable)} | {EscapeMarkdown(column.IsPrimaryKey)} | {EscapeMarkdown(column.IsIdentity)} | {EscapeMarkdown(column.ColumnDefault)} | {EscapeMarkdown(column.ColumnDescription)} |");
+                markdown.AppendLine(
+                    $"| {column.ColumnOrder} | {EscapeMarkdown(column.ColumnName)} | {EscapeMarkdown(column.ColumnType)} | {EscapeMarkdown(column.IsNullable)} | {EscapeMarkdown(column.IsPrimaryKey)} | {EscapeMarkdown(column.IsIdentity)} | {EscapeMarkdown(column.ColumnDefault)} | {EscapeMarkdown(column.ColumnDescription)} |"
+                );
             }
 
             if (databaseObject.Indexes.Count > 0) {
@@ -352,7 +416,9 @@ public sealed partial class SchemaExportOrchestrator {
                 markdown.AppendLine("| Name | PK | Clustered | Unique | Foreign Key | Columns | Other Columns |");
                 markdown.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
                 foreach (SchemaSnapshotIndexDocument index in databaseObject.Indexes) {
-                    markdown.AppendLine($"| {EscapeMarkdown(index.IndexName)} | {EscapeMarkdown(index.IsPrimaryKey)} | {EscapeMarkdown(index.IsClustered)} | {EscapeMarkdown(index.IsUnique)} | {EscapeMarkdown(index.IsForeignKey)} | {EscapeMarkdown(index.Columns)} | {EscapeMarkdown(index.OtherColumns)} |");
+                    markdown.AppendLine(
+                        $"| {EscapeMarkdown(index.IndexName)} | {EscapeMarkdown(index.IsPrimaryKey)} | {EscapeMarkdown(index.IsClustered)} | {EscapeMarkdown(index.IsUnique)} | {EscapeMarkdown(index.IsForeignKey)} | {EscapeMarkdown(index.Columns)} | {EscapeMarkdown(index.OtherColumns)} |"
+                    );
                 }
             }
         }
@@ -362,7 +428,9 @@ public sealed partial class SchemaExportOrchestrator {
             markdown.AppendLine("## Routines");
             foreach (SchemaSnapshotRoutineDocument routine in snapshot.Routines) {
                 markdown.AppendLine();
-                markdown.AppendLine($"### {EscapeMarkdown(BuildRoutineIdentifier(routine.SchemaName, routine.ContainerName, routine.RoutineName, routine.RoutineType, routine.OverloadIdentifier))}");
+                markdown.AppendLine(
+                    $"### {EscapeMarkdown(BuildRoutineIdentifier(routine.SchemaName, routine.ContainerName, routine.RoutineName, routine.RoutineType, routine.OverloadIdentifier))}"
+                );
                 if (!string.IsNullOrWhiteSpace(routine.ParameterSignature)) {
                     markdown.AppendLine();
                     markdown.AppendLine($"- Parameters: {EscapeMarkdown(routine.ParameterSignature)}");
@@ -408,9 +476,20 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static string BuildRoutineIdentifier(string schemaName, string containerName, string routineName, string routineType, string overloadIdentifier) {
-        string qualifiedName = string.IsNullOrWhiteSpace(containerName) ? $"{schemaName}.{routineName}" : $"{schemaName}.{containerName}.{routineName}";
-        return string.IsNullOrWhiteSpace(overloadIdentifier) ? $"{qualifiedName} ({routineType})" : $"{qualifiedName}#{overloadIdentifier} ({routineType})";
+    private static string BuildRoutineIdentifier(
+        string schemaName,
+        string containerName,
+        string routineName,
+        string routineType,
+        string overloadIdentifier
+    ) {
+        string qualifiedName = string.IsNullOrWhiteSpace(containerName)
+            ? $"{schemaName}.{routineName}"
+            : $"{schemaName}.{containerName}.{routineName}";
+
+        return string.IsNullOrWhiteSpace(overloadIdentifier)
+            ? $"{qualifiedName} ({routineType})"
+            : $"{qualifiedName}#{overloadIdentifier} ({routineType})";
     }
 
     private static string EscapeMarkdown(string value) {
@@ -418,7 +497,12 @@ public sealed partial class SchemaExportOrchestrator {
             return "";
         }
 
-        return value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("|", "\\|", StringComparison.Ordinal).Replace("\r\n", "<br />", StringComparison.Ordinal).Replace("\n", "<br />", StringComparison.Ordinal).Replace("\r", "", StringComparison.Ordinal);
+        return value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r\n", "<br />", StringComparison.Ordinal)
+            .Replace("\n", "<br />", StringComparison.Ordinal)
+            .Replace("\r", "", StringComparison.Ordinal);
     }
 
     private static string NormalizeComparableValue(string? value) {
@@ -426,7 +510,9 @@ public sealed partial class SchemaExportOrchestrator {
             return "";
         }
 
-        return value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Trim();
+        return value.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Trim();
     }
 
     private static int CountChanges(IEnumerable<SchemaDiffEntry> entries, SchemaChangeType changeType) {
@@ -439,7 +525,12 @@ public sealed partial class SchemaExportOrchestrator {
         return Path.Combine(directoryPath ?? "", $"{fileNameWithoutExtension}.{suffix}");
     }
 
-    private static async Task WriteJsonArtifactAsync<T>(string filePath, T document, CancellationToken cancellationToken, string errorMessagePrefix) {
+    private static async Task WriteJsonArtifactAsync<T>(
+        string filePath,
+        T document,
+        CancellationToken cancellationToken,
+        string errorMessagePrefix
+    ) {
         try {
             string json = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(filePath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
@@ -448,11 +539,73 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static async Task WriteTextArtifactAsync(string filePath, string content, CancellationToken cancellationToken, string errorMessagePrefix) {
+    private static async Task WriteTextArtifactAsync(
+        string filePath,
+        string content,
+        CancellationToken cancellationToken,
+        string errorMessagePrefix
+    ) {
         try {
             await File.WriteAllTextAsync(filePath, content, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {
             throw new ExportOutputException($"{errorMessagePrefix}{filePath}", ex);
         }
+    }
+
+    private static async Task<string> GenerateManifestAsync(
+        string outputFilePath,
+        SchemaConnection connection,
+        ExportProfile profile,
+        FilteredSchemaExport filteredExport,
+        IReadOnlyCollection<ExportDiagnostic> diagnostics,
+        ExportResultOptions resultOptions,
+        CancellationToken cancellationToken
+    ) {
+        string manifestPath = BuildManifestPath(outputFilePath);
+        ExportManifest manifest = new() {
+            ExportedAt = DateTimeOffset.Now,
+            ConnectionName = connection.Name,
+            DatabaseType = connection.DatabaseType.ToString(),
+            ProfileName = profile.Name,
+            OutputFilePath = outputFilePath,
+            ResultOptions = new ExportManifestResultOptions {
+                UseTimestamp = resultOptions.UseTimestamp,
+                TimestampFormat = resultOptions.TimestampFormat,
+                OverwriteStrategy = resultOptions.OverwriteStrategy.ToString(),
+                OpenOutputFolder = resultOptions.OpenOutputFolder,
+                GenerateManifest = resultOptions.GenerateManifest,
+                GenerateJsonSidecar = resultOptions.GenerateJsonSidecar,
+                GenerateMarkdownSidecar = resultOptions.GenerateMarkdownSidecar,
+                GenerateSchemaSnapshot = resultOptions.GenerateSchemaSnapshot,
+                DiffSourceSnapshotPath = resultOptions.DiffSourceSnapshotPath ?? ""
+            },
+            Counts = new ExportManifestCounts {
+                Objects = filteredExport.Objects.Count,
+                Columns = filteredExport.Columns.Count,
+                Indexes = filteredExport.Indexes.Count,
+                Routines = filteredExport.Routines.Count
+            },
+            Diagnostics = diagnostics.Select(x => new ExportManifestDiagnostic {
+                Severity = x.SeverityText,
+                Category = x.Category.ToString(),
+                SupportLevel = x.SupportLevelText,
+                AffectedObject = x.AffectedObject,
+                Message = x.Message
+            }).ToList()
+        };
+
+        try {
+            string json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(manifestPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+            return manifestPath;
+        } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {
+            throw new ExportOutputException($"無法產生 manifest 檔案：{manifestPath}", ex);
+        }
+    }
+
+    private static string BuildManifestPath(string outputFilePath) {
+        string? directoryPath = Path.GetDirectoryName(outputFilePath);
+        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(outputFilePath);
+        return Path.Combine(directoryPath ?? "", $"{fileNameWithoutExtension}.manifest.json");
     }
 }

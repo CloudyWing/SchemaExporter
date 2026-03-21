@@ -1,13 +1,11 @@
-#nullable enable
-
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Provides reusable loading, comparison, and formatting support for schema snapshots.
+/// 提供結構描述快照的可重用載入、比較與格式化支援。
 /// </summary>
 public sealed class SchemaSnapshotDiffService {
     private static readonly JsonSerializerOptions JsonOptions = new() {
@@ -16,21 +14,19 @@ public sealed class SchemaSnapshotDiffService {
     };
 
     /// <summary>
-    /// Loads a schema snapshot document from disk.
+    /// 從磁碟載入結構描述快照文件。
     /// </summary>
-    /// <param name="snapshotPath">The snapshot file path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The deserialized snapshot document.</returns>
+    /// <param name="snapshotPath">快照檔案路徑。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>已還原序列化的快照文件。</returns>
     public async Task<SchemaSnapshotDocument> LoadSnapshotAsync(string snapshotPath, CancellationToken cancellationToken = default) {
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath, nameof(snapshotPath));
 
         string normalizedPath = NormalizePath(snapshotPath);
         try {
             string json = await File.ReadAllTextAsync(normalizedPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(json, JsonOptions);
-            if (snapshot is null) {
-                throw new ExportValidationException($"無法讀取 schema snapshot 檔案：{normalizedPath}");
-            }
+            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(json, JsonOptions)
+                ?? throw new ExportValidationException($"無法讀取 schema snapshot 檔案：{normalizedPath}");
 
             return snapshot;
         } catch (ExportValidationException) {
@@ -43,12 +39,12 @@ public sealed class SchemaSnapshotDiffService {
     }
 
     /// <summary>
-    /// Compares two schema snapshot documents loaded from disk.
+    /// 比較從磁碟載入的兩份結構描述快照文件。
     /// </summary>
-    /// <param name="leftSnapshotPath">The baseline snapshot path.</param>
-    /// <param name="rightSnapshotPath">The current snapshot path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The calculated diff document.</returns>
+    /// <param name="leftSnapshotPath">基準快照路徑。</param>
+    /// <param name="rightSnapshotPath">目前快照路徑。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>計算完成的差異比對文件。</returns>
     public async Task<SchemaDiffDocument> CompareAsync(
         string leftSnapshotPath,
         string rightSnapshotPath,
@@ -62,38 +58,37 @@ public sealed class SchemaSnapshotDiffService {
     }
 
     /// <summary>
-    /// Writes a diff document as JSON.
+    /// 將差異比對文件以 JSON 格式寫出。
     /// </summary>
-    /// <param name="outputPath">The target file path.</param>
-    /// <param name="diff">The diff document to serialize.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="outputPath">目標檔案路徑。</param>
+    /// <param name="diff">要序列化的差異比對文件。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
     public async Task WriteJsonAsync(string outputPath, SchemaDiffDocument diff, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(diff, nameof(diff));
         await WriteTextAsync(
             outputPath,
             JsonSerializer.Serialize(diff, JsonOptions),
-            cancellationToken,
-            "無法產生 schema diff 檔案："
-        ).ConfigureAwait(false);
+            "無法產生 schema diff 檔案：",
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Writes a diff document as Markdown.
+    /// 將差異比對文件以 Markdown 格式寫出。
     /// </summary>
-    /// <param name="outputPath">The target file path.</param>
-    /// <param name="diff">The diff document to format.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="outputPath">目標檔案路徑。</param>
+    /// <param name="diff">要格式化的差異比對文件。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
     public async Task WriteMarkdownAsync(string outputPath, SchemaDiffDocument diff, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(diff, nameof(diff));
-        await WriteTextAsync(outputPath, BuildMarkdownReport(diff), cancellationToken, "無法產生 schema diff 檔案：")
+        await WriteTextAsync(outputPath, BuildMarkdownReport(diff), "無法產生 schema diff 檔案：", cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Builds a Markdown report for a schema diff.
+    /// 建立結構描述差異比對的 Markdown 報告。
     /// </summary>
-    /// <param name="diff">The diff document.</param>
-    /// <returns>The formatted Markdown report.</returns>
+    /// <param name="diff">差異比對文件。</param>
+    /// <returns>已格式化的 Markdown 報告字串。</returns>
     public string BuildMarkdownReport(SchemaDiffDocument diff) {
         ArgumentNullException.ThrowIfNull(diff, nameof(diff));
 
@@ -241,10 +236,10 @@ public sealed class SchemaSnapshotDiffService {
         Func<T, string> keySelector,
         Func<T, string> identifierSelector,
         Func<T, IReadOnlyDictionary<string, string?>> valueSelector
-    ) {
+    ) where T : notnull {
         Dictionary<string, T> previousMap = previousItems.ToDictionary(keySelector, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, T> currentMap = currentItems.ToDictionary(keySelector, StringComparer.OrdinalIgnoreCase);
-        SortedSet<string> allKeys = [..previousMap.Keys, ..currentMap.Keys];
+        SortedSet<string> allKeys = [.. previousMap.Keys, .. currentMap.Keys];
         List<SchemaDiffEntry> entries = [];
 
         foreach (string key in allKeys) {
@@ -252,25 +247,29 @@ public sealed class SchemaSnapshotDiffService {
             bool hasCurrent = currentMap.TryGetValue(key, out T? currentItem);
 
             if (!hasPrevious && hasCurrent) {
+                T ensuredCurrentItem = currentItem ?? throw new InvalidOperationException("Expected a current item for an added diff entry.");
                 entries.Add(new SchemaDiffEntry {
                     ChangeType = SchemaChangeType.Added,
-                    Identifier = identifierSelector(currentItem!),
-                    PropertyChanges = new Dictionary<string, SchemaValueChange>(BuildAddedOrRemovedChanges(valueSelector(currentItem!), isAdded: true))
+                    Identifier = identifierSelector(ensuredCurrentItem),
+                    PropertyChanges = new Dictionary<string, SchemaValueChange>(BuildAddedOrRemovedChanges(valueSelector(ensuredCurrentItem), isAdded: true))
                 });
                 continue;
             }
 
             if (hasPrevious && !hasCurrent) {
+                T ensuredPreviousItem = previousItem ?? throw new InvalidOperationException("Expected a previous item for a removed diff entry.");
                 entries.Add(new SchemaDiffEntry {
                     ChangeType = SchemaChangeType.Removed,
-                    Identifier = identifierSelector(previousItem!),
-                    PropertyChanges = new Dictionary<string, SchemaValueChange>(BuildAddedOrRemovedChanges(valueSelector(previousItem!), isAdded: false))
+                    Identifier = identifierSelector(ensuredPreviousItem),
+                    PropertyChanges = new Dictionary<string, SchemaValueChange>(BuildAddedOrRemovedChanges(valueSelector(ensuredPreviousItem), isAdded: false))
                 });
                 continue;
             }
 
-            IReadOnlyDictionary<string, string?> previousValues = valueSelector(previousItem!);
-            IReadOnlyDictionary<string, string?> currentValues = valueSelector(currentItem!);
+            T ensuredPreviousItemForComparison = previousItem ?? throw new InvalidOperationException("Expected a previous item for a modified diff entry.");
+            T ensuredCurrentItemForComparison = currentItem ?? throw new InvalidOperationException("Expected a current item for a modified diff entry.");
+            IReadOnlyDictionary<string, string?> previousValues = valueSelector(ensuredPreviousItemForComparison);
+            IReadOnlyDictionary<string, string?> currentValues = valueSelector(ensuredCurrentItemForComparison);
             IReadOnlyDictionary<string, SchemaValueChange> differences = BuildModifiedChanges(previousValues, currentValues);
             if (differences.Count == 0) {
                 continue;
@@ -278,7 +277,7 @@ public sealed class SchemaSnapshotDiffService {
 
             entries.Add(new SchemaDiffEntry {
                 ChangeType = SchemaChangeType.Modified,
-                Identifier = identifierSelector(currentItem!),
+                Identifier = identifierSelector(ensuredCurrentItemForComparison),
                 PropertyChanges = new Dictionary<string, SchemaValueChange>(differences)
             });
         }
@@ -304,7 +303,7 @@ public sealed class SchemaSnapshotDiffService {
         IReadOnlyDictionary<string, string?> previousValues,
         IReadOnlyDictionary<string, string?> currentValues
     ) {
-        SortedSet<string> propertyNames = [..previousValues.Keys, ..currentValues.Keys];
+        SortedSet<string> propertyNames = [.. previousValues.Keys, .. currentValues.Keys];
         Dictionary<string, SchemaValueChange> changes = [];
 
         foreach (string propertyName in propertyNames) {
@@ -388,9 +387,9 @@ public sealed class SchemaSnapshotDiffService {
     private static async Task WriteTextAsync(
         string outputPath,
         string content,
-        CancellationToken cancellationToken,
         string errorPrefix
-    ) {
+,
+        CancellationToken cancellationToken) {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath, nameof(outputPath));
         try {
             await File.WriteAllTextAsync(outputPath, content, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
@@ -399,3 +398,4 @@ public sealed class SchemaSnapshotDiffService {
         }
     }
 }
+

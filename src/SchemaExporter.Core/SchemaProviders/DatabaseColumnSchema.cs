@@ -1,68 +1,67 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 /// <summary>
-/// Represents a provider-neutral database column.
+/// 表示與提供者無關的資料庫資料行。
 /// </summary>
 public sealed class DatabaseColumnSchema {
     /// <summary>
-    /// Gets or sets the schema name.
+    /// 取得或設定結構描述名稱。
     /// </summary>
     public string SchemaName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the owning object name.
+    /// 取得或設定所屬物件名稱。
     /// </summary>
     public string ObjectName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the owning object type.
+    /// 取得或設定所屬物件類型。
     /// </summary>
     public string ObjectType { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the column name.
+    /// 取得或設定資料行名稱。
     /// </summary>
     public string ColumnName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the provider-specific column type.
+    /// 取得或設定提供者特定的資料行類型。
     /// </summary>
     public string ColumnType { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets whether the column is nullable.
+    /// 取得或設定資料行是否可為 null。
     /// </summary>
     public string IsNullable { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the column default expression.
+    /// 取得或設定資料行的預設運算式。
     /// </summary>
     public string ColumnDefault { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets whether the column is part of the primary key.
+    /// 取得或設定資料行是否為主鍵的一部分。
     /// </summary>
     public string IsPrimaryKey { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets whether the column is an identity column.
+    /// 取得或設定資料行是否為識別欄位。
     /// </summary>
     public string IsIdentity { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the column description.
+    /// 取得或設定資料行描述。
     /// </summary>
     public string ColumnDescription { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the ordinal position of the column.
+    /// 取得或設定資料行的序數位置。
     /// </summary>
     public int ColumnOrder { get; set; }
 
     /// <summary>
-    /// Gets the owning object key.
+    /// 取得所屬物件索引鍵。
     /// </summary>
     public DatabaseObjectKey ObjectKey => new(SchemaName, ObjectName, ObjectType);
 }
+

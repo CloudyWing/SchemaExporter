@@ -1,60 +1,59 @@
-#nullable enable
-
 using System.IO;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Contains the outcome of a successful export operation.
+/// 表示成功匯出作業的結果。
 /// </summary>
 public sealed class ExportResult {
     /// <summary>
-    /// Gets the path to the generated export file.
+    /// 取得產生的匯出檔案路徑。
     /// </summary>
     public string OutputFilePath { get; init; } = "";
 
     /// <summary>
-    /// Gets the generated manifest file path, if created.
+    /// 取得產生的 manifest 檔案路徑（若已建立）。
     /// </summary>
     public string? ManifestFilePath { get; init; }
 
     /// <summary>
-    /// Gets the generated JSON sidecar file path, if created.
+    /// 取得產生的 JSON 附屬檔案路徑（若已建立）。
     /// </summary>
     public string? JsonSidecarFilePath { get; init; }
 
     /// <summary>
-    /// Gets the generated Markdown sidecar file path, if created.
+    /// 取得產生的 Markdown 附屬檔案路徑（若已建立）。
     /// </summary>
     public string? MarkdownSidecarFilePath { get; init; }
 
     /// <summary>
-    /// Gets the generated schema snapshot file path, if created.
+    /// 取得產生的結構描述快照檔案路徑（若已建立）。
     /// </summary>
     public string? SnapshotFilePath { get; init; }
 
     /// <summary>
-    /// Gets the generated schema diff file path, if created.
+    /// 取得產生的結構描述差異比對檔案路徑（若已建立）。
     /// </summary>
     public string? DiffFilePath { get; init; }
 
     /// <summary>
-    /// Gets the output directory path.
+    /// 取得輸出目錄路徑。
     /// </summary>
     public string OutputDirectoryPath => Path.GetDirectoryName(OutputFilePath) ?? "";
 
     /// <summary>
-    /// Gets the connection name used for the export.
+    /// 取得匯出所使用的連線名稱。
     /// </summary>
     public string ConnectionName { get; init; } = "";
 
     /// <summary>
-    /// Gets the export profile name used for the export.
+    /// 取得匯出所使用的設定檔名稱。
     /// </summary>
     public string ProfileName { get; init; } = "";
 
     /// <summary>
-    /// Gets the diagnostics collected during export.
+    /// 取得匯出期間收集的診斷資訊。
     /// </summary>
     public IReadOnlyList<ExportDiagnostic> Diagnostics { get; init; } = [];
 }
+

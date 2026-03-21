@@ -2,13 +2,13 @@ using System.Drawing;
 using CloudyWing.SpreadsheetExporter;
 using CloudyWing.SpreadsheetExporter.Config;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
 /// Configures spreadsheet exporter defaults shared by desktop and CLI execution paths.
 /// </summary>
 public static class SpreadsheetExporterBootstrapper {
-    private static readonly object SyncRoot = new();
+    private static readonly Lock SyncRoot = new();
     private static bool isConfigured;
 
     /// <summary>
@@ -56,3 +56,4 @@ public static class SpreadsheetExporterBootstrapper {
         }
     }
 }
+

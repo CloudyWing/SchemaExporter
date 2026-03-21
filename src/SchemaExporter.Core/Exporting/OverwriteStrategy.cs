@@ -1,21 +1,22 @@
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Defines strategies for handling existing export files.
+/// 定義處理現有匯出檔案的策略。
 /// </summary>
 public enum OverwriteStrategy {
     /// <summary>
-    /// Overwrite the existing file without prompting.
+    /// 不提示直接覆寫現有檔案。
     /// </summary>
     Overwrite = 0,
 
     /// <summary>
-    /// Append a numeric suffix to create a unique filename.
+    /// 附加數字後綴以建立唯一的檔案名稱。
     /// </summary>
     AppendSuffix = 1,
 
     /// <summary>
-    /// Fail the export if the file already exists.
+    /// 若檔案已存在則使匯出失敗。
     /// </summary>
     Fail = 2
 }
+

@@ -2,7 +2,7 @@ using System.Data.Common;
 using Dapper;
 using Microsoft.Data.SqlClient;
 
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider {
     private const string QueryObjectsSql = """
@@ -248,8 +248,10 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         ORDER BY s.name, o.type, o.name;
         """;
 
+    /// <inheritdoc/>
     public DatabaseType DatabaseType => DatabaseType.SqlServer;
 
+    /// <inheritdoc/>
     public async Task<DatabaseSchemaExport> LoadSchemaAsync(
         string connectionString,
         CancellationToken cancellationToken = default
@@ -288,3 +290,4 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         };
     }
 }
+

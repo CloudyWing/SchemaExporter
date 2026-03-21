@@ -1,14 +1,18 @@
-﻿using System.Windows;
+using System.Windows;
 
-namespace CloudyWing.SchemaExporter {
+namespace CloudyWing.SchemaExporter;
+
+/// <summary>
+/// Interaction logic for MainWindow.xaml
+/// </summary>
+public partial class MainWindow : Window {
     /// <summary>
-    /// Interaction logic for MainWindow.xaml
+    /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
-    public partial class MainWindow : Window {
-        public MainWindow(ViewModel viewModel) {
-            InitializeComponent();
+    /// <param name="viewModel">The view model to bind to this window.</param>
+    public MainWindow(ViewModel viewModel) {
+        InitializeComponent();
 
-            DataContext = viewModel;
-        }
+        DataContext = viewModel;
     }
 }

@@ -1,21 +1,20 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Exception thrown when export validation fails.
+/// 當匯出驗證失敗時擲回的例外狀況。
 /// </summary>
 public sealed class ExportValidationException : ExportWorkflowException {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExportValidationException"/> class.
+    /// 初始化 <see cref="ExportValidationException"/> 類別的新執行個體，使用指定的錯誤訊息。
     /// </summary>
-    /// <param name="message">The validation error message.</param>
+    /// <param name="message">驗證錯誤訊息。</param>
     public ExportValidationException(string message) : base(message) { }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ExportValidationException"/> class.
+    /// 初始化 <see cref="ExportValidationException"/> 類別的新執行個體，使用指定的錯誤訊息及內部例外狀況參考。
     /// </summary>
-    /// <param name="message">The validation error message.</param>
-    /// <param name="innerException">The inner exception that caused this validation failure.</param>
+    /// <param name="message">驗證錯誤訊息。</param>
+    /// <param name="innerException">造成此驗證失敗的內部例外狀況。</param>
     public ExportValidationException(string message, Exception innerException) : base(message, innerException) { }
 }
+

@@ -1,22 +1,92 @@
 namespace CloudyWing.SchemaExporter.Cli;
 
+/// <summary>
+/// 表示 CLI 命令列參數的解析結果。
+/// </summary>
 internal sealed class CliArguments {
+    /// <summary>
+    /// 取得或設定要執行的命令。
+    /// </summary>
     public CliCommand Command { get; init; } = CliCommand.Export;
+
+    /// <summary>
+    /// 取得或設定匯出命令使用的連線名稱。
+    /// </summary>
     public string ConnectionName { get; init; } = "";
+
+    /// <summary>
+    /// 取得或設定匯出命令指定的設定檔名稱。
+    /// </summary>
     public string? ProfileName { get; init; }
+
+    /// <summary>
+    /// 取得或設定匯出或 diff 命令指定的輸出路徑。
+    /// </summary>
     public string? OutputPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否要產生 manifest 檔案。
+    /// </summary>
     public bool? GenerateManifest { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否要產生 JSON sidecar 檔案。
+    /// </summary>
     public bool? GenerateJsonSidecar { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否要產生 Markdown sidecar 檔案。
+    /// </summary>
     public bool? GenerateMarkdownSidecar { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否要產生 schema snapshot 檔案。
+    /// </summary>
     public bool? GenerateSchemaSnapshot { get; init; }
+
+    /// <summary>
+    /// 取得或設定差異比對使用的來源 snapshot 路徑。
+    /// </summary>
     public string? DiffSourceSnapshotPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否在匯出完成後開啟輸出資料夾。
+    /// </summary>
     public bool? OpenOutputFolder { get; init; }
+
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否要在輸出檔名附加時間戳記。
+    /// </summary>
     public bool? UseTimestamp { get; init; }
+
+    /// <summary>
+    /// 取得或設定 diff 命令的左側 snapshot 路徑。
+    /// </summary>
     public string? LeftSnapshotPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 diff 命令的右側 snapshot 路徑。
+    /// </summary>
     public string? RightSnapshotPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 diff 命令的輸出檔案路徑。
+    /// </summary>
     public string? DiffOutputPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 diff 命令的輸出格式。
+    /// </summary>
     public string? DiffOutputFormat { get; init; }
 
+    /// <summary>
+    /// 解析命令列引數並建立 <see cref="CliArguments"/> 執行個體。
+    /// </summary>
+    /// <param name="args">原始命令列引數。</param>
+    /// <param name="parsedArguments">當此方法回傳 <see langword="true"/> 時，包含已解析的引數；否則為 <see langword="null"/>。</param>
+    /// <param name="errorMessage">當此方法回傳 <see langword="false"/> 且未要求顯示說明時，包含錯誤訊息；否則為 <see langword="null"/>。</param>
+    /// <param name="showHelp">當此方法回傳 <see langword="false"/> 時，指示是否應顯示說明文字。</param>
+    /// <returns>解析成功時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
     public static bool TryParse(
         IReadOnlyList<string> args,
         out CliArguments? parsedArguments,

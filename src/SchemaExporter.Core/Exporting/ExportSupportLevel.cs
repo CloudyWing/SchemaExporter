@@ -1,23 +1,22 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Indicates how completely a feature is supported in export output.
+/// 表示功能在匯出輸出中的支援程度。
 /// </summary>
 public enum ExportSupportLevel {
     /// <summary>
-    /// Fully supported.
+    /// 完整支援。
     /// </summary>
     Full = 0,
 
     /// <summary>
-    /// Partially supported.
+    /// 部分支援。
     /// </summary>
     Partial = 1,
 
     /// <summary>
-    /// Not supported.
+    /// 不支援。
     /// </summary>
     Unsupported = 2
 }
+

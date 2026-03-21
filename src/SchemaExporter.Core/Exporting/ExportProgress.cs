@@ -1,21 +1,22 @@
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Reports incremental export progress to the UI.
+/// 向 UI 回報匯出的增量進度。
 /// </summary>
 public sealed class ExportProgress {
     /// <summary>
-    /// Gets or sets the current export stage.
+    /// 取得或設定目前的匯出階段。
     /// </summary>
     public ExportStage Stage { get; set; }
 
     /// <summary>
-    /// Gets or sets the current progress message.
+    /// 取得或設定目前的進度訊息。
     /// </summary>
     public string Message { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the percentage complete (0-100), or null if indeterminate.
+    /// 取得或設定完成百分比（0-100），若無法確定則為 null。
     /// </summary>
     public int? PercentComplete { get; set; }
 }
+

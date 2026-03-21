@@ -1,38 +1,36 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Represents a diagnostic message emitted during export.
+/// 表示匯出過程中發出的診斷訊息。
 /// </summary>
 public sealed class ExportDiagnostic {
     /// <summary>
-    /// Gets the severity level of the diagnostic.
+    /// 取得診斷的嚴重性層級。
     /// </summary>
     public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Info;
 
     /// <summary>
-    /// Gets the diagnostic category.
+    /// 取得診斷類別。
     /// </summary>
     public ExportDiagnosticCategory Category { get; init; } = ExportDiagnosticCategory.General;
 
     /// <summary>
-    /// Gets the support level associated with the diagnostic, when applicable.
+    /// 取得與診斷相關的支援層級（適用時）。
     /// </summary>
     public ExportSupportLevel? SupportLevel { get; init; }
 
     /// <summary>
-    /// Gets the diagnostic message.
+    /// 取得診斷訊息。
     /// </summary>
     public string Message { get; init; } = "";
 
     /// <summary>
-    /// Gets the affected database object, if applicable.
+    /// 取得受影響的資料庫物件（適用時）。
     /// </summary>
     public string? AffectedObject { get; init; }
 
     /// <summary>
-    /// Gets the localized severity text for display.
+    /// 取得用於顯示的本地化嚴重性文字。
     /// </summary>
     public string SeverityText => Severity switch {
         DiagnosticSeverity.Info => "資訊",
@@ -41,7 +39,7 @@ public sealed class ExportDiagnostic {
     };
 
     /// <summary>
-    /// Gets the localized support level text for display.
+    /// 取得用於顯示的本地化支援層級文字。
     /// </summary>
     public string SupportLevelText => SupportLevel switch {
         ExportSupportLevel.Full => "完整支援",
@@ -51,7 +49,12 @@ public sealed class ExportDiagnostic {
     };
 
     /// <summary>
-    /// Gets the localized category text for display.
+    /// 取得用於顯示的受影響物件名稱；當 <see cref="AffectedObject"/> 為 <see langword="null"/> 時傳回空字串。
+    /// </summary>
+    public string AffectedObjectDisplay => AffectedObject ?? "";
+
+    /// <summary>
+    /// 取得用於顯示的本地化類別文字。
     /// </summary>
     public string CategoryText => Category switch {
         ExportDiagnosticCategory.General => "一般",
@@ -64,3 +67,4 @@ public sealed class ExportDiagnostic {
         _ => Category.ToString()
     };
 }
+

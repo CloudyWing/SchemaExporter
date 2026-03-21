@@ -1,20 +1,16 @@
-#nullable enable
-
 using System.ComponentModel;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
-using CloudyWing.SchemaExporter.SchemaProviders;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SpreadsheetExporter;
 using CloudyWing.SpreadsheetExporter.Templates.Grid;
 using CloudyWing.SpreadsheetExporter.Templates.RecordSet;
 using Microsoft.Extensions.Logging;
 
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
 /// Orchestrates the schema export workflow with validation, filtering, diagnostics, and progress reporting.
@@ -113,7 +109,7 @@ public sealed partial class SchemaExportOrchestrator {
             stageStopwatch.Restart();
             ReportProgress(progress, ExportStage.Finalizing, "正在整理匯出結果...", 92);
 
-            ArtifactOutputs artifactOutputs = await WriteArtifactsAsync(
+            ArtifactOutputs artifactOutputs = await SchemaExportArtifactWriter.WriteArtifactsAsync(
                 outputPlan.FilePath,
                 connection,
                 profile,
@@ -160,7 +156,7 @@ public sealed partial class SchemaExportOrchestrator {
                 DiffFilePath = artifactOutputs.DiffFilePath,
                 ConnectionName = connection.Name,
                 ProfileName = profile.Name,
-                Diagnostics = [..diagnostics]
+                Diagnostics = [.. diagnostics]
             };
         } catch (OperationCanceledException) {
             LogExportCancelled(logger, connection.Name, currentStage, totalStopwatch.Elapsed.TotalMilliseconds);
@@ -252,7 +248,7 @@ public sealed partial class SchemaExportOrchestrator {
     }
 
     private static FilteredSchemaExport ApplyFilters(DatabaseSchemaExport schemaExport, ExportProfile profile, List<ExportDiagnostic> diagnostics) {
-        IReadOnlyList<DatabaseObjectSchema> orderedObjects = schemaExport.Objects
+        List<DatabaseObjectSchema> orderedObjects = schemaExport.Objects
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectType, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectName, StringComparer.OrdinalIgnoreCase)
@@ -281,7 +277,7 @@ public sealed partial class SchemaExportOrchestrator {
             filteredObjects = filteredObjects.Where(x => !IsViewObjectType(x.ObjectType)).ToList();
         }
 
-        IReadOnlyList<DatabaseRoutineSchema> orderedRoutines = schemaExport.Routines
+        List<DatabaseRoutineSchema> orderedRoutines = schemaExport.Routines
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ContainerName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.RoutineName, StringComparer.OrdinalIgnoreCase)
@@ -426,13 +422,13 @@ public sealed partial class SchemaExportOrchestrator {
         }
 
         ISpreadsheetExporter exporter = SpreadsheetManager.CreateExporter();
-        string baseFileName = $"TableSchema_{normalizedConnectionName}";
+        string basicFileName = $"TableSchema_{normalizedConnectionName}";
         if (resultOptions.UseTimestamp) {
             string timestamp = DateTimeOffset.Now.ToString(resultOptions.TimestampFormat, CultureInfo.InvariantCulture);
-            baseFileName = $"{baseFileName}_{timestamp}";
+            basicFileName = $"{basicFileName}_{timestamp}";
         }
 
-        string filePath = Path.Combine(exportPath, $"{baseFileName}{exporter.FileNameExtension}");
+        string filePath = Path.Combine(exportPath, $"{basicFileName}{exporter.FileNameExtension}");
         string resolvedFilePath = ResolveOutputFilePath(filePath, resultOptions.OverwriteStrategy, diagnostics);
         return new OutputPlan(resolvedFilePath);
     }
@@ -510,55 +506,6 @@ public sealed partial class SchemaExportOrchestrator {
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {
             throw new ExportOutputException($"無法寫入輸出檔案：{filePath}", ex);
         }
-    }
-
-    private static async Task<string> GenerateManifestAsync(string outputFilePath, SchemaConnection connection, ExportProfile profile, FilteredSchemaExport filteredExport, List<ExportDiagnostic> diagnostics, ExportResultOptions resultOptions, CancellationToken cancellationToken) {
-        string manifestPath = BuildManifestPath(outputFilePath);
-        ExportManifest manifest = new() {
-            ExportedAt = DateTimeOffset.Now,
-            ConnectionName = connection.Name,
-            DatabaseType = connection.DatabaseType.ToString(),
-            ProfileName = profile.Name,
-            OutputFilePath = outputFilePath,
-            ResultOptions = new ExportManifestResultOptions {
-                UseTimestamp = resultOptions.UseTimestamp,
-                TimestampFormat = resultOptions.TimestampFormat,
-                OverwriteStrategy = resultOptions.OverwriteStrategy.ToString(),
-                OpenOutputFolder = resultOptions.OpenOutputFolder,
-                GenerateManifest = resultOptions.GenerateManifest,
-                GenerateJsonSidecar = resultOptions.GenerateJsonSidecar,
-                GenerateMarkdownSidecar = resultOptions.GenerateMarkdownSidecar,
-                GenerateSchemaSnapshot = resultOptions.GenerateSchemaSnapshot,
-                DiffSourceSnapshotPath = resultOptions.DiffSourceSnapshotPath ?? ""
-            },
-            Counts = new ExportManifestCounts {
-                Objects = filteredExport.Objects.Count,
-                Columns = filteredExport.Columns.Count,
-                Indexes = filteredExport.Indexes.Count,
-                Routines = filteredExport.Routines.Count
-            },
-            Diagnostics = diagnostics.Select(x => new ExportManifestDiagnostic {
-                Severity = x.SeverityText,
-                Category = x.Category.ToString(),
-                SupportLevel = x.SupportLevelText,
-                AffectedObject = x.AffectedObject,
-                Message = x.Message
-            }).ToList()
-        };
-
-        try {
-            string json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(manifestPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-            return manifestPath;
-        } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {
-            throw new ExportOutputException($"無法產生 manifest 檔案：{manifestPath}", ex);
-        }
-    }
-
-    private static string BuildManifestPath(string outputFilePath) {
-        string? directoryPath = Path.GetDirectoryName(outputFilePath);
-        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(outputFilePath);
-        return Path.Combine(directoryPath ?? "", $"{fileNameWithoutExtension}.manifest.json");
     }
 
     private static void TryOpenOutputFolder(string? outputDirectoryPath, List<ExportDiagnostic> diagnostics) {
@@ -672,7 +619,7 @@ public sealed partial class SchemaExportOrchestrator {
         template.Columns.Add("嚴重性", x => x.SeverityText);
         template.Columns.Add("類別", x => x.CategoryText);
         template.Columns.Add("支援層級", x => x.SupportLevelText);
-        template.Columns.Add("影響物件", x => x.AffectedObject ?? "");
+        template.Columns.Add("影響物件", x => x.AffectedObjectDisplay);
         template.Columns.Add("訊息", x => x.Message);
         Sheeter sheeter = exporter.CreateSheeter("匯出診斷");
         sheeter.AddTemplates(template);
@@ -692,16 +639,24 @@ public sealed partial class SchemaExportOrchestrator {
             DatabaseObjectSchema databaseObject = databaseObjects[index];
             DatabaseObjectKey objectKey = databaseObject.ObjectKey;
             Sheeter sheeter = exporter.CreateSheeter(sheetNames[objectKey]);
-            BuildTableDetailSheet(sheeter, databaseObject, columnsByObject[objectKey].OrderBy(x => x.ColumnOrder).ToList(), indexesByObject[objectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).ToList());
-            int percent = 68 + (int)Math.Round(((double)(index + 1) / totalObjects) * 17, MidpointRounding.AwayFromZero);
-            ReportProgress(progress, ExportStage.GeneratingExport, $"正在建立工作表：{databaseObject.SchemaName}.{databaseObject.ObjectName} ({index + 1}/{databaseObjects.Count})", percent);
+            BuildTableDetailSheet(
+                sheeter, databaseObject,
+                columnsByObject[objectKey].OrderBy(x => x.ColumnOrder).ToList(),
+                indexesByObject[objectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).ToList()
+            );
+            int percent = 68 + (int)Math.Round((double)(index + 1) / totalObjects * 17, MidpointRounding.AwayFromZero);
+            ReportProgress(
+                progress, ExportStage.GeneratingExport,
+                $"正在建立工作表：{databaseObject.SchemaName}.{databaseObject.ObjectName} ({index + 1}/{databaseObjects.Count})",
+                percent
+            );
         }
     }
 
     private static void BuildTableDetailSheet(Sheeter sheeter, DatabaseObjectSchema databaseObject, IReadOnlyCollection<DatabaseColumnSchema> columns, IReadOnlyCollection<DatabaseIndexSchema> indexes) {
         CellStyle defaultGridStyle = SpreadsheetManager.DefaultCellStyles.GridCellStyle;
         CellFont defaultFont = SpreadsheetManager.DefaultCellStyles.GridCellStyle.Font;
-        CellStyle headerLabelStyle = defaultGridStyle with { HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Right, Font = defaultFont with { Style = defaultFont.Style | SpreadsheetExporter.FontStyles.IsBold } };
+        CellStyle headerLabelStyle = defaultGridStyle with { HorizontalAlignment = HorizontalAlignment.Right, Font = defaultFont with { Style = defaultFont.Style | SpreadsheetExporter.FontStyles.IsBold } };
         GridTemplate headerTemplate = new();
         headerTemplate.CreateRow().CreateCell("Schema：", cellStyle: headerLabelStyle).CreateCell(databaseObject.SchemaName, 2).CreateCell("物件名稱：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectName, 3).CreateRow(Constants.AutoFitRowHeight).CreateCell("類型：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectType, 2).CreateCell("資料表描述：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectDescription, 3);
         sheeter.AddTemplate(headerTemplate);
@@ -806,3 +761,4 @@ public sealed partial class SchemaExportOrchestrator {
         return value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\\n", "\n", StringComparison.Ordinal).Replace("\n", Environment.NewLine, StringComparison.Ordinal);
     }
 }
+

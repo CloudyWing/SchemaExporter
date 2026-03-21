@@ -1,14 +1,16 @@
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 internal sealed class DatabaseSchemaProviderFactory : IDatabaseSchemaProviderFactory {
     private readonly IReadOnlyDictionary<DatabaseType, IDatabaseSchemaProvider> providers;
 
+    /// <inheritdoc/>
     public DatabaseSchemaProviderFactory(IEnumerable<IDatabaseSchemaProvider> providers) {
         ArgumentNullException.ThrowIfNull(providers, nameof(providers));
 
         this.providers = providers.ToDictionary(x => x.DatabaseType);
     }
 
+    /// <inheritdoc/>
     public Task<DatabaseSchemaExport> LoadSchemaAsync(
         DatabaseType databaseType,
         string connectionString,
@@ -21,3 +23,4 @@ internal sealed class DatabaseSchemaProviderFactory : IDatabaseSchemaProviderFac
         return provider.LoadSchemaAsync(connectionString, cancellationToken);
     }
 }
+

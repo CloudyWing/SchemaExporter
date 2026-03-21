@@ -1,6 +1,6 @@
 using System.Text;
-using CloudyWing.SchemaExporter;
-using CloudyWing.SchemaExporter.Exporting;
+using CloudyWing.SchemaExporter.Core;
+using CloudyWing.SchemaExporter.Core.Exporting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,13 +23,15 @@ internal static class Program {
             return showHelp ? 0 : 1;
         }
 
+        CliArguments arguments = parsedArguments ?? throw new InvalidOperationException("CLI parser returned success without arguments.");
+
         try {
-            return parsedArguments!.Command switch {
-                CliCommand.Diff => await ExecuteDiffAsync(parsedArguments).ConfigureAwait(false),
-                _ => await ExecuteExportAsync(parsedArguments).ConfigureAwait(false)
+            return arguments.Command switch {
+                CliCommand.Diff => await ExecuteDiffAsync(arguments).ConfigureAwait(false),
+                _ => await ExecuteExportAsync(arguments).ConfigureAwait(false)
             };
         } catch (ExportWorkflowException ex) {
-            Console.Error.WriteLine($"{GetCommandLabel(parsedArguments!)} failed: {ex.Message}");
+            Console.Error.WriteLine($"{GetCommandLabel(arguments)} failed: {ex.Message}");
             return 2;
         } catch (Exception ex) {
             Console.Error.WriteLine($"Unexpected error: {ex.Message}");
@@ -93,10 +95,12 @@ internal static class Program {
     }
 
     private static async Task<int> ExecuteDiffAsync(CliArguments arguments) {
+        string leftSnapshotPath = arguments.LeftSnapshotPath ?? throw new InvalidOperationException("Diff command is missing the left snapshot path.");
+        string rightSnapshotPath = arguments.RightSnapshotPath ?? throw new InvalidOperationException("Diff command is missing the right snapshot path.");
         SchemaSnapshotDiffService diffService = new();
         SchemaDiffDocument diff = await diffService.CompareAsync(
-            arguments.LeftSnapshotPath!,
-            arguments.RightSnapshotPath!,
+            leftSnapshotPath,
+            rightSnapshotPath,
             CancellationToken.None
         ).ConfigureAwait(false);
 
@@ -244,3 +248,4 @@ internal static class Program {
     }
 
 }
+

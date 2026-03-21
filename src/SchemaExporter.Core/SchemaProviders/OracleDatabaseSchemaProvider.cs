@@ -2,7 +2,7 @@ using System.Data.Common;
 using Dapper;
 using Oracle.ManagedDataAccess.Client;
 
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
     private const string QueryObjectsSql = """
@@ -273,8 +273,10 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
             p.subprogram_id;
         """;
 
+    /// <inheritdoc/>
     public DatabaseType DatabaseType => DatabaseType.Oracle;
 
+    /// <inheritdoc/>
     public async Task<DatabaseSchemaExport> LoadSchemaAsync(
         string connectionString,
         CancellationToken cancellationToken = default
@@ -313,3 +315,4 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
         };
     }
 }
+

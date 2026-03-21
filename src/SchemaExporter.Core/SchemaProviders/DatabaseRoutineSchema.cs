@@ -1,58 +1,56 @@
-#nullable enable
-
-namespace CloudyWing.SchemaExporter.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 /// <summary>
-/// Represents a provider-neutral stored routine.
+/// 表示與提供者無關的預存程序。
 /// </summary>
 public sealed class DatabaseRoutineSchema {
     /// <summary>
-    /// Gets or sets the schema name.
+    /// 取得或設定結構描述名稱。
     /// </summary>
     public string SchemaName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the optional containing package or object name.
+    /// 取得或設定選擇性的所屬套件或物件名稱。
     /// </summary>
     public string ContainerName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the routine name.
+    /// 取得或設定程序名稱。
     /// </summary>
     public string RoutineName { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the routine type.
+    /// 取得或設定程序類型。
     /// </summary>
     public string RoutineType { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the overload identifier.
+    /// 取得或設定多載識別碼。
     /// </summary>
     public string OverloadIdentifier { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the formatted parameter signature.
+    /// 取得或設定格式化的參數簽章。
     /// </summary>
     public string ParameterSignature { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the return type.
+    /// 取得或設定傳回類型。
     /// </summary>
     public string ReturnType { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the routine description.
+    /// 取得或設定程序描述。
     /// </summary>
     public string RoutineDescription { get; set; } = "";
 
     /// <summary>
-    /// Gets or sets the routine definition.
+    /// 取得或設定程序定義。
     /// </summary>
     public string RoutineDefinition { get; set; } = "";
 
     /// <summary>
-    /// Gets the routine key.
+    /// 取得程序索引鍵。
     /// </summary>
     public DatabaseRoutineKey RoutineKey => new(
         SchemaName,
@@ -63,9 +61,10 @@ public sealed class DatabaseRoutineSchema {
     );
 
     /// <summary>
-    /// Gets the schema-qualified routine name.
+    /// 取得結構描述限定的程序名稱。
     /// </summary>
     public string QualifiedName => string.IsNullOrWhiteSpace(ContainerName)
         ? $"{SchemaName}.{RoutineName}"
         : $"{SchemaName}.{ContainerName}.{RoutineName}";
 }
+

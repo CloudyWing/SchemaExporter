@@ -1,36 +1,37 @@
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Defines the stages of an export operation.
+/// 定義匯出作業的各個階段。
 /// </summary>
 public enum ExportStage {
     /// <summary>
-    /// Validating connection and export settings.
+    /// 驗證連線與匯出設定。
     /// </summary>
     Validating = 0,
 
     /// <summary>
-    /// Loading schema metadata from the database.
+    /// 從資料庫載入結構描述中繼資料。
     /// </summary>
     LoadingSchema = 1,
 
     /// <summary>
-    /// Applying filters to the loaded schema.
+    /// 對已載入的結構描述套用篩選條件。
     /// </summary>
     ApplyingFilters = 2,
 
     /// <summary>
-    /// Building spreadsheet sheets and writing to file.
+    /// 建立試算表工作表並寫入檔案。
     /// </summary>
     GeneratingExport = 3,
 
     /// <summary>
-    /// Writing manifest and performing post-export actions.
+    /// 寫入 manifest 並執行匯出後動作。
     /// </summary>
     Finalizing = 4,
 
     /// <summary>
-    /// Export completed successfully.
+    /// 匯出已成功完成。
     /// </summary>
     Completed = 5
 }
+

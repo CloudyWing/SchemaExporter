@@ -1,52 +1,53 @@
-namespace CloudyWing.SchemaExporter.Exporting;
+namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Configures output file naming and post-export actions.
+/// 設定輸出檔案命名及匯出後動作。
 /// </summary>
 public sealed class ExportResultOptions {
     /// <summary>
-    /// Gets or sets whether to append timestamp to the filename.
+    /// 取得或設定是否在檔名中附加時間戳記。
     /// </summary>
     public bool UseTimestamp { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets the timestamp format when <see cref="UseTimestamp"/> is true.
-    /// Default is "yyyyMMdd_HHmmss".
+    /// 取得或設定當 <see cref="UseTimestamp"/> 為 true 時所使用的時間戳記格式。
+    /// 預設值為 "yyyyMMdd_HHmmss"。
     /// </summary>
     public string TimestampFormat { get; set; } = "yyyyMMdd_HHmmss";
 
     /// <summary>
-    /// Gets or sets the overwrite strategy when a file already exists.
+    /// 取得或設定當檔案已存在時的覆寫策略。
     /// </summary>
     public OverwriteStrategy OverwriteStrategy { get; set; } = OverwriteStrategy.Overwrite;
 
     /// <summary>
-    /// Gets or sets whether to open the output folder after export completes.
+    /// 取得或設定是否在匯出完成後開啟輸出資料夾。
     /// </summary>
     public bool OpenOutputFolder { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets whether to generate a manifest file describing the export.
+    /// 取得或設定是否產生描述匯出內容的 manifest 檔案。
     /// </summary>
     public bool GenerateManifest { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets whether to generate a JSON sidecar containing the exported schema and optional diff data.
+    /// 取得或設定是否產生包含匯出結構描述及選用差異比對資料的 JSON 附屬檔案。
     /// </summary>
     public bool GenerateJsonSidecar { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets whether to generate a Markdown sidecar containing the exported schema and optional diff summary.
+    /// 取得或設定是否產生包含匯出結構描述及選用差異比對摘要的 Markdown 附屬檔案。
     /// </summary>
     public bool GenerateMarkdownSidecar { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets whether to write a reusable schema snapshot JSON file.
+    /// 取得或設定是否寫入可重複使用的結構描述快照 JSON 檔案。
     /// </summary>
     public bool GenerateSchemaSnapshot { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets the absolute path to a baseline schema snapshot used for diff generation.
+    /// 取得或設定用於差異比對產生的基準結構描述快照絕對路徑。
     /// </summary>
     public string? DiffSourceSnapshotPath { get; set; }
 }
+
