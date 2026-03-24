@@ -5,6 +5,93 @@ using Microsoft.Data.SqlClient;
 namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider {
+    /// <inheritdoc/>
+    public DatabaseType DatabaseType => DatabaseType.SqlServer;
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<DatabaseObjectSchema>> LoadObjectsAsync(
+        string connectionString,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+
+        using DbConnection connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        IReadOnlyList<DatabaseObjectSchema> objects = [
+            ..await connection.QueryAsync<DatabaseObjectSchema>(
+                new CommandDefinition(QueryObjectsSql, cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
+
+        return objects;
+    }
+
+    /// <inheritdoc/>
+    public async Task<DatabaseSchemaDetails> LoadDetailsAsync(
+        string connectionString,
+        IReadOnlyList<DatabaseObjectSchema> filteredObjects,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+
+        if (filteredObjects.Count == 0) {
+            return new DatabaseSchemaDetails();
+        }
+
+        using DbConnection connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        string objectInClause = BuildObjectInClause(filteredObjects);
+        string tableInClause = BuildTableInClause(filteredObjects);
+
+        IReadOnlyList<DatabaseColumnSchema> columns = [
+            ..await connection.QueryAsync<DatabaseColumnSchema>(
+                new CommandDefinition(BuildQueryColumnsSql(objectInClause), cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
+
+        IReadOnlyList<DatabaseIndexSchema> indexes = [
+            ..await connection.QueryAsync<DatabaseIndexSchema>(
+                new CommandDefinition(BuildQueryIndexesSql(tableInClause), cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
+
+        IReadOnlyList<DatabaseRoutineSchema> routines = [
+            ..await connection.QueryAsync<DatabaseRoutineSchema>(
+                new CommandDefinition(QueryRoutinesSql, cancellationToken: cancellationToken)
+            ).ConfigureAwait(false)
+        ];
+
+        return new DatabaseSchemaDetails {
+            Columns = columns,
+            Indexes = indexes,
+            Routines = routines
+        };
+    }
+
+    private static string BuildObjectInClause(IReadOnlyList<DatabaseObjectSchema> objects) {
+        string inList = string.Join(
+            ", ",
+            objects.Select(o => $"N'{o.SchemaName.Replace("'", "''")}' + '.' + N'{o.ObjectName.Replace("'", "''")}'")
+        );
+
+        return inList;
+    }
+
+    private static string BuildTableInClause(IReadOnlyList<DatabaseObjectSchema> objects) {
+        IEnumerable<DatabaseObjectSchema> tables = objects.Where(
+            o => string.Equals(o.ObjectType, "BASE TABLE", StringComparison.OrdinalIgnoreCase)
+        );
+
+        string inList = string.Join(
+            ", ",
+            tables.Select(o => $"N'{o.SchemaName.Replace("'", "''")}' + '.' + N'{o.ObjectName.Replace("'", "''")}'")
+        );
+
+        return inList;
+    }
+
     private const string QueryObjectsSql = """
         SELECT
             s.name AS SchemaName,
@@ -26,7 +113,7 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         ORDER BY s.name, o.name;
         """;
 
-    private const string QueryColumnsSql = """
+    private static string BuildQueryColumnsSql(string objectInClause) => $"""
         SELECT
             s.name AS SchemaName,
             o.name AS ObjectName,
@@ -82,85 +169,94 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
             AND ep.major_id = c.object_id
             AND ep.minor_id = c.column_id
             AND ep.name = 'MS_Description'
+        WHERE s.name + '.' + o.name IN ({objectInClause})
         ORDER BY s.name, o.name, c.column_id;
         """;
 
-    private const string QueryIndexesSql = """
-        SELECT
-            s.name AS SchemaName,
-            t.name AS ObjectName,
-            'BASE TABLE' AS ObjectType,
-            ind.name AS IndexName,
-            CASE WHEN ind.is_primary_key = 1 THEN 'Yes' ELSE 'No' END AS IsPrimaryKey,
-            CASE WHEN ind.type_desc = 'CLUSTERED' THEN 'Yes' ELSE 'No' END AS IsClustered,
-            CASE WHEN ind.is_unique = 1 THEN 'Yes' ELSE 'No' END AS IsUnique,
-            'No' AS IsForeignKey,
-            COALESCE(STUFF((
-                SELECT CHAR(10) + COL_NAME(ic.object_id, ic.column_id)
-                FROM sys.index_columns AS ic
-                WHERE ic.object_id = ind.object_id
-                    AND ic.index_id = ind.index_id
-                    AND ic.is_included_column = 0
-                ORDER BY ic.key_ordinal, ic.index_column_id
-                FOR XML PATH(''), TYPE
-            ).value('.', 'nvarchar(max)'), 1, 1, ''), '') AS Columns,
-            COALESCE(STUFF((
-                SELECT ',' + CHAR(10) + COL_NAME(ic.object_id, ic.column_id)
-                FROM sys.index_columns AS ic
-                WHERE ic.object_id = ind.object_id
-                    AND ic.index_id = ind.index_id
-                    AND ic.is_included_column = 1
-                ORDER BY ic.index_column_id
-                FOR XML PATH(''), TYPE
-            ).value('.', 'nvarchar(max)'), 1, 2, ''), '') AS OtherColumns
-        FROM sys.indexes AS ind
-        INNER JOIN sys.tables AS t ON t.object_id = ind.object_id
-        INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-        WHERE t.is_ms_shipped = 0
-            AND ind.name IS NOT NULL
+    private static string BuildQueryIndexesSql(string tableInClause) {
+        if (string.IsNullOrEmpty(tableInClause)) {
+            return "SELECT NULL AS SchemaName, NULL AS ObjectName, NULL AS ObjectType, NULL AS IndexName, NULL AS IsPrimaryKey, NULL AS IsClustered, NULL AS IsUnique, NULL AS IsForeignKey, NULL AS Columns, NULL AS OtherColumns WHERE 1 = 0";
+        }
 
-        UNION ALL
-
-        SELECT DISTINCT
-            s.name AS SchemaName,
-            t.name AS ObjectName,
-            'BASE TABLE' AS ObjectType,
-            fk.name AS IndexName,
-            'No' AS IsPrimaryKey,
-            'No' AS IsClustered,
-            'No' AS IsUnique,
-            'Yes' AS IsForeignKey,
-            COALESCE(STUFF((
-                SELECT CHAR(10) + COL_NAME(fkc1.parent_object_id, fkc1.parent_column_id)
-                FROM sys.foreign_key_columns AS fkc1
-                WHERE fkc1.constraint_object_id = fk.object_id
-                ORDER BY fkc1.constraint_column_id
-                FOR XML PATH(''), TYPE
-            ).value('.', 'nvarchar(max)'), 1, 1, ''), '') AS Columns,
-            CONCAT(
-                rs.name,
-                '.',
-                rt.name,
-                ':',
-                CHAR(10),
+        return $"""
+            SELECT
+                s.name AS SchemaName,
+                t.name AS ObjectName,
+                'BASE TABLE' AS ObjectType,
+                ind.name AS IndexName,
+                CASE WHEN ind.is_primary_key = 1 THEN 'Yes' ELSE 'No' END AS IsPrimaryKey,
+                CASE WHEN ind.type_desc = 'CLUSTERED' THEN 'Yes' ELSE 'No' END AS IsClustered,
+                CASE WHEN ind.is_unique = 1 THEN 'Yes' ELSE 'No' END AS IsUnique,
+                'No' AS IsForeignKey,
                 COALESCE(STUFF((
-                    SELECT ',' + CHAR(10) + COL_NAME(fkc2.referenced_object_id, fkc2.referenced_column_id)
-                    FROM sys.foreign_key_columns AS fkc2
-                    WHERE fkc2.constraint_object_id = fk.object_id
-                    ORDER BY fkc2.constraint_column_id
+                    SELECT CHAR(10) + COL_NAME(ic.object_id, ic.column_id)
+                    FROM sys.index_columns AS ic
+                    WHERE ic.object_id = ind.object_id
+                        AND ic.index_id = ind.index_id
+                        AND ic.is_included_column = 0
+                    ORDER BY ic.key_ordinal, ic.index_column_id
                     FOR XML PATH(''), TYPE
-                ).value('.', 'nvarchar(max)'), 1, 2, ''), '')
-            ) AS OtherColumns
-        FROM sys.foreign_keys AS fk
-        INNER JOIN sys.foreign_key_columns AS fkc ON fkc.constraint_object_id = fk.object_id
-        INNER JOIN sys.tables AS t ON t.object_id = fk.parent_object_id
-        INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-        INNER JOIN sys.tables AS rt ON rt.object_id = fk.referenced_object_id
-        INNER JOIN sys.schemas AS rs ON rs.schema_id = rt.schema_id
-        WHERE t.is_ms_shipped = 0
+                ).value('.', 'nvarchar(max)'), 1, 1, ''), '') AS Columns,
+                COALESCE(STUFF((
+                    SELECT ',' + CHAR(10) + COL_NAME(ic.object_id, ic.column_id)
+                    FROM sys.index_columns AS ic
+                    WHERE ic.object_id = ind.object_id
+                        AND ic.index_id = ind.index_id
+                        AND ic.is_included_column = 1
+                    ORDER BY ic.index_column_id
+                    FOR XML PATH(''), TYPE
+                ).value('.', 'nvarchar(max)'), 1, 2, ''), '') AS OtherColumns
+            FROM sys.indexes AS ind
+            INNER JOIN sys.tables AS t ON t.object_id = ind.object_id
+            INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+            WHERE t.is_ms_shipped = 0
+                AND ind.name IS NOT NULL
+                AND s.name + '.' + t.name IN ({tableInClause})
 
-        ORDER BY SchemaName, ObjectName, IndexName;
-    """;
+            UNION ALL
+
+            SELECT DISTINCT
+                s.name AS SchemaName,
+                t.name AS ObjectName,
+                'BASE TABLE' AS ObjectType,
+                fk.name AS IndexName,
+                'No' AS IsPrimaryKey,
+                'No' AS IsClustered,
+                'No' AS IsUnique,
+                'Yes' AS IsForeignKey,
+                COALESCE(STUFF((
+                    SELECT CHAR(10) + COL_NAME(fkc1.parent_object_id, fkc1.parent_column_id)
+                    FROM sys.foreign_key_columns AS fkc1
+                    WHERE fkc1.constraint_object_id = fk.object_id
+                    ORDER BY fkc1.constraint_column_id
+                    FOR XML PATH(''), TYPE
+                ).value('.', 'nvarchar(max)'), 1, 1, ''), '') AS Columns,
+                CONCAT(
+                    rs.name,
+                    '.',
+                    rt.name,
+                    ':',
+                    CHAR(10),
+                    COALESCE(STUFF((
+                        SELECT ',' + CHAR(10) + COL_NAME(fkc2.referenced_object_id, fkc2.referenced_column_id)
+                        FROM sys.foreign_key_columns AS fkc2
+                        WHERE fkc2.constraint_object_id = fk.object_id
+                        ORDER BY fkc2.constraint_column_id
+                        FOR XML PATH(''), TYPE
+                    ).value('.', 'nvarchar(max)'), 1, 2, ''), '')
+                ) AS OtherColumns
+            FROM sys.foreign_keys AS fk
+            INNER JOIN sys.foreign_key_columns AS fkc ON fkc.constraint_object_id = fk.object_id
+            INNER JOIN sys.tables AS t ON t.object_id = fk.parent_object_id
+            INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+            INNER JOIN sys.tables AS rt ON rt.object_id = fk.referenced_object_id
+            INNER JOIN sys.schemas AS rs ON rs.schema_id = rt.schema_id
+            WHERE t.is_ms_shipped = 0
+                AND s.name + '.' + t.name IN ({tableInClause})
+
+            ORDER BY SchemaName, ObjectName, IndexName;
+        """;
+    }
 
     private const string QueryRoutinesSql = """
         SELECT
@@ -247,47 +343,4 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
             AND o.is_ms_shipped = 0
         ORDER BY s.name, o.type, o.name;
         """;
-
-    /// <inheritdoc/>
-    public DatabaseType DatabaseType => DatabaseType.SqlServer;
-
-    /// <inheritdoc/>
-    public async Task<DatabaseSchemaExport> LoadSchemaAsync(
-        string connectionString,
-        CancellationToken cancellationToken = default
-    ) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
-
-        using DbConnection connection = new SqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-        IReadOnlyList<DatabaseObjectSchema> objects = [
-            ..await connection.QueryAsync<DatabaseObjectSchema>(
-                new CommandDefinition(QueryObjectsSql, cancellationToken: cancellationToken)
-            ).ConfigureAwait(false)
-        ];
-        IReadOnlyList<DatabaseColumnSchema> columns = [
-            ..await connection.QueryAsync<DatabaseColumnSchema>(
-                new CommandDefinition(QueryColumnsSql, cancellationToken: cancellationToken)
-            ).ConfigureAwait(false)
-        ];
-        IReadOnlyList<DatabaseIndexSchema> indexes = [
-            ..await connection.QueryAsync<DatabaseIndexSchema>(
-                new CommandDefinition(QueryIndexesSql, cancellationToken: cancellationToken)
-            ).ConfigureAwait(false)
-        ];
-        IReadOnlyList<DatabaseRoutineSchema> routines = [
-            ..await connection.QueryAsync<DatabaseRoutineSchema>(
-                new CommandDefinition(QueryRoutinesSql, cancellationToken: cancellationToken)
-            ).ConfigureAwait(false)
-        ];
-
-        return new DatabaseSchemaExport {
-            Objects = objects,
-            Columns = columns,
-            Indexes = indexes,
-            Routines = routines
-        };
-    }
 }
-

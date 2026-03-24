@@ -69,11 +69,11 @@ public sealed partial class SchemaExportOrchestrator {
 
             currentStage = ExportStage.LoadingSchema;
             stageStopwatch.Restart();
-            ReportProgress(progress, ExportStage.LoadingSchema, "正在連線資料庫並載入結構資訊...", 10);
+            ReportProgress(progress, ExportStage.LoadingSchema, "正在連線資料庫並載入物件清單...", 10);
 
-            DatabaseSchemaExport schemaExport;
+            IReadOnlyList<DatabaseObjectSchema> allObjects;
             try {
-                schemaExport = await providerFactory.LoadSchemaAsync(
+                allObjects = await providerFactory.LoadObjectsAsync(
                     connection.DatabaseType,
                     connectionString,
                     cancellationToken
@@ -86,12 +86,36 @@ public sealed partial class SchemaExportOrchestrator {
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            executionSummary.SchemaLoadDuration = stageStopwatch.Elapsed;
 
             currentStage = ExportStage.ApplyingFilters;
+            ReportProgress(progress, ExportStage.ApplyingFilters, "正在套用匯出設定檔篩選條件...", 20);
+            List<DatabaseObjectSchema> filteredObjects = FilterObjects(allObjects, profile, diagnostics);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            currentStage = ExportStage.LoadingSchema;
+            ReportProgress(progress, ExportStage.LoadingSchema, "正在載入欄位、索引與程序明細...", 30);
+
+            DatabaseSchemaDetails schemaDetails;
+            try {
+                schemaDetails = await providerFactory.LoadDetailsAsync(
+                    connection.DatabaseType,
+                    connectionString,
+                    filteredObjects,
+                    cancellationToken
+                ).ConfigureAwait(false);
+            } catch (Exception ex) when (ex is DbException or TimeoutException or InvalidOperationException or NotSupportedException) {
+                throw new ExportConnectionException(
+                    $"無法載入「{connection.Name}」的明細資料。請確認連線字串、資料庫權限與資料庫類型設定。",
+                    ex
+                );
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            executionSummary.SchemaLoadDuration = stageStopwatch.Elapsed;
+
             stageStopwatch.Restart();
-            ReportProgress(progress, ExportStage.ApplyingFilters, "正在套用匯出設定檔篩選條件...", 30);
-            FilteredSchemaExport filteredExport = ApplyFilters(schemaExport, profile, diagnostics);
+            ReportProgress(progress, ExportStage.ApplyingFilters, "正在篩選程序與函數...", 40);
+            FilteredSchemaExport filteredExport = BuildFilteredExport(filteredObjects, schemaDetails, profile, diagnostics);
             cancellationToken.ThrowIfCancellationRequested();
             executionSummary.FilteringDuration = stageStopwatch.Elapsed;
 
@@ -180,6 +204,9 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
+    private static bool IsExactPattern(string pattern) =>
+        !string.IsNullOrWhiteSpace(pattern) && !pattern.Contains('*') && !pattern.Contains('?');
+
     private static string ValidateConnection(SchemaConnection connection) {
         if (string.IsNullOrWhiteSpace(connection.Name)) {
             throw new ExportValidationException("請先設定連線名稱。");
@@ -247,8 +274,12 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static FilteredSchemaExport ApplyFilters(DatabaseSchemaExport schemaExport, ExportProfile profile, List<ExportDiagnostic> diagnostics) {
-        List<DatabaseObjectSchema> orderedObjects = schemaExport.Objects
+    private static List<DatabaseObjectSchema> FilterObjects(
+        IReadOnlyList<DatabaseObjectSchema> allObjects,
+        ExportProfile profile,
+        List<ExportDiagnostic> diagnostics
+    ) {
+        List<DatabaseObjectSchema> orderedObjects = allObjects
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectType, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectName, StringComparer.OrdinalIgnoreCase)
@@ -277,7 +308,16 @@ public sealed partial class SchemaExportOrchestrator {
             filteredObjects = filteredObjects.Where(x => !IsViewObjectType(x.ObjectType)).ToList();
         }
 
-        List<DatabaseRoutineSchema> orderedRoutines = schemaExport.Routines
+        return filteredObjects;
+    }
+
+    private static FilteredSchemaExport BuildFilteredExport(
+        List<DatabaseObjectSchema> filteredObjects,
+        DatabaseSchemaDetails schemaDetails,
+        ExportProfile profile,
+        List<ExportDiagnostic> diagnostics
+    ) {
+        List<DatabaseRoutineSchema> orderedRoutines = schemaDetails.Routines
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ContainerName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.RoutineName, StringComparer.OrdinalIgnoreCase)
@@ -299,16 +339,13 @@ public sealed partial class SchemaExportOrchestrator {
             throw new ExportValidationException("目前的匯出設定沒有任何可匯出的資料表、檢視表或程序/函數。請調整篩選條件後再試一次。");
         }
 
-        HashSet<DatabaseObjectKey> includedKeys = filteredObjects.Select(x => x.ObjectKey).ToHashSet();
-        List<DatabaseColumnSchema> filteredColumns = schemaExport.Columns
-            .Where(x => includedKeys.Contains(x.ObjectKey))
+        List<DatabaseColumnSchema> filteredColumns = schemaDetails.Columns
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ColumnOrder)
             .ToList();
 
-        List<DatabaseIndexSchema> filteredIndexes = schemaExport.Indexes
-            .Where(x => includedKeys.Contains(x.ObjectKey))
+        List<DatabaseIndexSchema> filteredIndexes = schemaDetails.Indexes
             .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ObjectName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase)

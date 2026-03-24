@@ -31,7 +31,7 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(exception, Is.Not.Null);
         ExportValidationException assertedException = exception ?? throw new AssertionException("Expected an ExportValidationException.");
         Assert.That(assertedException.Message, Does.Contain("連線名稱"));
-        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        providerFactory.DidNotReceiveWithAnyArgs().LoadObjectsAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -52,7 +52,7 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(exception, Is.Not.Null);
         ExportValidationException assertedException = exception ?? throw new AssertionException("Expected an ExportValidationException.");
         Assert.That(assertedException.Message, Does.Contain("ConnectionString"));
-        providerFactory.DidNotReceiveWithAnyArgs().LoadSchemaAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        providerFactory.DidNotReceiveWithAnyArgs().LoadObjectsAsync(Arg.Any<DatabaseType>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -62,8 +62,8 @@ public sealed class SchemaExportOrchestratorTests {
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
         SchemaConnection connection = CreateConnection();
 
-        providerFactory.LoadSchemaAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
-            .Returns<Task<DatabaseSchemaExport>>(_ => throw new TimeoutException("database timed out"));
+        providerFactory.LoadObjectsAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
+            .Returns<Task<IReadOnlyList<DatabaseObjectSchema>>>(_ => throw new TimeoutException("database timed out"));
 
         ExportConnectionException? exception = Assert.ThrowsAsync<ExportConnectionException>(
             async () => await sut.ExportAsync(connection, directory.Path, CreateProfile(), new ExportResultOptions())
@@ -87,8 +87,8 @@ public sealed class SchemaExportOrchestratorTests {
         );
 
         File.WriteAllText(outputPath, "existing output");
-        providerFactory.LoadSchemaAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(SchemaTestData.CreateSchemaExport()));
+        DatabaseSchemaExport schemaExport = SchemaTestData.CreateSchemaExport();
+        SetupProviderFactory(providerFactory, connection, schemaExport);
 
         ExportResultOptions resultOptions = new() {
             OverwriteStrategy = OverwriteStrategy.Fail
@@ -117,8 +117,8 @@ public sealed class SchemaExportOrchestratorTests {
             includeNameColumn: false
         );
 
-        providerFactory.LoadSchemaAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(SchemaTestData.CreateSchemaExport()));
+        DatabaseSchemaExport schemaExport = SchemaTestData.CreateSchemaExport();
+        SetupProviderFactory(providerFactory, connection, schemaExport);
 
         ExportResultOptions resultOptions = new() {
             GenerateManifest = true,
@@ -156,11 +156,31 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(diffJson, Does.Contain("\"ModifiedObjects\": 1"));
         Assert.That(markdownSidecar, Does.Contain("## Snapshot Diff"));
         Assert.That(markdownSidecar, Does.Contain("dbo.Users (TABLE)"));
-        await providerFactory.Received(1).LoadSchemaAsync(
+        await providerFactory.Received(1).LoadObjectsAsync(
             connection.DatabaseType,
             connection.ConnectionString,
             Arg.Any<CancellationToken>()
         );
+    }
+
+    private static void SetupProviderFactory(
+        IDatabaseSchemaProviderFactory providerFactory,
+        SchemaConnection connection,
+        DatabaseSchemaExport schemaExport
+    ) {
+        providerFactory.LoadObjectsAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(schemaExport.Objects));
+
+        providerFactory.LoadDetailsAsync(
+            connection.DatabaseType,
+            connection.ConnectionString,
+            Arg.Any<IReadOnlyList<DatabaseObjectSchema>>(),
+            Arg.Any<CancellationToken>()
+        ).Returns(Task.FromResult(new DatabaseSchemaDetails {
+            Columns = schemaExport.Columns,
+            Indexes = schemaExport.Indexes,
+            Routines = schemaExport.Routines
+        }));
     }
 
     private static SchemaExportOrchestrator CreateSubject(IDatabaseSchemaProviderFactory providerFactory) {
@@ -184,4 +204,3 @@ public sealed class SchemaExportOrchestratorTests {
         };
     }
 }
-

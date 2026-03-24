@@ -11,16 +11,29 @@ internal sealed class DatabaseSchemaProviderFactory : IDatabaseSchemaProviderFac
     }
 
     /// <inheritdoc/>
-    public Task<DatabaseSchemaExport> LoadSchemaAsync(
+    public Task<IReadOnlyList<DatabaseObjectSchema>> LoadObjectsAsync(
         DatabaseType databaseType,
         string connectionString,
         CancellationToken cancellationToken = default
     ) {
+        return GetProvider(databaseType).LoadObjectsAsync(connectionString, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public Task<DatabaseSchemaDetails> LoadDetailsAsync(
+        DatabaseType databaseType,
+        string connectionString,
+        IReadOnlyList<DatabaseObjectSchema> filteredObjects,
+        CancellationToken cancellationToken = default
+    ) {
+        return GetProvider(databaseType).LoadDetailsAsync(connectionString, filteredObjects, cancellationToken);
+    }
+
+    private IDatabaseSchemaProvider GetProvider(DatabaseType databaseType) {
         if (!providers.TryGetValue(databaseType, out IDatabaseSchemaProvider? provider)) {
             throw new NotSupportedException($"Database type '{databaseType}' is not supported.");
         }
 
-        return provider.LoadSchemaAsync(connectionString, cancellationToken);
+        return provider;
     }
 }
-
