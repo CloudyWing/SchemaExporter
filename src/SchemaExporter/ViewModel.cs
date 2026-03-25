@@ -8,6 +8,7 @@ using CloudyWing.SchemaExporter.Core.Exporting;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Options;
+using Microsoft.Win32;
 
 namespace CloudyWing.SchemaExporter;
 
@@ -75,6 +76,54 @@ public partial class ViewModel : ObservableObject {
     public partial string? LastManifestFilePath { get; set; }
 
     /// <summary>
+    /// 取得或設定是否產生 manifest 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateManifest { get; set; }
+
+    /// <summary>
+    /// 取得或設定是否產生 JSON sidecar 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateJsonSidecar { get; set; }
+
+    /// <summary>
+    /// 取得或設定是否產生 Markdown sidecar 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateMarkdownSidecar { get; set; }
+
+    /// <summary>
+    /// 取得或設定是否產生 schema snapshot 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateSchemaSnapshot { get; set; }
+
+    /// <summary>
+    /// 取得或設定差異比對使用的基準 snapshot 路徑。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? DiffSourceSnapshotPath { get; set; }
+
+    /// <summary>
+    /// 取得或設定是否在檔名中附加時間戳記。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool UseTimestamp { get; set; }
+
+    /// <summary>
+    /// 取得或設定是否在匯出完成後開啟輸出資料夾。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool AutoOpenOutputFolder { get; set; }
+
+    /// <summary>
+    /// 取得或設定診斷區塊是否展開。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsDiagnosticsExpanded { get; set; }
+
+    /// <summary>
     /// 取得可用的連線設定集合。
     /// </summary>
     public ObservableCollection<SchemaConnection> Connections { get; }
@@ -88,48 +137,6 @@ public partial class ViewModel : ObservableObject {
     /// 取得最近一次匯出作業的診斷資訊集合。
     /// </summary>
     public ObservableCollection<ExportDiagnostic> Diagnostics { get; } = [];
-
-    /// <summary>
-    /// 取得目前結果選項的摘要說明。
-    /// </summary>
-    public string ResultOptionsSummary {
-        get {
-            List<string> segments = [];
-            if (schemaOptions.ExportResultOptions.UseTimestamp) {
-                segments.Add($"檔名加上時間戳記（{schemaOptions.ExportResultOptions.TimestampFormat}）");
-            }
-
-            segments.Add($"檔案衝突處理：{GetOverwriteStrategyText(schemaOptions.ExportResultOptions.OverwriteStrategy)}");
-
-            if (schemaOptions.ExportResultOptions.GenerateManifest) {
-                segments.Add("產生 manifest");
-            }
-
-            if (schemaOptions.ExportResultOptions.GenerateJsonSidecar) {
-                segments.Add("產生 JSON sidecar");
-            }
-
-            if (schemaOptions.ExportResultOptions.GenerateMarkdownSidecar) {
-                segments.Add("產生 Markdown sidecar");
-            }
-
-            if (schemaOptions.ExportResultOptions.GenerateSchemaSnapshot) {
-                segments.Add("產生 schema snapshot");
-            }
-
-            if (!string.IsNullOrWhiteSpace(schemaOptions.ExportResultOptions.DiffSourceSnapshotPath)) {
-                segments.Add("比對既有 schema snapshot");
-            }
-
-            if (schemaOptions.ExportResultOptions.OpenOutputFolder) {
-                segments.Add("完成後自動開啟輸出資料夾");
-            }
-
-            return segments.Count == 0
-                ? "使用預設結果選項"
-                : string.Join("、", segments);
-        }
-    }
 
     /// <summary>
     /// 初始化 <see cref="ViewModel"/> 類別的新執行個體。
@@ -156,6 +163,14 @@ public partial class ViewModel : ObservableObject {
         OutputPath = schemaOptions.ExportPath;
         Connection = Connections.FirstOrDefault();
         SelectedProfile = ResolveConnectionProfile(Connection);
+
+        GenerateManifest = schemaOptions.ExportResultOptions.GenerateManifest;
+        GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
+        GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
+        GenerateSchemaSnapshot = schemaOptions.ExportResultOptions.GenerateSchemaSnapshot;
+        DiffSourceSnapshotPath = schemaOptions.ExportResultOptions.DiffSourceSnapshotPath;
+        UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
+        AutoOpenOutputFolder = schemaOptions.ExportResultOptions.OpenOutputFolder;
     }
 
     [RelayCommand(CanExecute = nameof(CanSubmit))]
@@ -181,11 +196,25 @@ public partial class ViewModel : ObservableObject {
         try {
             Progress<ExportProgress> progress = new(UpdateProgress);
 
+            ExportResultOptions resultOptions = new() {
+                UseTimestamp = UseTimestamp,
+                TimestampFormat = schemaOptions.ExportResultOptions.TimestampFormat,
+                OverwriteStrategy = schemaOptions.ExportResultOptions.OverwriteStrategy,
+                OpenOutputFolder = AutoOpenOutputFolder,
+                GenerateManifest = GenerateManifest,
+                GenerateJsonSidecar = GenerateJsonSidecar,
+                GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateSchemaSnapshot = GenerateSchemaSnapshot,
+                DiffSourceSnapshotPath = string.IsNullOrWhiteSpace(DiffSourceSnapshotPath)
+                    ? null
+                    : DiffSourceSnapshotPath
+            };
+
             ExportResult result = await exportOrchestrator.ExportAsync(
                 Connection,
                 OutputPath,
                 SelectedProfile,
-                schemaOptions.ExportResultOptions,
+                resultOptions,
                 progress,
                 currentExportCancellation.Token
             );
@@ -202,6 +231,7 @@ public partial class ViewModel : ObservableObject {
                 ? $"匯出完成，但有 {warningCount} 個警告，請確認下方診斷資訊。"
                 : "匯出完成。";
             ProgressPercent = 100;
+            IsDiagnosticsExpanded = result.Diagnostics.Count > 0;
 
             ShowExportSuccessDialog(result);
         } catch (OperationCanceledException) {
@@ -283,6 +313,19 @@ public partial class ViewModel : ObservableObject {
         return !IsExporting && !string.IsNullOrWhiteSpace(OutputPath);
     }
 
+    [RelayCommand]
+    private void BrowseDiffSourceSnapshot() {
+        OpenFileDialog dialog = new() {
+            Title = "選擇基準 Snapshot 檔案",
+            Filter = "Schema Snapshot (*.snapshot.json)|*.snapshot.json|All Files (*.*)|*.*",
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() == true) {
+            DiffSourceSnapshotPath = dialog.FileName;
+        }
+    }
+
     partial void OnConnectionChanged(SchemaConnection? value) {
         SelectedProfile = ResolveConnectionProfile(value);
     }
@@ -358,15 +401,6 @@ public partial class ViewModel : ObservableObject {
         }
 
         MessageBox.Show(messageBuilder.ToString(), "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private static string GetOverwriteStrategyText(OverwriteStrategy overwriteStrategy) {
-        return overwriteStrategy switch {
-            OverwriteStrategy.Overwrite => "直接覆寫",
-            OverwriteStrategy.AppendSuffix => "自動附加編號",
-            OverwriteStrategy.Fail => "發現重複檔名時中止",
-            _ => overwriteStrategy.ToString()
-        };
     }
 }
 
