@@ -102,7 +102,7 @@ internal sealed class CliArguments {
             return false;
         }
 
-        List<string> normalizedArgs = [..args];
+        List<string> normalizedArgs = [.. args];
         CliCommand command = CliCommand.Export;
         if (normalizedArgs.Count > 0 && !normalizedArgs[0].StartsWith("--", StringComparison.Ordinal)) {
             if (string.Equals(normalizedArgs[0], "export", StringComparison.OrdinalIgnoreCase)) {
@@ -321,4 +321,3 @@ internal sealed class CliArguments {
         return true;
     }
 }
-

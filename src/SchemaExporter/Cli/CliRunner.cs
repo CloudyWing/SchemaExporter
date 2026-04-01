@@ -1,19 +1,32 @@
-using System.Text;
+using System.IO;
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using CloudyWing.SchemaExporter.Services;
 
 namespace CloudyWing.SchemaExporter.Cli;
 
-internal static class Program {
-    private static async Task<int> Main(string[] args) {
-        Console.OutputEncoding = Encoding.UTF8;
-        SpreadsheetExporterBootstrapper.Configure();
+internal sealed class CliRunner {
+    private readonly SchemaExportOrchestrator exportOrchestrator;
+    private readonly SchemaSnapshotDiffService diffService;
+    private readonly ISettingsService settingsService;
+
+    public CliRunner(
+        SchemaExportOrchestrator exportOrchestrator,
+        SchemaSnapshotDiffService diffService,
+        ISettingsService settingsService
+    ) {
+        ArgumentNullException.ThrowIfNull(exportOrchestrator, nameof(exportOrchestrator));
+        ArgumentNullException.ThrowIfNull(diffService, nameof(diffService));
+        ArgumentNullException.ThrowIfNull(settingsService, nameof(settingsService));
+        this.exportOrchestrator = exportOrchestrator;
+        this.diffService = diffService;
+        this.settingsService = settingsService;
+    }
+
+    public async Task<int> RunAsync(string[] args) {
+        ArgumentNullException.ThrowIfNull(args, nameof(args));
 
         if (!CliArguments.TryParse(args, out CliArguments? parsedArguments, out string? errorMessage, out bool showHelp)) {
             if (!string.IsNullOrWhiteSpace(errorMessage)) {
@@ -41,23 +54,8 @@ internal static class Program {
         }
     }
 
-    private static async Task<int> ExecuteExportAsync(CliArguments arguments) {
-        IConfiguration configuration = LoadConfiguration();
-        ServiceCollection serviceCollection = new();
-        serviceCollection.AddLogging(logging => {
-            logging.ClearProviders();
-            logging.AddSimpleConsole(options => {
-                options.SingleLine = true;
-                options.TimestampFormat = "HH:mm:ss ";
-            });
-            logging.SetMinimumLevel(LogLevel.Information);
-        });
-        serviceCollection.AddSchemaExporterCore(configuration);
-
-        using ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
-        SchemaOptions schemaOptions = serviceProvider.GetRequiredService<IOptions<SchemaOptions>>().Value;
-        SchemaExportOrchestrator orchestrator = serviceProvider.GetRequiredService<SchemaExportOrchestrator>();
-
+    private async Task<int> ExecuteExportAsync(CliArguments arguments) {
+        SchemaOptions schemaOptions = await settingsService.LoadAsync().ConfigureAwait(false);
         SchemaConnection connection = ResolveConnection(schemaOptions, arguments);
         ExportProfile profile = ResolveProfile(schemaOptions, connection, arguments);
         ExportResultOptions resultOptions = BuildResultOptions(schemaOptions.ExportResultOptions, arguments);
@@ -69,7 +67,7 @@ internal static class Program {
             Console.WriteLine($"[{exportProgress.Stage}] {exportProgress.Message}");
         });
 
-        ExportResult result = await orchestrator.ExportAsync(
+        ExportResult result = await exportOrchestrator.ExportAsync(
             connection,
             outputPath,
             profile,
@@ -96,10 +94,9 @@ internal static class Program {
         return 0;
     }
 
-    private static async Task<int> ExecuteDiffAsync(CliArguments arguments) {
+    private async Task<int> ExecuteDiffAsync(CliArguments arguments) {
         string leftSnapshotPath = arguments.LeftSnapshotPath ?? throw new InvalidOperationException("Diff command is missing the left snapshot path.");
         string rightSnapshotPath = arguments.RightSnapshotPath ?? throw new InvalidOperationException("Diff command is missing the right snapshot path.");
-        SchemaSnapshotDiffService diffService = new();
         SchemaDiffDocument diff = await diffService.CompareAsync(
             leftSnapshotPath,
             rightSnapshotPath,
@@ -129,14 +126,6 @@ internal static class Program {
 
         Console.WriteLine($"Diff written: {outputPath}");
         return 0;
-    }
-
-    private static IConfiguration LoadConfiguration() {
-        return new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-            .AddEnvironmentVariables()
-            .Build();
     }
 
     private static SchemaConnection ResolveConnection(SchemaOptions schemaOptions, CliArguments arguments) {
@@ -248,6 +237,4 @@ internal static class Program {
         Console.WriteLine("  --format <json|markdown>     Optional output format when --output is provided.");
         Console.WriteLine("  --help                       Show this help text.");
     }
-
 }
-
