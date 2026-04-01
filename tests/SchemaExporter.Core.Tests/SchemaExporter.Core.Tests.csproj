@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SchemaExporter.Core\SchemaExporter.Core.csproj" />
+    <ProjectReference Include="..\..\src\SchemaExporter.Core\SchemaExporter.Core.csproj" />
   </ItemGroup>
 
 </Project>
