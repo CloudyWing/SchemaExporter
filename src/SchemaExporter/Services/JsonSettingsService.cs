@@ -10,7 +10,8 @@ namespace CloudyWing.SchemaExporter.Services;
 internal sealed class JsonSettingsService : ISettingsService {
     private static readonly JsonSerializerOptions SerializerOptions = new() {
         PropertyNamingPolicy = null,
-        WriteIndented = true
+        WriteIndented = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
     private readonly string appsettingsPath;

@@ -5,9 +5,9 @@ using System.Text;
 using System.Windows;
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.Options;
 using Microsoft.Win32;
 
 namespace CloudyWing.SchemaExporter;
@@ -16,8 +16,9 @@ namespace CloudyWing.SchemaExporter;
 /// 提供桌面介面使用的 schema 匯出作業協調器。
 /// </summary>
 public partial class ViewModel : ObservableObject {
-    private readonly SchemaOptions schemaOptions;
+    private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
+    private SchemaOptions schemaOptions = new();
     private CancellationTokenSource? currentExportCancellation;
 
     /// <summary>
@@ -55,7 +56,7 @@ public partial class ViewModel : ObservableObject {
     /// 取得或設定目前顯示的狀態訊息。
     /// </summary>
     [ObservableProperty]
-    public partial string StatusMessage { get; set; } = "請選擇連線並確認匯出設定。";
+    public partial string StatusMessage { get; set; } = "請先選擇連線並確認匯出設定。";
 
     /// <summary>
     /// 取得或設定目前進度百分比。
@@ -126,12 +127,12 @@ public partial class ViewModel : ObservableObject {
     /// <summary>
     /// 取得可用的連線設定集合。
     /// </summary>
-    public ObservableCollection<SchemaConnection> Connections { get; }
+    public ObservableCollection<SchemaConnection> Connections { get; } = [];
 
     /// <summary>
     /// 取得可用的匯出設定檔集合。
     /// </summary>
-    public ObservableCollection<ExportProfile> ExportProfiles { get; }
+    public ObservableCollection<ExportProfile> ExportProfiles { get; } = [];
 
     /// <summary>
     /// 取得最近一次匯出作業的診斷資訊集合。
@@ -141,29 +142,42 @@ public partial class ViewModel : ObservableObject {
     /// <summary>
     /// 初始化 <see cref="ViewModel"/> 類別的新執行個體。
     /// </summary>
-    /// <param name="schemaAccessor">Schema 設定存取器。</param>
+    /// <param name="settingsService">設定檔存取服務。</param>
     /// <param name="exportOrchestrator">匯出流程協調器。</param>
-    public ViewModel(
-        IOptions<SchemaOptions> schemaAccessor,
+    internal ViewModel(
+        ISettingsService settingsService,
         SchemaExportOrchestrator exportOrchestrator
     ) {
-        ArgumentNullException.ThrowIfNull(schemaAccessor, nameof(schemaAccessor));
+        ArgumentNullException.ThrowIfNull(settingsService, nameof(settingsService));
         ArgumentNullException.ThrowIfNull(exportOrchestrator, nameof(exportOrchestrator));
-
-        schemaOptions = schemaAccessor.Value;
+        this.settingsService = settingsService;
         this.exportOrchestrator = exportOrchestrator;
+    }
 
-        ExportProfiles = new ObservableCollection<ExportProfile>(
+    /// <summary>
+    /// 以目前設定初始化畫面狀態。
+    /// </summary>
+    public Task InitializeAsync() {
+        return ReloadSettingsAsync();
+    }
+
+    /// <summary>
+    /// 從 appsettings.json 重新載入設定並更新畫面。
+    /// </summary>
+    public async Task ReloadSettingsAsync() {
+        string? selectedConnectionName = Connection?.Name;
+        string? selectedProfileName = SelectedProfile?.Name;
+        schemaOptions = await settingsService.LoadAsync();
+
+        ReplaceCollection(Connections, schemaOptions.Connections);
+        ReplaceCollection(
+            ExportProfiles,
             schemaOptions.ExportProfiles.Count > 0
                 ? schemaOptions.ExportProfiles
                 : [new ExportProfile { Name = "Default" }]
         );
 
-        Connections = new ObservableCollection<SchemaConnection>(schemaOptions.Connections);
         OutputPath = schemaOptions.ExportPath;
-        Connection = Connections.FirstOrDefault();
-        SelectedProfile = ResolveConnectionProfile(Connection);
-
         GenerateManifest = schemaOptions.ExportResultOptions.GenerateManifest;
         GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
         GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
@@ -171,6 +185,12 @@ public partial class ViewModel : ObservableObject {
         DiffSourceSnapshotPath = schemaOptions.ExportResultOptions.DiffSourceSnapshotPath;
         UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
         AutoOpenOutputFolder = schemaOptions.ExportResultOptions.OpenOutputFolder;
+
+        Connection = ResolveConnection(selectedConnectionName);
+        SelectedProfile = ResolveProfile(selectedProfileName, Connection);
+        StatusMessage = Connections.Count == 0
+            ? "請先在設定中建立連線。"
+            : "請選擇連線並確認匯出設定。";
     }
 
     [RelayCommand(CanExecute = nameof(CanSubmit))]
@@ -327,18 +347,34 @@ public partial class ViewModel : ObservableObject {
     }
 
     partial void OnConnectionChanged(SchemaConnection? value) {
-        SelectedProfile = ResolveConnectionProfile(value);
+        SelectedProfile = ResolveProfile(SelectedProfile?.Name, value);
     }
 
-    private ExportProfile ResolveConnectionProfile(SchemaConnection? connection) {
-        ExportProfile fallbackProfile = ExportProfiles.First();
+    private SchemaConnection? ResolveConnection(string? connectionName) {
+        if (!string.IsNullOrWhiteSpace(connectionName)) {
+            SchemaConnection? matchedConnection = Connections.FirstOrDefault(x =>
+                string.Equals(x.Name, connectionName, StringComparison.OrdinalIgnoreCase)
+            );
+            if (matchedConnection is not null) {
+                return matchedConnection;
+            }
+        }
 
-        if (connection is null || string.IsNullOrWhiteSpace(connection.ExportProfileName)) {
+        return Connections.FirstOrDefault();
+    }
+
+    private ExportProfile ResolveProfile(string? requestedProfileName, SchemaConnection? connection) {
+        ExportProfile fallbackProfile = ExportProfiles.First();
+        string? profileName = !string.IsNullOrWhiteSpace(requestedProfileName)
+            ? requestedProfileName
+            : connection?.ExportProfileName;
+
+        if (string.IsNullOrWhiteSpace(profileName)) {
             return fallbackProfile;
         }
 
         ExportProfile? matchedProfile = ExportProfiles.FirstOrDefault(x =>
-            string.Equals(x.Name, connection.ExportProfileName, StringComparison.OrdinalIgnoreCase)
+            string.Equals(x.Name, profileName, StringComparison.OrdinalIgnoreCase)
         );
 
         if (matchedProfile is not null) {
@@ -346,7 +382,7 @@ public partial class ViewModel : ObservableObject {
         }
 
         if (!IsExporting) {
-            StatusMessage = $"連線「{connection.Name}」指定的匯出設定檔不存在，已改用「{fallbackProfile.Name}」。";
+            StatusMessage = $"連線「{connection?.Name}」指定的匯出設定檔不存在，已改用「{fallbackProfile.Name}」。";
         }
 
         return fallbackProfile;
@@ -355,6 +391,13 @@ public partial class ViewModel : ObservableObject {
     private void UpdateProgress(ExportProgress progress) {
         StatusMessage = progress.Message;
         ProgressPercent = progress.PercentComplete ?? ProgressPercent;
+    }
+
+    private static void ReplaceCollection<T>(ObservableCollection<T> target, IEnumerable<T> values) {
+        target.Clear();
+        foreach (T value in values) {
+            target.Add(value);
+        }
     }
 
     private static void ShowExportSuccessDialog(ExportResult result) {
@@ -403,4 +446,3 @@ public partial class ViewModel : ObservableObject {
         MessageBox.Show(messageBuilder.ToString(), "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }
-

@@ -9,6 +9,5 @@
     <Project Path="src/SchemaExporter.Core/SchemaExporter.Core.csproj" />
     <Project Path="src/SchemaExporter.Core.Tests/SchemaExporter.Core.Tests.csproj" />
     <Project Path="src/SchemaExporter/SchemaExporter.csproj" />
-    <Project Path="src/SchemaExporter.Cli/SchemaExporter.Cli.csproj" />
   </Folder>
 </Solution>
