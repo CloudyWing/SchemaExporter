@@ -10,8 +10,8 @@
 
 從原始碼建置：
 
-```bash
-dotnet build
+```powershell
+dotnet build .\SchemaExporter.slnx -v minimal
 ```
 
 ## 設定

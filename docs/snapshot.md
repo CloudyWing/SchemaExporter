@@ -31,7 +31,7 @@ TableSchema_prod_20241201_120000.snapshot.json
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "exportedAt": "2024-12-01T12:00:00+08:00",
   "connectionName": "prod",
   "databaseType": "SqlServer",

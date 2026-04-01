@@ -6,10 +6,9 @@
 
 ## 專案組成
 
-- `src\SchemaExporter`：WPF 桌面程式
+- `src\SchemaExporter`：WPF 桌面程式，以命令列引數觸發時進入 CLI 模式
 - `src\SchemaExporter.Core`：共用核心邏輯，負責 provider、匯出流程、snapshot / diff、診斷資訊
-- `src\SchemaExporter.Cli`：命令列入口
-- `src\SchemaExporter.Core.Tests`：NUnit 測試
+- `tests\SchemaExporter.Core.Tests`：NUnit 測試
 
 ## 目前支援的內容
 

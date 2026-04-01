@@ -44,7 +44,7 @@ Diff 支援兩種輸出格式：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": "2024-12-01T12:00:00+08:00",
   "leftSnapshotPath": "D:\\Snapshots\\baseline.snapshot.json",
   "rightSnapshotPath": "D:\\SchemaExports\\TableSchema_prod_20241201_120000.snapshot.json",
