@@ -9,6 +9,7 @@
     <AssemblyName>CloudyWing.$(MSBuildProjectName)</AssemblyName>
     <RootNamespace>CloudyWing.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
 	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +23,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.5" />
+    <PackageReference Include="MinVer" Version="7.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
 

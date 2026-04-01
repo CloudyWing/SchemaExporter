@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>CloudyWing.$(MSBuildProjectName)</AssemblyName>
     <RootNamespace>CloudyWing.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.5" />
+    <PackageReference Include="MinVer" Version="7.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.100" />
   </ItemGroup>
 
