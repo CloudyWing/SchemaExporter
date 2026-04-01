@@ -10,6 +10,7 @@ using CloudyWing.SchemaExporter.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Velopack;
 
 namespace CloudyWing.SchemaExporter;
 
@@ -18,6 +19,10 @@ namespace CloudyWing.SchemaExporter;
 /// </summary>
 public partial class App : Application {
     private ServiceProvider? serviceProvider;
+
+    public App() {
+        VelopackApp.Build().Run();
+    }
 
     protected override async void OnStartup(StartupEventArgs e) {
         base.OnStartup(e);
@@ -47,6 +52,7 @@ public partial class App : Application {
             });
             serviceCollection.AddSchemaExporterCore(configuration);
             serviceCollection.AddSingleton<ISettingsService, JsonSettingsService>();
+            serviceCollection.AddSingleton<IUpdateService, VelopackUpdateService>();
             serviceCollection.AddSingleton<CliRunner>();
             serviceCollection.AddTransient<MainWindow>(sp => new MainWindow(
                 sp.GetRequiredService<ViewModel>(),
@@ -74,6 +80,7 @@ public partial class App : Application {
             await mainWindow.InitializeAsync();
             MainWindow = mainWindow;
             mainWindow.Show();
+            _ = mainWindow.CheckForUpdatesAsync();
         } catch (Exception ex) when (ex is IOException or InvalidOperationException or JsonException) {
             if (isCliMode) {
                 Console.Error.WriteLine($"Startup failed: {ex.Message}");

@@ -1,0 +1,49 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore .\SchemaExporter.slnx
+
+      - name: Build
+        run: dotnet build .\SchemaExporter.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test .\SchemaExporter.slnx -c Release --no-build --verbosity minimal
+
+      - name: Publish app
+        run: dotnet publish .\src\SchemaExporter\SchemaExporter.csproj -c Release --self-contained -r win-x64 -o .\artifacts\publish
+
+      - name: Pack Velopack
+        uses: CloudyWing/devops-templates/.github/actions/velopack-pack@main
+        with:
+          version: ${{ github.ref_name }}
+          pack-id: CloudyWing.SchemaExporter
+          main-exe: CloudyWing.SchemaExporter.exe
+          pack-dir: .\artifacts\publish
+          output-dir: .\artifacts\velopack
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/velopack/*
