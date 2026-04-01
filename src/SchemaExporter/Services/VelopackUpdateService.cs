@@ -15,7 +15,7 @@ internal sealed partial class VelopackUpdateService : IUpdateService {
         updateManager = new UpdateManager(new GithubSource(GitHubRepository, accessToken: null, prerelease: false));
     }
 
-    public async Task<UpdateInfo?> CheckForUpdatesAsync(CancellationToken cancellationToken = default) {
+    public async Task<UpdateInfo?> CheckForUpdatesAsync() {
         if (!updateManager.IsInstalled) {
             LogUpdateCheckSkipped(logger);
             return null;

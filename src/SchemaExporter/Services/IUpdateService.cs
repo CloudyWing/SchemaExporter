@@ -3,7 +3,7 @@ using Velopack;
 namespace CloudyWing.SchemaExporter.Services;
 
 internal interface IUpdateService {
-    Task<UpdateInfo?> CheckForUpdatesAsync(CancellationToken cancellationToken = default);
+    Task<UpdateInfo?> CheckForUpdatesAsync();
 
     Task DownloadUpdateAsync(
         UpdateInfo update,

@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
 using CloudyWing.SchemaExporter.Windows;
@@ -71,7 +70,7 @@ public partial class MainWindow : Window {
                 MessageBoxImage.Information
             );
             updateService.ApplyUpdateAndRestart(update);
-        } catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException) {
+        } catch (Exception ex) {
             viewModel.StatusMessage = $"更新檢查未完成：{ex.Message}";
         }
     }
