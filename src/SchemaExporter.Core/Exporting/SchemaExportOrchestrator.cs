@@ -204,9 +204,6 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static bool IsExactPattern(string pattern) =>
-        !string.IsNullOrWhiteSpace(pattern) && !pattern.Contains('*') && !pattern.Contains('?');
-
     private static string ValidateConnection(SchemaConnection connection) {
         if (string.IsNullOrWhiteSpace(connection.Name)) {
             throw new ExportValidationException("請先設定連線名稱。");
