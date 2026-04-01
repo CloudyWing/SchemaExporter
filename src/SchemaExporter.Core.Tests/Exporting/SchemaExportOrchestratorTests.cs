@@ -83,7 +83,7 @@ public sealed class SchemaExportOrchestratorTests {
         SchemaConnection connection = CreateConnection();
         string outputPath = Path.Combine(
             directory.Path,
-            $"TableSchema_{connection.Name}{SpreadsheetManager.CreateExporter().FileNameExtension}"
+            $"TableSchema_{connection.Name}{SpreadsheetManager.CreateDocument().FileNameExtension}"
         );
 
         File.WriteAllText(outputPath, "existing output");
@@ -130,7 +130,7 @@ public sealed class SchemaExportOrchestratorTests {
 
         ExportResult result = await sut.ExportAsync(connection, directory.Path, CreateProfile(), resultOptions);
 
-        Assert.That(result.OutputFilePath, Does.EndWith(SpreadsheetManager.CreateExporter().FileNameExtension));
+        Assert.That(result.OutputFilePath, Does.EndWith(SpreadsheetManager.CreateDocument().FileNameExtension));
         Assert.That(File.Exists(result.OutputFilePath), Is.True);
         Assert.That(result.ManifestFilePath, Is.Not.Null);
         Assert.That(result.JsonSidecarFilePath, Is.Not.Null);

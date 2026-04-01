@@ -458,14 +458,14 @@ public sealed partial class SchemaExportOrchestrator {
             });
         }
 
-        ISpreadsheetExporter exporter = SpreadsheetManager.CreateExporter();
+        SpreadsheetDocument document = SpreadsheetManager.CreateDocument();
         string basicFileName = $"TableSchema_{normalizedConnectionName}";
         if (resultOptions.UseTimestamp) {
             string timestamp = DateTimeOffset.Now.ToString(resultOptions.TimestampFormat, CultureInfo.InvariantCulture);
             basicFileName = $"{basicFileName}_{timestamp}";
         }
 
-        string filePath = Path.Combine(exportPath, $"{basicFileName}{exporter.FileNameExtension}");
+        string filePath = Path.Combine(exportPath, $"{basicFileName}{document.FileNameExtension}");
         string resolvedFilePath = ResolveOutputFilePath(filePath, resultOptions.OverwriteStrategy, diagnostics);
         return new OutputPlan(resolvedFilePath);
     }
@@ -519,24 +519,24 @@ public sealed partial class SchemaExportOrchestrator {
             await Task.Run(() => {
                 cancellationToken.ThrowIfCancellationRequested();
                 Dictionary<DatabaseObjectKey, string> sheetNames = BuildSheetNames(filteredExport.Objects, diagnostics);
-                ISpreadsheetExporter exporter = SpreadsheetManager.CreateExporter();
-                BuildTableListSheet(exporter, filteredExport.Objects);
+                SpreadsheetDocument document = SpreadsheetManager.CreateDocument();
+                BuildTableListSheet(document, filteredExport.Objects);
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在建立資料表清單工作表...", 52);
                 cancellationToken.ThrowIfCancellationRequested();
-                BuildColumnListSheet(exporter, filteredExport.Columns);
+                BuildColumnListSheet(document, filteredExport.Columns);
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在建立欄位清單工作表...", 58);
                 cancellationToken.ThrowIfCancellationRequested();
-                BuildRoutineListSheet(exporter, filteredExport.Routines);
+                BuildRoutineListSheet(document, filteredExport.Routines);
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在建立程序與函數清單工作表...", 64);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (diagnostics.Count > 0) {
-                    BuildDiagnosticsSheet(exporter, diagnostics);
+                    BuildDiagnosticsSheet(document, diagnostics);
                 }
 
-                BuildTableDetailSheets(exporter, filteredExport.Objects, filteredExport.Columns, filteredExport.Indexes, sheetNames, progress, cancellationToken);
+                BuildTableDetailSheets(document, filteredExport.Objects, filteredExport.Columns, filteredExport.Indexes, sheetNames, progress, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在寫入 Excel 檔案...", 88);
-                exporter.ExportFile(filePath);
+                document.ExportFile(filePath, SpreadsheetFileMode.Create);
             }, cancellationToken).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             throw;
@@ -586,22 +586,22 @@ public sealed partial class SchemaExportOrchestrator {
     [LoggerMessage(EventId = 2003, Level = LogLevel.Error, Message = "Schema export failed for {connectionName} during {stage} after {elapsedMilliseconds} ms. Profile={profileName}, DatabaseType={databaseType}, WarningCount={warningCount}, DiagnosticCount={diagnosticCount}, Output={outputFilePath}.")]
     private static partial void LogExportFailed(ILogger logger, Exception exception, string connectionName, ExportStage stage, double elapsedMilliseconds, string profileName, DatabaseType databaseType, int warningCount, int diagnosticCount, string outputFilePath);
 
-    private static void BuildTableListSheet(ISpreadsheetExporter exporter, IReadOnlyCollection<DatabaseObjectSchema> databaseObjects) {
+    private static void BuildTableListSheet(SpreadsheetDocument document, IReadOnlyCollection<DatabaseObjectSchema> databaseObjects) {
         CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with { HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left };
         RecordSetTemplate<DatabaseObjectSchema> template = new(databaseObjects) { RecordHeight = Constants.AutoFitRowHeight };
         template.Columns.Add("Schema", x => x.SchemaName);
         template.Columns.Add("名稱", x => x.ObjectName, fieldStyleGenerator: _ => itemStyle);
         template.Columns.Add("類型", x => x.ObjectType, fieldStyleGenerator: _ => itemStyle);
         template.Columns.Add("描述", x => x.ObjectDescription, fieldStyleGenerator: _ => itemStyle);
-        Sheeter sheeter = exporter.CreateSheeter("資料表清單");
-        sheeter.AddTemplates(template);
-        sheeter.SetColumnWidth(0, 14D);
-        sheeter.SetColumnWidth(1, 40D);
-        sheeter.SetColumnWidth(2, 15D);
-        sheeter.SetColumnWidth(3, 50D);
+        SheetDefinition sheet = document.CreateSheet("資料表清單");
+        sheet.AddTemplate(template);
+        sheet.SetColumnWidth(0, 14D);
+        sheet.SetColumnWidth(1, 40D);
+        sheet.SetColumnWidth(2, 15D);
+        sheet.SetColumnWidth(3, 50D);
     }
 
-    private static void BuildColumnListSheet(ISpreadsheetExporter exporter, IReadOnlyCollection<DatabaseColumnSchema> columns) {
+    private static void BuildColumnListSheet(SpreadsheetDocument document, IReadOnlyCollection<DatabaseColumnSchema> columns) {
         CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with { HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center };
         RecordSetTemplate<DatabaseColumnSchema> template = new(columns) { RecordHeight = Constants.AutoFitRowHeight };
         template.Columns.Add("Schema", x => x.SchemaName);
@@ -613,20 +613,20 @@ public sealed partial class SchemaExportOrchestrator {
         template.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
         template.Columns.Add("是否為 Identity", x => x.IsIdentity, fieldStyleGenerator: _ => centerFieldStyle);
         template.Columns.Add("描述", x => x.ColumnDescription);
-        Sheeter sheeter = exporter.CreateSheeter("資料表欄位清單");
-        sheeter.AddTemplates(template);
-        sheeter.SetColumnWidth(0, 14D);
-        sheeter.SetColumnWidth(1, 40D);
-        sheeter.SetColumnWidth(2, 30D);
-        sheeter.SetColumnWidth(3, 30D);
-        sheeter.SetColumnWidth(4, 15D);
-        sheeter.SetColumnWidth(5, 15D);
-        sheeter.SetColumnWidth(6, 15D);
-        sheeter.SetColumnWidth(7, 15D);
-        sheeter.SetColumnWidth(8, 50D);
+        SheetDefinition sheet = document.CreateSheet("資料表欄位清單");
+        sheet.AddTemplate(template);
+        sheet.SetColumnWidth(0, 14D);
+        sheet.SetColumnWidth(1, 40D);
+        sheet.SetColumnWidth(2, 30D);
+        sheet.SetColumnWidth(3, 30D);
+        sheet.SetColumnWidth(4, 15D);
+        sheet.SetColumnWidth(5, 15D);
+        sheet.SetColumnWidth(6, 15D);
+        sheet.SetColumnWidth(7, 15D);
+        sheet.SetColumnWidth(8, 50D);
     }
 
-    private static void BuildRoutineListSheet(ISpreadsheetExporter exporter, IReadOnlyCollection<DatabaseRoutineSchema> routines) {
+    private static void BuildRoutineListSheet(SpreadsheetDocument document, IReadOnlyCollection<DatabaseRoutineSchema> routines) {
         CellStyle itemStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with { HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Left };
         RecordSetTemplate<DatabaseRoutineSchema> template = new(routines) { RecordHeight = Constants.AutoFitRowHeight };
         template.Columns.Add("Schema", x => x.SchemaName);
@@ -638,36 +638,36 @@ public sealed partial class SchemaExportOrchestrator {
         template.Columns.Add("回傳型別", x => x.ReturnType, fieldStyleGenerator: _ => itemStyle);
         template.Columns.Add("描述", x => x.RoutineDescription, fieldStyleGenerator: _ => itemStyle);
         template.Columns.Add("定義", x => x.RoutineDefinition, x => x.UseValue(static value => NormalizeMultilineText(value.Value)));
-        Sheeter sheeter = exporter.CreateSheeter("程序與函數清單");
-        sheeter.AddTemplates(template);
-        sheeter.SetColumnWidth(0, 14D);
-        sheeter.SetColumnWidth(1, 20D);
-        sheeter.SetColumnWidth(2, 30D);
-        sheeter.SetColumnWidth(3, 12D);
-        sheeter.SetColumnWidth(4, 12D);
-        sheeter.SetColumnWidth(5, 45D);
-        sheeter.SetColumnWidth(6, 18D);
-        sheeter.SetColumnWidth(7, 40D);
-        sheeter.SetColumnWidth(8, 90D);
+        SheetDefinition sheet = document.CreateSheet("程序與函數清單");
+        sheet.AddTemplate(template);
+        sheet.SetColumnWidth(0, 14D);
+        sheet.SetColumnWidth(1, 20D);
+        sheet.SetColumnWidth(2, 30D);
+        sheet.SetColumnWidth(3, 12D);
+        sheet.SetColumnWidth(4, 12D);
+        sheet.SetColumnWidth(5, 45D);
+        sheet.SetColumnWidth(6, 18D);
+        sheet.SetColumnWidth(7, 40D);
+        sheet.SetColumnWidth(8, 90D);
     }
 
-    private static void BuildDiagnosticsSheet(ISpreadsheetExporter exporter, IReadOnlyCollection<ExportDiagnostic> diagnostics) {
+    private static void BuildDiagnosticsSheet(SpreadsheetDocument document, IReadOnlyCollection<ExportDiagnostic> diagnostics) {
         RecordSetTemplate<ExportDiagnostic> template = new(diagnostics) { RecordHeight = Constants.AutoFitRowHeight };
         template.Columns.Add("嚴重性", x => x.SeverityText);
         template.Columns.Add("類別", x => x.CategoryText);
         template.Columns.Add("支援層級", x => x.SupportLevelText);
         template.Columns.Add("影響物件", x => x.AffectedObjectDisplay);
         template.Columns.Add("訊息", x => x.Message);
-        Sheeter sheeter = exporter.CreateSheeter("匯出診斷");
-        sheeter.AddTemplates(template);
-        sheeter.SetColumnWidth(0, 12D);
-        sheeter.SetColumnWidth(1, 18D);
-        sheeter.SetColumnWidth(2, 15D);
-        sheeter.SetColumnWidth(3, 35D);
-        sheeter.SetColumnWidth(4, 80D);
+        SheetDefinition sheet = document.CreateSheet("匯出診斷");
+        sheet.AddTemplate(template);
+        sheet.SetColumnWidth(0, 12D);
+        sheet.SetColumnWidth(1, 18D);
+        sheet.SetColumnWidth(2, 15D);
+        sheet.SetColumnWidth(3, 35D);
+        sheet.SetColumnWidth(4, 80D);
     }
 
-    private static void BuildTableDetailSheets(ISpreadsheetExporter exporter, IReadOnlyList<DatabaseObjectSchema> databaseObjects, IReadOnlyList<DatabaseColumnSchema> columns, IReadOnlyList<DatabaseIndexSchema> indexes, IReadOnlyDictionary<DatabaseObjectKey, string> sheetNames, IProgress<ExportProgress>? progress, CancellationToken cancellationToken) {
+    private static void BuildTableDetailSheets(SpreadsheetDocument document, IReadOnlyList<DatabaseObjectSchema> databaseObjects, IReadOnlyList<DatabaseColumnSchema> columns, IReadOnlyList<DatabaseIndexSchema> indexes, IReadOnlyDictionary<DatabaseObjectKey, string> sheetNames, IProgress<ExportProgress>? progress, CancellationToken cancellationToken) {
         ILookup<DatabaseObjectKey, DatabaseColumnSchema> columnsByObject = columns.ToLookup(x => x.ObjectKey);
         ILookup<DatabaseObjectKey, DatabaseIndexSchema> indexesByObject = indexes.ToLookup(x => x.ObjectKey);
         int totalObjects = Math.Max(1, databaseObjects.Count);
@@ -675,9 +675,9 @@ public sealed partial class SchemaExportOrchestrator {
             cancellationToken.ThrowIfCancellationRequested();
             DatabaseObjectSchema databaseObject = databaseObjects[index];
             DatabaseObjectKey objectKey = databaseObject.ObjectKey;
-            Sheeter sheeter = exporter.CreateSheeter(sheetNames[objectKey]);
+            SheetDefinition sheet = document.CreateSheet(sheetNames[objectKey]);
             BuildTableDetailSheet(
-                sheeter, databaseObject,
+                sheet, databaseObject,
                 columnsByObject[objectKey].OrderBy(x => x.ColumnOrder).ToList(),
                 indexesByObject[objectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).ToList()
             );
@@ -690,13 +690,13 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static void BuildTableDetailSheet(Sheeter sheeter, DatabaseObjectSchema databaseObject, IReadOnlyCollection<DatabaseColumnSchema> columns, IReadOnlyCollection<DatabaseIndexSchema> indexes) {
+    private static void BuildTableDetailSheet(SheetDefinition sheet, DatabaseObjectSchema databaseObject, IReadOnlyCollection<DatabaseColumnSchema> columns, IReadOnlyCollection<DatabaseIndexSchema> indexes) {
         CellStyle defaultGridStyle = SpreadsheetManager.DefaultCellStyles.GridCellStyle;
         CellFont defaultFont = SpreadsheetManager.DefaultCellStyles.GridCellStyle.Font;
-        CellStyle headerLabelStyle = defaultGridStyle with { HorizontalAlignment = HorizontalAlignment.Right, Font = defaultFont with { Style = defaultFont.Style | SpreadsheetExporter.FontStyles.IsBold } };
+        CellStyle headerLabelStyle = defaultGridStyle with { HorizontalAlignment = HorizontalAlignment.Right, Font = defaultFont with { Style = defaultFont.Style | SpreadsheetExporter.FontStyles.Bold } };
         GridTemplate headerTemplate = new();
         headerTemplate.CreateRow().CreateCell("Schema：", cellStyle: headerLabelStyle).CreateCell(databaseObject.SchemaName, 2).CreateCell("物件名稱：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectName, 3).CreateRow(Constants.AutoFitRowHeight).CreateCell("類型：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectType, 2).CreateCell("資料表描述：", cellStyle: headerLabelStyle).CreateCell(databaseObject.ObjectDescription, 3);
-        sheeter.AddTemplate(headerTemplate);
+        sheet.AddTemplate(headerTemplate);
         CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with { HorizontalAlignment = SpreadsheetExporter.HorizontalAlignment.Center };
         RecordSetTemplate<DatabaseColumnSchema> columnsTemplate = new(columns);
         columnsTemplate.Columns.Add("欄位名稱", x => x.ColumnName);
@@ -706,9 +706,9 @@ public sealed partial class SchemaExportOrchestrator {
         columnsTemplate.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
         columnsTemplate.Columns.Add("是否為 Identity", x => x.IsIdentity, fieldStyleGenerator: _ => centerFieldStyle);
         columnsTemplate.Columns.Add("描述", x => x.ColumnDescription);
-        sheeter.AddTemplate(columnsTemplate);
+        sheet.AddTemplate(columnsTemplate);
         if (indexes.Count > 0) {
-            sheeter.AddTemplate(new GridTemplate().CreateRow());
+            sheet.AddTemplate(new GridTemplate().CreateRow());
             RecordSetTemplate<DatabaseIndexSchema> indexesTemplate = new(indexes) { RecordHeight = Constants.AutoFitRowHeight };
             indexesTemplate.Columns.Add("索引名稱", x => x.IndexName);
             indexesTemplate.Columns.Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle);
@@ -717,16 +717,16 @@ public sealed partial class SchemaExportOrchestrator {
             indexesTemplate.Columns.Add("是否為外鍵", x => x.IsForeignKey, fieldStyleGenerator: _ => centerFieldStyle);
             indexesTemplate.Columns.Add("欄位", x => x.Columns, x => x.UseValue(static value => NormalizeMultilineText(value.Value)));
             indexesTemplate.Columns.Add("Include/外鍵 欄位", x => x.OtherColumns, x => x.UseValue(static value => NormalizeMultilineText(value.Value)));
-            sheeter.AddTemplate(indexesTemplate);
+            sheet.AddTemplate(indexesTemplate);
         }
 
-        sheeter.SetColumnWidth(0, 40D);
-        sheeter.SetColumnWidth(1, 15D);
-        sheeter.SetColumnWidth(2, 15D);
-        sheeter.SetColumnWidth(3, 15D);
-        sheeter.SetColumnWidth(4, 15D);
-        sheeter.SetColumnWidth(5, 25D);
-        sheeter.SetColumnWidth(6, 50D);
+        sheet.SetColumnWidth(0, 40D);
+        sheet.SetColumnWidth(1, 15D);
+        sheet.SetColumnWidth(2, 15D);
+        sheet.SetColumnWidth(3, 15D);
+        sheet.SetColumnWidth(4, 15D);
+        sheet.SetColumnWidth(5, 25D);
+        sheet.SetColumnWidth(6, 50D);
     }
 
     private static Dictionary<DatabaseObjectKey, string> BuildSheetNames(IEnumerable<DatabaseObjectSchema> databaseObjects, List<ExportDiagnostic> diagnostics) {
