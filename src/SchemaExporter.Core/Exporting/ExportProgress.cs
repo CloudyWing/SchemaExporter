@@ -12,7 +12,7 @@ public sealed class ExportProgress {
     /// <summary>
     /// 取得或設定目前的進度訊息。
     /// </summary>
-    public string Message { get; set; } = "";
+    public required string Message { get; set; }
 
     /// <summary>
     /// 取得或設定完成百分比（0-100），若無法確定則為 null。

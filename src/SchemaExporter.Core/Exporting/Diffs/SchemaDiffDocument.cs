@@ -17,36 +17,36 @@ public sealed class SchemaDiffDocument {
     /// <summary>
     /// 取得或設定左側 snapshot 路徑。
     /// </summary>
-    public string LeftSnapshotPath { get; init; } = "";
+    public required string LeftSnapshotPath { get; init; }
 
     /// <summary>
     /// 取得或設定右側 snapshot 路徑。
     /// </summary>
-    public string RightSnapshotPath { get; init; } = "";
+    public required string RightSnapshotPath { get; init; }
 
     /// <summary>
     /// 取得或設定差異摘要。
     /// </summary>
-    public SchemaDiffSummary Summary { get; init; } = new();
+    public required SchemaDiffSummary Summary { get; init; }
 
     /// <summary>
     /// 取得或設定物件層級的差異集合。
     /// </summary>
-    public List<SchemaDiffEntry> ObjectChanges { get; init; } = [];
+    public required IReadOnlyList<SchemaDiffEntry> ObjectChanges { get; init; }
 
     /// <summary>
     /// 取得或設定欄位層級的差異集合。
     /// </summary>
-    public List<SchemaDiffEntry> ColumnChanges { get; init; } = [];
+    public required IReadOnlyList<SchemaDiffEntry> ColumnChanges { get; init; }
 
     /// <summary>
     /// 取得或設定索引層級的差異集合。
     /// </summary>
-    public List<SchemaDiffEntry> IndexChanges { get; init; } = [];
+    public required IReadOnlyList<SchemaDiffEntry> IndexChanges { get; init; }
 
     /// <summary>
     /// 取得或設定程序與函數層級的差異集合。
     /// </summary>
-    public List<SchemaDiffEntry> RoutineChanges { get; init; } = [];
+    public required IReadOnlyList<SchemaDiffEntry> RoutineChanges { get; init; }
 }
 

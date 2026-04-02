@@ -21,7 +21,8 @@ public sealed class SchemaExportOrchestratorTests {
         SchemaExportOrchestrator sut = CreateSubject(providerFactory);
         SchemaConnection connection = new() {
             Name = "   ",
-            DatabaseType = DatabaseType.SqlServer
+            DatabaseType = DatabaseType.SqlServer,
+            ConnectionString = ""
         };
 
         ExportValidationException? exception = Assert.ThrowsAsync<ExportValidationException>(

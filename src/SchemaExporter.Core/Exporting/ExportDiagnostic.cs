@@ -22,7 +22,7 @@ public sealed class ExportDiagnostic {
     /// <summary>
     /// 取得診斷訊息。
     /// </summary>
-    public string Message { get; init; } = "";
+    public required string Message { get; init; }
 
     /// <summary>
     /// 取得受影響的資料庫物件（適用時）。

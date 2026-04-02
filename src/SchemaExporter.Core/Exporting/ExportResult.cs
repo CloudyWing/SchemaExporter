@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
@@ -9,7 +7,7 @@ public sealed class ExportResult {
     /// <summary>
     /// 取得產生的匯出檔案路徑。
     /// </summary>
-    public string OutputFilePath { get; init; } = "";
+    public required string OutputFilePath { get; init; }
 
     /// <summary>
     /// 取得產生的 manifest 檔案路徑（若已建立）。
@@ -44,16 +42,16 @@ public sealed class ExportResult {
     /// <summary>
     /// 取得匯出所使用的連線名稱。
     /// </summary>
-    public string ConnectionName { get; init; } = "";
+    public required string ConnectionName { get; init; }
 
     /// <summary>
     /// 取得匯出所使用的設定檔名稱。
     /// </summary>
-    public string ProfileName { get; init; } = "";
+    public required string ProfileName { get; init; }
 
     /// <summary>
     /// 取得匯出期間收集的診斷資訊。
     /// </summary>
-    public IReadOnlyList<ExportDiagnostic> Diagnostics { get; init; } = [];
+    public required IReadOnlyList<ExportDiagnostic> Diagnostics { get; init; }
 }
 

@@ -12,11 +12,11 @@ public sealed class SchemaDiffEntry {
     /// <summary>
     /// 取得或設定異動項目的識別字串。
     /// </summary>
-    public string Identifier { get; init; } = "";
+    public required string Identifier { get; init; }
 
     /// <summary>
     /// 取得或設定屬性差異集合。
     /// </summary>
-    public Dictionary<string, SchemaValueChange> PropertyChanges { get; init; } = [];
+    public required IReadOnlyDictionary<string, SchemaValueChange> PropertyChanges { get; init; }
 }
 

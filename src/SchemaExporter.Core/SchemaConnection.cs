@@ -7,7 +7,7 @@ public class SchemaConnection {
     /// <summary>
     /// 取得或設定在 UI 中顯示的名稱。
     /// </summary>
-    public string Name { get; set; } = "";
+    public required string Name { get; set; }
 
     /// <summary>
     /// 取得或設定資料庫提供者類型。省略時預設為 SQL Server。
@@ -17,7 +17,7 @@ public class SchemaConnection {
     /// <summary>
     /// 取得或設定資料庫連接字串。
     /// </summary>
-    public string ConnectionString { get; set; } = "";
+    public required string ConnectionString { get; set; }
 
     /// <summary>
     /// 取得或設定此連線使用的匯出設定檔名稱。

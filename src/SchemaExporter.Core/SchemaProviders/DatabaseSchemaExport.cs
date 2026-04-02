@@ -7,21 +7,21 @@ public sealed class DatabaseSchemaExport {
     /// <summary>
     /// 取得已匯出的資料庫物件。
     /// </summary>
-    public IReadOnlyList<DatabaseObjectSchema> Objects { get; init; } = [];
+    public required IReadOnlyList<DatabaseObjectSchema> Objects { get; init; }
 
     /// <summary>
     /// 取得已匯出的資料行。
     /// </summary>
-    public IReadOnlyList<DatabaseColumnSchema> Columns { get; init; } = [];
+    public required IReadOnlyList<DatabaseColumnSchema> Columns { get; init; }
 
     /// <summary>
     /// 取得已匯出的索引。
     /// </summary>
-    public IReadOnlyList<DatabaseIndexSchema> Indexes { get; init; } = [];
+    public required IReadOnlyList<DatabaseIndexSchema> Indexes { get; init; }
 
     /// <summary>
     /// 取得已匯出的程序。
     /// </summary>
-    public IReadOnlyList<DatabaseRoutineSchema> Routines { get; init; } = [];
+    public required IReadOnlyList<DatabaseRoutineSchema> Routines { get; init; }
 }
 

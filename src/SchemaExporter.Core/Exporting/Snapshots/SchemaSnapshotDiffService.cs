@@ -21,7 +21,7 @@ public sealed class SchemaSnapshotDiffService {
     /// <param name="cancellationToken">取消語彙基元。</param>
     /// <returns>已還原序列化的快照文件。</returns>
     public async Task<SchemaSnapshotDocument> LoadSnapshotAsync(string snapshotPath, CancellationToken cancellationToken = default) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath, nameof(snapshotPath));
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
 
         string normalizedPath = NormalizePath(snapshotPath);
         try {
@@ -65,12 +65,14 @@ public sealed class SchemaSnapshotDiffService {
     /// <param name="diff">要序列化的差異比對文件。</param>
     /// <param name="cancellationToken">取消語彙基元。</param>
     public async Task WriteJsonAsync(string outputPath, SchemaDiffDocument diff, CancellationToken cancellationToken = default) {
-        ArgumentNullException.ThrowIfNull(diff, nameof(diff));
+        ArgumentNullException.ThrowIfNull(diff);
+
         await WriteTextAsync(
             outputPath,
             JsonSerializer.Serialize(diff, JsonOptions),
             "無法產生 schema diff 檔案：",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken
+        ).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -80,7 +82,8 @@ public sealed class SchemaSnapshotDiffService {
     /// <param name="diff">要格式化的差異比對文件。</param>
     /// <param name="cancellationToken">取消語彙基元。</param>
     public async Task WriteMarkdownAsync(string outputPath, SchemaDiffDocument diff, CancellationToken cancellationToken = default) {
-        ArgumentNullException.ThrowIfNull(diff, nameof(diff));
+        ArgumentNullException.ThrowIfNull(diff);
+
         await WriteTextAsync(outputPath, BuildMarkdownReport(diff), "無法產生 schema diff 檔案：", cancellationToken)
             .ConfigureAwait(false);
     }
@@ -91,7 +94,7 @@ public sealed class SchemaSnapshotDiffService {
     /// <param name="diff">差異比對文件。</param>
     /// <returns>已格式化的 Markdown 報告字串。</returns>
     public string BuildMarkdownReport(SchemaDiffDocument diff) {
-        ArgumentNullException.ThrowIfNull(diff, nameof(diff));
+        ArgumentNullException.ThrowIfNull(diff);
 
         StringBuilder markdown = new();
         markdown.AppendLine("# Schema Diff");
@@ -388,10 +391,10 @@ public sealed class SchemaSnapshotDiffService {
     private static async Task WriteTextAsync(
         string outputPath,
         string content,
-        string errorPrefix
-,
+        string errorPrefix,
         CancellationToken cancellationToken) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath, nameof(outputPath));
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
         try {
             await File.WriteAllTextAsync(outputPath, content, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {

@@ -55,7 +55,7 @@ public sealed class DatabaseSchemaProviderFactoryTests {
         oracleProvider.DatabaseType.Returns(DatabaseType.Oracle);
 
         IReadOnlyList<DatabaseObjectSchema> filteredObjects = [new DatabaseObjectSchema { SchemaName = "TEST", ObjectName = "T1", ObjectType = "BASE TABLE" }];
-        DatabaseSchemaDetails expected = new();
+        DatabaseSchemaDetails expected = DatabaseSchemaDetails.Empty;
         CancellationToken cancellationToken = new CancellationTokenSource().Token;
         oracleProvider.LoadDetailsAsync("oracle-connection", filteredObjects, cancellationToken).Returns(Task.FromResult(expected));
 

@@ -17,8 +17,8 @@ public static class ServiceCollectionExtensions {
     /// <param name="configuration">應用程式組態根物件。</param>
     /// <returns>已更新的服務集合。</returns>
     public static IServiceCollection AddSchemaExporterCore(this IServiceCollection services, IConfiguration configuration) {
-        ArgumentNullException.ThrowIfNull(services, nameof(services));
-        ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddLogging();
         services.AddSingleton(configuration);

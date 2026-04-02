@@ -7,17 +7,17 @@ public sealed class SchemaSnapshotDiagnostic {
     /// <summary>
     /// 取得或設定診斷嚴重性。
     /// </summary>
-    public string Severity { get; init; } = "";
+    public required string Severity { get; init; }
 
     /// <summary>
     /// 取得或設定診斷分類。
     /// </summary>
-    public string Category { get; init; } = "";
+    public required string Category { get; init; }
 
     /// <summary>
     /// 取得或設定支援等級描述。
     /// </summary>
-    public string SupportLevel { get; init; } = "";
+    public string? SupportLevel { get; init; }
 
     /// <summary>
     /// 取得或設定受影響的物件識別。
@@ -27,6 +27,6 @@ public sealed class SchemaSnapshotDiagnostic {
     /// <summary>
     /// 取得或設定診斷訊息。
     /// </summary>
-    public string Message { get; init; } = "";
+    public required string Message { get; init; }
 }
 

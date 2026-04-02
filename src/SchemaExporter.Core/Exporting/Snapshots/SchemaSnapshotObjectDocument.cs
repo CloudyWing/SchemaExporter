@@ -7,31 +7,31 @@ public sealed class SchemaSnapshotObjectDocument {
     /// <summary>
     /// 取得結構描述名稱。
     /// </summary>
-    public string SchemaName { get; init; } = "";
+    public required string SchemaName { get; init; }
 
     /// <summary>
     /// 取得物件名稱。
     /// </summary>
-    public string ObjectName { get; init; } = "";
+    public required string ObjectName { get; init; }
 
     /// <summary>
     /// 取得物件類型（例如 TABLE、VIEW）。
     /// </summary>
-    public string ObjectType { get; init; } = "";
+    public required string ObjectType { get; init; }
 
     /// <summary>
     /// 取得物件描述。
     /// </summary>
-    public string ObjectDescription { get; init; } = "";
+    public required string ObjectDescription { get; init; }
 
     /// <summary>
     /// 取得屬於此物件的資料行集合。
     /// </summary>
-    public IReadOnlyList<SchemaSnapshotColumnDocument> Columns { get; init; } = [];
+    public required IReadOnlyList<SchemaSnapshotColumnDocument> Columns { get; init; }
 
     /// <summary>
     /// 取得屬於此物件的索引集合。
     /// </summary>
-    public IReadOnlyList<SchemaSnapshotIndexDocument> Indexes { get; init; } = [];
+    public required IReadOnlyList<SchemaSnapshotIndexDocument> Indexes { get; init; }
 }
 

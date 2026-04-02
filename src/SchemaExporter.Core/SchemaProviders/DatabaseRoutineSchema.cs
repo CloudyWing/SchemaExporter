@@ -7,57 +7,57 @@ public sealed class DatabaseRoutineSchema {
     /// <summary>
     /// 取得或設定結構描述名稱。
     /// </summary>
-    public string SchemaName { get; set; } = "";
+    public required string SchemaName { get; set; }
 
     /// <summary>
     /// 取得或設定選擇性的所屬套件或物件名稱。
     /// </summary>
-    public string ContainerName { get; set; } = "";
+    public string? ContainerName { get; set; }
 
     /// <summary>
     /// 取得或設定程序名稱。
     /// </summary>
-    public string RoutineName { get; set; } = "";
+    public required string RoutineName { get; set; }
 
     /// <summary>
     /// 取得或設定程序類型。
     /// </summary>
-    public string RoutineType { get; set; } = "";
+    public required string RoutineType { get; set; }
 
     /// <summary>
     /// 取得或設定多載識別碼。
     /// </summary>
-    public string OverloadIdentifier { get; set; } = "";
+    public string? OverloadIdentifier { get; set; }
 
     /// <summary>
     /// 取得或設定格式化的參數簽章。
     /// </summary>
-    public string ParameterSignature { get; set; } = "";
+    public string? ParameterSignature { get; set; }
 
     /// <summary>
     /// 取得或設定傳回類型。
     /// </summary>
-    public string ReturnType { get; set; } = "";
+    public string? ReturnType { get; set; }
 
     /// <summary>
     /// 取得或設定程序描述。
     /// </summary>
-    public string RoutineDescription { get; set; } = "";
+    public string? RoutineDescription { get; set; }
 
     /// <summary>
     /// 取得或設定程序定義。
     /// </summary>
-    public string RoutineDefinition { get; set; } = "";
+    public string? RoutineDefinition { get; set; }
 
     /// <summary>
     /// 取得程序索引鍵。
     /// </summary>
     public DatabaseRoutineKey RoutineKey => new(
         SchemaName,
-        ContainerName,
+        ContainerName ?? "",
         RoutineName,
         RoutineType,
-        OverloadIdentifier
+        OverloadIdentifier ?? ""
     );
 
     /// <summary>

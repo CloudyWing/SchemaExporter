@@ -1,5 +1,4 @@
 using System.Text.Json;
-using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
@@ -66,11 +65,9 @@ internal static class SchemaTestData {
             Routines = [
                 new DatabaseRoutineSchema {
                     SchemaName = "dbo",
-                    ContainerName = "",
                     RoutineName = "usp_GetUsers",
                     RoutineType = "PROCEDURE",
                     ParameterSignature = "@IsActive bit",
-                    ReturnType = "",
                     RoutineDescription = "Returns users",
                     RoutineDefinition = "SELECT [Id], [Name] FROM [dbo].[Users];"
                 }

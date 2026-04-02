@@ -10,7 +10,7 @@ internal sealed class SchemaJsonSidecar {
     /// <summary>
     /// 取得或設定目前匯出的 snapshot。
     /// </summary>
-    public SchemaSnapshotDocument Snapshot { get; init; } = new();
+    public required SchemaSnapshotDocument Snapshot { get; init; }
 
     /// <summary>
     /// 取得或設定與基準 snapshot 的差異；若未產生差異則為 <see langword="null" />。

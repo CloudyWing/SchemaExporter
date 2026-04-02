@@ -7,12 +7,12 @@ internal sealed class CliArguments {
     /// <summary>
     /// 取得或設定要執行的命令。
     /// </summary>
-    public CliCommand Command { get; init; } = CliCommand.Export;
+    public required CliCommand Command { get; init; }
 
     /// <summary>
     /// 取得或設定匯出命令使用的連線名稱。
     /// </summary>
-    public string ConnectionName { get; init; } = "";
+    public string? ConnectionName { get; init; }
 
     /// <summary>
     /// 取得或設定匯出命令指定的設定檔名稱。
@@ -137,7 +137,7 @@ internal sealed class CliArguments {
         errorMessage = null;
         showHelp = false;
 
-        string connectionName = "";
+        string? connectionName = null;
         string? profileName = null;
         string? outputPath = null;
         bool? generateManifest = null;
@@ -162,7 +162,7 @@ internal sealed class CliArguments {
                         return false;
                     }
 
-                    connectionName = readConnectionName ?? "";
+                    connectionName = readConnectionName;
                     break;
                 case "--profile":
                     if (!TryReadValue(args, ref index, out profileName)) {

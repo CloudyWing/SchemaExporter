@@ -7,22 +7,22 @@ public sealed class DatabaseObjectSchema {
     /// <summary>
     /// 取得或設定結構描述名稱。
     /// </summary>
-    public string SchemaName { get; set; } = "";
+    public required string SchemaName { get; set; }
 
     /// <summary>
     /// 取得或設定物件名稱。
     /// </summary>
-    public string ObjectName { get; set; } = "";
+    public required string ObjectName { get; set; }
 
     /// <summary>
     /// 取得或設定物件類型。
     /// </summary>
-    public string ObjectType { get; set; } = "";
+    public required string ObjectType { get; set; }
 
     /// <summary>
     /// 取得或設定物件描述。
     /// </summary>
-    public string ObjectDescription { get; set; } = "";
+    public string? ObjectDescription { get; set; }
 
     /// <summary>
     /// 取得物件索引鍵。

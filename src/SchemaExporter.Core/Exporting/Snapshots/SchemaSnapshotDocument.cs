@@ -17,41 +17,41 @@ public sealed class SchemaSnapshotDocument {
     /// <summary>
     /// 取得或設定連線名稱。
     /// </summary>
-    public string ConnectionName { get; init; } = "";
+    public required string ConnectionName { get; init; }
 
     /// <summary>
     /// 取得或設定資料庫類型名稱。
     /// </summary>
-    public string DatabaseType { get; init; } = "";
+    public required string DatabaseType { get; init; }
 
     /// <summary>
     /// 取得或設定匯出設定檔名稱。
     /// </summary>
-    public string ProfileName { get; init; } = "";
+    public required string ProfileName { get; init; }
 
     /// <summary>
     /// 取得或設定輸出活頁簿路徑。
     /// </summary>
-    public string OutputFilePath { get; init; } = "";
+    public required string OutputFilePath { get; init; }
 
     /// <summary>
     /// 取得或設定數量統計資訊。
     /// </summary>
-    public SchemaSnapshotCounts Counts { get; set; } = new();
+    public required SchemaSnapshotCounts Counts { get; init; }
 
     /// <summary>
     /// 取得或設定診斷資訊集合。
     /// </summary>
-    public List<SchemaSnapshotDiagnostic> Diagnostics { get; set; } = [];
+    public required IReadOnlyList<SchemaSnapshotDiagnostic> Diagnostics { get; init; }
 
     /// <summary>
     /// 取得或設定資料庫物件集合。
     /// </summary>
-    public List<SchemaSnapshotObjectDocument> Objects { get; set; } = [];
+    public required IReadOnlyList<SchemaSnapshotObjectDocument> Objects { get; init; }
 
     /// <summary>
     /// 取得或設定程序與函數集合。
     /// </summary>
-    public List<SchemaSnapshotRoutineDocument> Routines { get; set; } = [];
+    public required IReadOnlyList<SchemaSnapshotRoutineDocument> Routines { get; init; }
 }
 

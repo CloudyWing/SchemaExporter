@@ -12,36 +12,36 @@ internal sealed class ExportManifest {
     /// <summary>
     /// 取得或設定連線名稱。
     /// </summary>
-    public string ConnectionName { get; init; } = "";
+    public required string ConnectionName { get; init; }
 
     /// <summary>
     /// 取得或設定資料庫類型名稱。
     /// </summary>
-    public string DatabaseType { get; init; } = "";
+    public required string DatabaseType { get; init; }
 
     /// <summary>
     /// 取得或設定匯出設定檔名稱。
     /// </summary>
-    public string ProfileName { get; init; } = "";
+    public required string ProfileName { get; init; }
 
     /// <summary>
     /// 取得或設定輸出活頁簿路徑。
     /// </summary>
-    public string OutputFilePath { get; init; } = "";
+    public required string OutputFilePath { get; init; }
 
     /// <summary>
     /// 取得或設定結果選項資訊。
     /// </summary>
-    public ExportManifestResultOptions ResultOptions { get; init; } = new();
+    public required ExportManifestResultOptions ResultOptions { get; init; }
 
     /// <summary>
     /// 取得或設定匯出項目統計資訊。
     /// </summary>
-    public ExportManifestCounts Counts { get; init; } = new();
+    public required ExportManifestCounts Counts { get; init; }
 
     /// <summary>
     /// 取得或設定診斷資訊集合。
     /// </summary>
-    public List<ExportManifestDiagnostic> Diagnostics { get; init; } = [];
+    public required IReadOnlyList<ExportManifestDiagnostic> Diagnostics { get; init; }
 }
 
