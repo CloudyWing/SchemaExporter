@@ -7,26 +7,41 @@ using CloudyWing.SchemaExporter.Services;
 
 namespace CloudyWing.SchemaExporter.Cli;
 
+/// <summary>
+/// 負責解析命令列引數並分派至對應的 CLI 子命令執行器。
+/// </summary>
 internal sealed class CliRunner {
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private readonly SchemaSnapshotDiffService diffService;
     private readonly ISettingsService settingsService;
 
+    /// <summary>
+    /// 初始化 <see cref="CliRunner"/> 類別的新執行個體。
+    /// </summary>
+    /// <param name="exportOrchestrator">Schema 匯出流程協調器。</param>
+    /// <param name="diffService">Schema Snapshot 差異比對服務。</param>
+    /// <param name="settingsService">設定檔存取服務。</param>
     public CliRunner(
         SchemaExportOrchestrator exportOrchestrator,
         SchemaSnapshotDiffService diffService,
         ISettingsService settingsService
     ) {
-        ArgumentNullException.ThrowIfNull(exportOrchestrator, nameof(exportOrchestrator));
-        ArgumentNullException.ThrowIfNull(diffService, nameof(diffService));
-        ArgumentNullException.ThrowIfNull(settingsService, nameof(settingsService));
+        ArgumentNullException.ThrowIfNull(exportOrchestrator);
+        ArgumentNullException.ThrowIfNull(diffService);
+        ArgumentNullException.ThrowIfNull(settingsService);
+
         this.exportOrchestrator = exportOrchestrator;
         this.diffService = diffService;
         this.settingsService = settingsService;
     }
 
+    /// <summary>
+    /// 解析命令列引數並執行對應的命令。
+    /// </summary>
+    /// <param name="args">應用程式啟動時傳入的命令列引數陣列。</param>
+    /// <returns>代表執行結果的結束代碼；<c>0</c> 表示成功，非零表示失敗。</returns>
     public async Task<int> RunAsync(string[] args) {
-        ArgumentNullException.ThrowIfNull(args, nameof(args));
+        ArgumentNullException.ThrowIfNull(args);
 
         if (!CliArguments.TryParse(args, out CliArguments? parsedArguments, out string? errorMessage, out bool showHelp)) {
             if (!string.IsNullOrWhiteSpace(errorMessage)) {
@@ -129,12 +144,14 @@ internal sealed class CliRunner {
     }
 
     private static SchemaConnection ResolveConnection(SchemaOptions schemaOptions, CliArguments arguments) {
+        string connectionName = arguments.ConnectionName
+            ?? throw new InvalidOperationException("Export command is missing the connection name.");
         SchemaConnection? connection = schemaOptions.Connections.FirstOrDefault(x =>
-            string.Equals(x.Name, arguments.ConnectionName, StringComparison.OrdinalIgnoreCase)
+            string.Equals(x.Name, connectionName, StringComparison.OrdinalIgnoreCase)
         );
 
         if (connection is null) {
-            throw new ExportValidationException($"找不到名稱為「{arguments.ConnectionName}」的連線設定。");
+            throw new ExportValidationException($"找不到名稱為「{connectionName}」的連線設定。");
         }
 
         return connection;
@@ -163,8 +180,8 @@ internal sealed class CliRunner {
     }
 
     private static ExportResultOptions BuildResultOptions(ExportResultOptions defaults, CliArguments arguments) {
-        ArgumentNullException.ThrowIfNull(defaults, nameof(defaults));
-        ArgumentNullException.ThrowIfNull(arguments, nameof(arguments));
+        ArgumentNullException.ThrowIfNull(defaults);
+        ArgumentNullException.ThrowIfNull(arguments);
 
         return new ExportResultOptions {
             UseTimestamp = arguments.UseTimestamp ?? defaults.UseTimestamp,

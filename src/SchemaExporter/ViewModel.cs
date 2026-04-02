@@ -18,7 +18,7 @@ namespace CloudyWing.SchemaExporter;
 public partial class ViewModel : ObservableObject {
     private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
-    private SchemaOptions schemaOptions = new();
+    private SchemaOptions schemaOptions = new() { ExportPath = "" };
     private CancellationTokenSource? currentExportCancellation;
 
     /// <summary>
@@ -148,8 +148,8 @@ public partial class ViewModel : ObservableObject {
         ISettingsService settingsService,
         SchemaExportOrchestrator exportOrchestrator
     ) {
-        ArgumentNullException.ThrowIfNull(settingsService, nameof(settingsService));
-        ArgumentNullException.ThrowIfNull(exportOrchestrator, nameof(exportOrchestrator));
+        ArgumentNullException.ThrowIfNull(settingsService);
+        ArgumentNullException.ThrowIfNull(exportOrchestrator);
         this.settingsService = settingsService;
         this.exportOrchestrator = exportOrchestrator;
     }
@@ -174,7 +174,11 @@ public partial class ViewModel : ObservableObject {
             ExportProfiles,
             schemaOptions.ExportProfiles.Count > 0
                 ? schemaOptions.ExportProfiles
-                : [new ExportProfile { Name = "Default" }]
+                : [
+                    new ExportProfile {
+                        Name = "Default"
+                    }
+                ]
         );
 
         OutputPath = schemaOptions.ExportPath;

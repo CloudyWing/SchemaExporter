@@ -23,9 +23,9 @@
 
 Velopack 是一個 Windows 應用程式打包與自動更新框架，用來取代 Squirrel.Windows。它負責：
 
-- 建立可安裝的 `.exe` 安裝檔
-- 在應用程式啟動時檢查並下載新版本
-- 在不中斷使用者操作的情況下更新並重啟
+- 建立可安裝的 `.exe` 安裝檔。
+- 在應用程式啟動時檢查並下載新版本。
+- 在不中斷使用者操作的情況下更新並重啟。
 
 ### 初始化（必要步驟）
 
@@ -48,9 +48,9 @@ updateManager = new UpdateManager(
 );
 ```
 
-- `GitHubRepository`：格式為 `https://github.com/Owner/Repo`
-- `prerelease: false`：僅提供正式版更新，忽略預發布標籤
-- `accessToken`：公開儲存庫不需要，私有儲存庫需要填入 PAT
+- `GitHubRepository`：格式為 `https://github.com/Owner/Repo`。
+- `prerelease: false`：僅提供正式版更新，忽略預發布標籤。
+- `accessToken`：公開儲存庫不需要，私有儲存庫需要填入 PAT。
 
 ### 更新生命週期
 
@@ -222,10 +222,10 @@ CloudyWing.SpreadsheetExporter 是一個建構式 Excel 匯出函式庫，以宣
 
 核心概念：
 
-- **SpreadsheetManager**：全域設定中心（Renderer、預設樣式）
-- **SheetDefinition**：代表一個工作表，可附加多個 Template
-- **GridTemplate**：自由格式方格，逐列逐儲存格定義
-- **RecordSetTemplate**：資料列表，自動根據集合渲染多列
+- **SpreadsheetManager**：全域設定中心（Renderer、預設樣式）。
+- **SheetDefinition**：代表一個工作表，可附加多個 Template。
+- **GridTemplate**：自由格式方格，逐列逐儲存格定義。
+- **RecordSetTemplate**：資料列表，自動根據集合渲染多列。
 
 ### 初始化（SpreadsheetExporterBootstrapper）
 
@@ -410,9 +410,9 @@ internal sealed partial class CliConsoleSession : IDisposable {
 }
 ```
 
-- `partial` 關鍵字：讓 Source Generator 在同一個 `partial class` 產生實作程式碼
-- `SetLastError = true`：呼叫失敗時可用 `Marshal.GetLastWin32Error()` 取得錯誤碼
-- `[return: MarshalAs(UnmanagedType.Bool)]`：指定將 C 的 `BOOL`（32-bit int）正確轉換為 C# `bool`
+- `partial` 關鍵字：讓 Source Generator 在同一個 `partial class` 產生實作程式碼。
+- `SetLastError = true`：呼叫失敗時可用 `Marshal.GetLastWin32Error()` 取得錯誤碼。
+- `[return: MarshalAs(UnmanagedType.Bool)]`：指定將 C 的 `BOOL`（32-bit int）正確轉換為 C# `bool`。
 
 ### 為何需要 AllowUnsafeBlocks
 
@@ -423,7 +423,8 @@ LibraryImport Source Generator 產生的程式碼包含 `unsafe` 區塊（用於
 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 ```
 
-> **注意**：`AllowUnsafeBlocks` 允許**整個專案**撰寫 `unsafe` 程式碼，但本專案只有 Source Generator 產生的部分使用，不應在業務邏輯中直接撰寫 `unsafe` 程式碼。
+> [!NOTE]
+> `AllowUnsafeBlocks` 允許**整個專案**撰寫 `unsafe` 程式碼，但本專案只有 Source Generator 產生的部分使用，不應在業務邏輯中直接撰寫 `unsafe` 程式碼。
 
 ---
 
@@ -488,10 +489,10 @@ private static partial void LogUpdateCheckSkipped(ILogger logger);
 
 ### 使用規則
 
-- 方法必須是 `static partial void`（或回傳 `bool`）
-- 類別必須是 `partial class`
-- `Exception` 參數（若有）必須放在 `ILogger` 之後的第一個位置
-- `EventId` 建議按模組分段管理（本專案：2000-2999 為 Core，3000-3999 為 App）
+- 方法必須是 `static partial void`（或回傳 `bool`）。
+- 類別必須是 `partial class`。
+- `Exception` 參數（若有）必須放在 `ILogger` 之後的第一個位置。
+- `EventId` 建議按模組分段管理（本專案：2000-2999 為 Core，3000-3999 為 App）。
 
 ---
 
@@ -515,9 +516,9 @@ IReadOnlyList<DatabaseColumnSchema> columns = (await connection.QueryAsync<Datab
 ).ConfigureAwait(false)).ToList().AsReadOnly();
 ```
 
-- `QueryAsync<T>`：非同步查詢，結果直接對應至 `DatabaseColumnSchema` 屬性
-- 匿名物件作為參數（防 SQL Injection）
-- `ConfigureAwait(false)`：Library 層必須加，避免死結
+- `QueryAsync<T>`：非同步查詢，結果直接對應至 `DatabaseColumnSchema` 屬性。
+- 匿名物件作為參數（防 SQL Injection）。
+- `ConfigureAwait(false)`：Library 層必須加，避免死結。
 
 ### Schema 對應規則
 

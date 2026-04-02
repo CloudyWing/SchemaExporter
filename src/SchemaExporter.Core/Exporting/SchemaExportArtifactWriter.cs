@@ -11,6 +11,17 @@ namespace CloudyWing.SchemaExporter.Core.Exporting;
 /// 負責寫入次要匯出成品，包含資訊清單、附屬檔案、快照與差異比對結果。
 /// </summary>
 internal static class SchemaExportArtifactWriter {
+    /// <summary>
+    /// 依據匯出設定非同步產生所有次要成品，並回傳各成品的輸出路徑。
+    /// </summary>
+    /// <param name="outputFilePath">主要 Excel 輸出檔案的完整路徑。</param>
+    /// <param name="connection">匯出所使用的資料庫連線設定。</param>
+    /// <param name="profile">匯出設定檔。</param>
+    /// <param name="filteredExport">篩選後的結構描述匯出資料。</param>
+    /// <param name="diagnostics">本次匯出過程收集到的診斷訊息清單。</param>
+    /// <param name="resultOptions">匯出結果選項，決定要產生哪些成品。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>包含各成品輸出路徑的 <see cref="ArtifactOutputs"/> 物件。</returns>
     internal static async Task<ArtifactOutputs> WriteArtifactsAsync(
         string outputFilePath,
         SchemaConnection connection,
@@ -99,7 +110,7 @@ internal static class SchemaExportArtifactWriter {
                 SchemaName = databaseObject.SchemaName,
                 ObjectName = databaseObject.ObjectName,
                 ObjectType = databaseObject.ObjectType,
-                ObjectDescription = databaseObject.ObjectDescription,
+                ObjectDescription = databaseObject.ObjectDescription ?? "",
                 Columns = columnsByObject[databaseObject.ObjectKey]
                     .OrderBy(x => x.ColumnOrder)
                     .ThenBy(x => x.ColumnName, StringComparer.OrdinalIgnoreCase)
@@ -107,10 +118,10 @@ internal static class SchemaExportArtifactWriter {
                         ColumnName = x.ColumnName,
                         ColumnType = x.ColumnType,
                         IsNullable = x.IsNullable,
-                        ColumnDefault = x.ColumnDefault,
+                        ColumnDefault = x.ColumnDefault ?? "",
                         IsPrimaryKey = x.IsPrimaryKey,
                         IsIdentity = x.IsIdentity,
-                        ColumnDescription = x.ColumnDescription,
+                        ColumnDescription = x.ColumnDescription ?? "",
                         ColumnOrder = x.ColumnOrder
                     })
                     .ToList(),
@@ -123,20 +134,20 @@ internal static class SchemaExportArtifactWriter {
                         IsUnique = x.IsUnique,
                         IsForeignKey = x.IsForeignKey,
                         Columns = x.Columns,
-                        OtherColumns = x.OtherColumns
+                        OtherColumns = x.OtherColumns ?? ""
                     })
                     .ToList()
             }).ToList(),
             Routines = filteredExport.Routines.Select(x => new SchemaSnapshotRoutineDocument {
                 SchemaName = x.SchemaName,
-                ContainerName = x.ContainerName,
+                ContainerName = x.ContainerName ?? "",
                 RoutineName = x.RoutineName,
                 RoutineType = x.RoutineType,
-                OverloadIdentifier = x.OverloadIdentifier,
-                ParameterSignature = x.ParameterSignature,
-                ReturnType = x.ReturnType,
-                RoutineDescription = x.RoutineDescription,
-                RoutineDefinition = x.RoutineDefinition
+                OverloadIdentifier = x.OverloadIdentifier ?? "",
+                ParameterSignature = x.ParameterSignature ?? "",
+                ReturnType = x.ReturnType ?? "",
+                RoutineDescription = x.RoutineDescription ?? "",
+                RoutineDefinition = x.RoutineDefinition ?? ""
             }).ToList()
         };
     }

@@ -1,14 +1,14 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
-using CloudyWing.SchemaExporter.Windows;
 using CloudyWing.SchemaExporter.Services;
+using CloudyWing.SchemaExporter.Windows;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CloudyWing.SchemaExporter;
 
 /// <summary>
-/// Interaction logic for MainWindow
+/// MainWindow.xaml 的互動邏輯。
 /// </summary>
 public partial class MainWindow : Window {
     private readonly ViewModel viewModel;
@@ -16,14 +16,15 @@ public partial class MainWindow : Window {
     private readonly IUpdateService updateService;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MainWindow"/> class.
+    /// 初始化 <see cref="MainWindow"/> 類別的新執行個體。
     /// </summary>
-    /// <param name="viewModel">The view model to bind to this window.</param>
-    /// <param name="serviceProvider">The service provider used to resolve child windows.</param>
+    /// <param name="viewModel">要繫結至此視窗的 ViewModel。</param>
+    /// <param name="serviceProvider">用於解析子視窗的服務提供者。</param>
+    /// <param name="updateService">用於檢查與套用應用程式更新的服務。</param>
     internal MainWindow(ViewModel viewModel, IServiceProvider serviceProvider, IUpdateService updateService) {
-        ArgumentNullException.ThrowIfNull(viewModel, nameof(viewModel));
-        ArgumentNullException.ThrowIfNull(serviceProvider, nameof(serviceProvider));
-        ArgumentNullException.ThrowIfNull(updateService, nameof(updateService));
+        ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(updateService);
         InitializeComponent();
 
         this.viewModel = viewModel;
@@ -32,10 +33,18 @@ public partial class MainWindow : Window {
         DataContext = viewModel;
     }
 
+    /// <summary>
+    /// 以目前的 ViewModel 狀態初始化視窗。
+    /// </summary>
+    /// <returns>代表非同步作業的工作。</returns>
     public Task InitializeAsync() {
         return viewModel.InitializeAsync();
     }
 
+    /// <summary>
+    /// 非同步檢查是否有可用更新，若有則提示使用者下載並重新啟動。
+    /// </summary>
+    /// <returns>代表非同步作業的工作。</returns>
     public async Task CheckForUpdatesAsync() {
         try {
             Velopack.UpdateInfo? update = await updateService.CheckForUpdatesAsync();

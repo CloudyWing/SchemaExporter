@@ -7,6 +7,15 @@ namespace CloudyWing.SchemaExporter.Core;
 /// </summary>
 public class SchemaOptions {
     /// <summary>
+    /// 初始化 <see cref="SchemaOptions"/> 類別的新執行個體，並設定預設值。
+    /// </summary>
+    public SchemaOptions() {
+        Connections = [];
+        ExportProfiles = [];
+        ExportResultOptions = new ExportResultOptions();
+    }
+
+    /// <summary>
     /// 取得組態區段名稱。
     /// </summary>
     public const string OptionsName = "Schema";
@@ -14,21 +23,21 @@ public class SchemaOptions {
     /// <summary>
     /// 取得或設定匯出輸出的基底目錄路徑。
     /// </summary>
-    public string ExportPath { get; set; } = "";
+    public required string ExportPath { get; set; }
 
     /// <summary>
     /// 取得可用的資料庫連線清單。
     /// </summary>
-    public IReadOnlyList<SchemaConnection> Connections { get; init; } = [];
+    public IReadOnlyList<SchemaConnection> Connections { get; init; }
 
     /// <summary>
     /// 取得定義篩選條件與偏好設定的可用匯出設定檔清單。
     /// </summary>
-    public IReadOnlyList<ExportProfile> ExportProfiles { get; init; } = [];
+    public IReadOnlyList<ExportProfile> ExportProfiles { get; init; }
 
     /// <summary>
     /// 取得或設定預設的匯出結果選項，用於檔案命名與匯出後動作。
     /// </summary>
-    public ExportResultOptions ExportResultOptions { get; set; } = new();
+    public ExportResultOptions ExportResultOptions { get; set; }
 }
 

@@ -7,6 +7,9 @@ using CloudyWing.SchemaExporter.Core.Exporting;
 
 namespace CloudyWing.SchemaExporter.Services;
 
+/// <summary>
+/// 以 JSON 格式（appsettings.json）實作 <see cref="ISettingsService"/> 的設定存取服務。
+/// </summary>
 internal sealed class JsonSettingsService : ISettingsService {
     private static readonly JsonSerializerOptions SerializerOptions = new() {
         PropertyNamingPolicy = null,
@@ -17,17 +20,19 @@ internal sealed class JsonSettingsService : ISettingsService {
     private readonly string appsettingsPath;
     private readonly string backupPath;
 
+    /// <summary>
+    /// 初始化 <see cref="JsonSettingsService"/> 類別的新執行個體，並設定 appsettings.json 與備份檔案路徑。
+    /// </summary>
     public JsonSettingsService() {
         appsettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         backupPath = Path.Combine(AppContext.BaseDirectory, "appsettings.backup.json");
     }
 
+    /// <inheritdoc/>
     public async Task<SchemaOptions> LoadAsync() {
         JsonObject root = await ReadRootObjectAsync().ConfigureAwait(false);
-        JsonNode? schemaNode = root[SchemaOptions.OptionsName];
-        if (schemaNode is null) {
-            throw new InvalidOperationException("appsettings.json 缺少 Schema 設定區段。");
-        }
+        JsonNode? schemaNode = root[SchemaOptions.OptionsName]
+            ?? throw new InvalidOperationException("appsettings.json 缺少 Schema 設定區段。");
 
         SchemaOptions options = schemaNode.Deserialize<SchemaOptions>(SerializerOptions)
             ?? throw new InvalidOperationException("無法讀取 Schema 設定區段。");
@@ -35,8 +40,9 @@ internal sealed class JsonSettingsService : ISettingsService {
         return options;
     }
 
+    /// <inheritdoc/>
     public async Task SaveAsync(SchemaOptions options) {
-        ArgumentNullException.ThrowIfNull(options, nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
         await ValidateAsync(options).ConfigureAwait(false);
 
         JsonObject root = await ReadRootObjectAsync().ConfigureAwait(false);
@@ -55,8 +61,9 @@ internal sealed class JsonSettingsService : ISettingsService {
         File.Move(tempPath, appsettingsPath);
     }
 
+    /// <inheritdoc/>
     public Task<bool> ValidateAsync(SchemaOptions options) {
-        ArgumentNullException.ThrowIfNull(options, nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
 
         if (string.IsNullOrWhiteSpace(options.ExportPath)) {
             throw new ExportValidationException("Schema.ExportPath 不可為空白。");

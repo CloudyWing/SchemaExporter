@@ -4,6 +4,9 @@ using Oracle.ManagedDataAccess.Client;
 
 namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
+/// <summary>
+/// 提供 Oracle 資料庫結構描述的載入實作。
+/// </summary>
 internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
     /// <inheritdoc/>
     public DatabaseType DatabaseType => DatabaseType.Oracle;
@@ -13,7 +16,7 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
         string connectionString,
         CancellationToken cancellationToken = default
     ) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         using DbConnection connection = new OracleConnection(connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -33,10 +36,10 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
         IReadOnlyList<DatabaseObjectSchema> filteredObjects,
         CancellationToken cancellationToken = default
     ) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         if (filteredObjects.Count == 0) {
-            return new DatabaseSchemaDetails();
+            return DatabaseSchemaDetails.Empty;
         }
 
         using DbConnection connection = new OracleConnection(connectionString);

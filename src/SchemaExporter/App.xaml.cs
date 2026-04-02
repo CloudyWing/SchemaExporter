@@ -20,6 +20,9 @@ namespace CloudyWing.SchemaExporter;
 public partial class App : Application {
     private ServiceProvider? serviceProvider;
 
+    /// <summary>
+    /// 初始化 <see cref="App"/> 類別的新執行個體，並啟動 Velopack 更新流程。
+    /// </summary>
     public App() {
         VelopackApp.Build().Run();
     }

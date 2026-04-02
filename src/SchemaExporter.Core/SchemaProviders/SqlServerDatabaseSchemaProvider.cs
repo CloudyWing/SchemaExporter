@@ -4,6 +4,9 @@ using Microsoft.Data.SqlClient;
 
 namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
 
+/// <summary>
+/// 提供 SQL Server 資料庫結構描述的載入實作。
+/// </summary>
 internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider {
     /// <inheritdoc/>
     public DatabaseType DatabaseType => DatabaseType.SqlServer;
@@ -13,7 +16,7 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         string connectionString,
         CancellationToken cancellationToken = default
     ) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         using DbConnection connection = new SqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -33,10 +36,10 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
         IReadOnlyList<DatabaseObjectSchema> filteredObjects,
         CancellationToken cancellationToken = default
     ) {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString, nameof(connectionString));
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         if (filteredObjects.Count == 0) {
-            return new DatabaseSchemaDetails();
+            return DatabaseSchemaDetails.Empty;
         }
 
         using DbConnection connection = new SqlConnection(connectionString);

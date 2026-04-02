@@ -6,14 +6,14 @@ using CloudyWing.SpreadsheetExporter.Renderer.ClosedXML;
 namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// Configures spreadsheet exporter defaults shared by desktop and CLI execution paths.
+/// 設定桌面端與 CLI 執行路徑共用的試算表匯出器預設值。
 /// </summary>
 public static class SpreadsheetExporterBootstrapper {
     private static readonly Lock SyncRoot = new();
     private static bool isConfigured;
 
     /// <summary>
-    /// Applies the default spreadsheet exporter implementation and cell styles.
+    /// 套用預設的試算表匯出器實作與儲存格樣式設定。
     /// </summary>
     public static void Configure() {
         lock (SyncRoot) {
@@ -37,20 +37,23 @@ public static class SpreadsheetExporterBootstrapper {
                 Style = cellStyle.Font.Style | FontStyles.Bold
             };
 
+            CellStyle leftAlignedCellStyle = cellStyle with {
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            CellStyle headerStyle = cellStyle with {
+                Font = headerFont,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                HasBorder = true
+            };
+            CellStyle fieldStyle = leftAlignedCellStyle with {
+                HasBorder = true
+            };
+
             SpreadsheetManager.DefaultCellStyles = new CellStyleConfiguration {
                 CellStyle = cellStyle,
-                GridCellStyle = cellStyle with {
-                    HorizontalAlignment = HorizontalAlignment.Left
-                },
-                HeaderStyle = cellStyle with {
-                    Font = headerFont,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    HasBorder = true
-                },
-                FieldStyle = cellStyle with {
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    HasBorder = true
-                }
+                GridCellStyle = leftAlignedCellStyle,
+                HeaderStyle = headerStyle,
+                FieldStyle = fieldStyle
             };
 
             isConfigured = true;
