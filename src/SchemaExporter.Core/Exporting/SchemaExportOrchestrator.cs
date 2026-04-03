@@ -42,7 +42,7 @@ public sealed partial class SchemaExportOrchestrator {
     /// 非同步執行結構描述匯出作業。
     /// </summary>
     /// <param name="connection">要匯出的資料庫連線設定。</param>
-    /// <param name="exportPath">匯出檔案的目標資料夾路徑（必須為絕對路徑）。</param>
+    /// <param name="exportPath">匯出檔案的目標資料夾路徑，支援絕對路徑與相對路徑。</param>
     /// <param name="profile">控制篩選、命名與輸出行為的匯出設定檔。</param>
     /// <param name="resultOptions">控制成品產生方式的匯出結果選項。</param>
     /// <param name="progress">用於回報匯出進度的物件；可為 <see langword="null"/>。</param>
@@ -232,10 +232,6 @@ public sealed partial class SchemaExportOrchestrator {
         }
 
         string trimmedPath = exportPath.Trim();
-        if (!Path.IsPathFullyQualified(trimmedPath)) {
-            throw new ExportValidationException($"匯出資料夾必須使用絕對路徑：{trimmedPath}");
-        }
-
         try {
             string normalizedPath = Path.GetFullPath(trimmedPath);
             Directory.CreateDirectory(normalizedPath);

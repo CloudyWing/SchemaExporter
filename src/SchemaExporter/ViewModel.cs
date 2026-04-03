@@ -310,10 +310,6 @@ public partial class ViewModel : ObservableObject {
             }
 
             string trimmedPath = OutputPath.Trim();
-            if (!Path.IsPathFullyQualified(trimmedPath)) {
-                throw new ExportValidationException($"匯出資料夾必須使用絕對路徑：{trimmedPath}");
-            }
-
             string normalizedPath = Path.GetFullPath(trimmedPath);
             Directory.CreateDirectory(normalizedPath);
 
