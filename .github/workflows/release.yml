@@ -42,8 +42,31 @@ jobs:
           pack-dir: .\artifacts\publish
           output-dir: .\artifacts\velopack
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            artifacts/velopack/*
+          name: velopack
+          path: artifacts/velopack/*
+
+  create-release:
+    needs: build
+    uses: CloudyWing/devops-templates/.github/workflows/reusable-create-release.yml@main
+
+  upload-release-assets:
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: velopack
+          path: artifacts/velopack
+
+      - name: Upload release assets
+        run: gh release upload ${{ github.ref_name }} artifacts/velopack/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

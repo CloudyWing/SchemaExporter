@@ -43,7 +43,7 @@
                 MinWidth="110"
                 Padding="12,6"
                 Margin="0,0,0,12"
-                Content="設定"
+                Content="管理設定"
                 IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBooleanConverter}}"
                 Click="OpenSettingsButton_Click" />
 
@@ -128,21 +128,28 @@
                 IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBooleanConverter}}"
                 Command="{Binding BrowseDiffSourceSnapshotCommand}" />
 
-        <StackPanel Grid.Row="5"
-                    Grid.Column="1"
-                    Grid.ColumnSpan="2"
-                    Orientation="Horizontal"
-                    Margin="0,0,0,12">
-            <Button Width="90"
+        <Grid Grid.Row="5"
+              Grid.Column="1"
+              Grid.ColumnSpan="2"
+              Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Left">
+                <Button Width="90"
+                        Padding="12,6"
+                        Content="匯出"
+                        Command="{Binding SubmitCommand}" />
+                <Button Width="90"
+                        Padding="12,6"
+                        Margin="12,0,0,0"
+                        Content="取消"
+                        Command="{Binding CancelExportCommand}" />
+            </StackPanel>
+            <Button HorizontalAlignment="Right"
+                    MinWidth="110"
                     Padding="12,6"
-                    Content="匯出"
-                    Command="{Binding SubmitCommand}" />
-            <Button Width="90"
-                    Padding="12,6"
-                    Margin="12,0,0,0"
-                    Content="取消"
-                    Command="{Binding CancelExportCommand}" />
-        </StackPanel>
+                    Content="儲存設定"
+                    Command="{Binding SaveSettingsCommand}" />
+        </Grid>
 
         <Border Grid.Row="6"
                 Grid.Column="0"

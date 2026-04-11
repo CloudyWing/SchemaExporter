@@ -41,6 +41,7 @@ public partial class ViewModel : ObservableObject {
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveSettingsCommand))]
     public partial string OutputPath { get; set; } = "";
 
     /// <summary>
@@ -50,6 +51,7 @@ public partial class ViewModel : ObservableObject {
     [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelExportCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenOutputFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveSettingsCommand))]
     public partial bool IsExporting { get; set; }
 
     /// <summary>
@@ -165,8 +167,6 @@ public partial class ViewModel : ObservableObject {
     /// 從 appsettings.json 重新載入設定並更新畫面。
     /// </summary>
     public async Task ReloadSettingsAsync() {
-        string? selectedConnectionName = Connection?.Name;
-        string? selectedProfileName = SelectedProfile?.Name;
         schemaOptions = await settingsService.LoadAsync();
 
         ReplaceCollection(Connections, schemaOptions.Connections);
@@ -186,15 +186,55 @@ public partial class ViewModel : ObservableObject {
         GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
         GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
         GenerateSchemaSnapshot = schemaOptions.ExportResultOptions.GenerateSchemaSnapshot;
-        DiffSourceSnapshotPath = schemaOptions.ExportResultOptions.DiffSourceSnapshotPath;
+        DiffSourceSnapshotPath = null;
         UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
         AutoOpenOutputFolder = schemaOptions.ExportResultOptions.OpenOutputFolder;
 
-        Connection = ResolveConnection(selectedConnectionName);
-        SelectedProfile = ResolveProfile(selectedProfileName, Connection);
+        Connection = ResolveConnection(schemaOptions.LastSelectedConnectionName);
+        SelectedProfile = ResolveProfile(schemaOptions.LastSelectedProfileName, Connection);
         StatusMessage = Connections.Count == 0
             ? "請先在設定中建立連線。"
             : "請選擇連線並確認匯出設定。";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSaveSettings))]
+    private async Task SaveSettingsAsync() {
+        SchemaOptions optionsToSave = new() {
+            ExportPath = OutputPath.Trim(),
+            Connections = schemaOptions.Connections,
+            ExportProfiles = schemaOptions.ExportProfiles,
+            ExportResultOptions = new ExportResultOptions {
+                UseTimestamp = UseTimestamp,
+                TimestampFormat = schemaOptions.ExportResultOptions.TimestampFormat,
+                OverwriteStrategy = schemaOptions.ExportResultOptions.OverwriteStrategy,
+                OpenOutputFolder = AutoOpenOutputFolder,
+                GenerateManifest = GenerateManifest,
+                GenerateJsonSidecar = GenerateJsonSidecar,
+                GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateSchemaSnapshot = GenerateSchemaSnapshot,
+                DiffSourceSnapshotPath = null
+            },
+            LastSelectedConnectionName = Connection?.Name,
+            LastSelectedProfileName = SelectedProfile?.Name
+        };
+
+        try {
+            await settingsService.SaveAsync(optionsToSave);
+            StatusMessage = "設定已儲存。";
+        } catch (ExportValidationException ex) {
+            MessageBox.Show(ex.Message, "儲存設定", MessageBoxButton.OK, MessageBoxImage.Warning);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            MessageBox.Show(
+                $"無法儲存設定：{ex.Message}",
+                "儲存設定",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+        }
+    }
+
+    private bool CanSaveSettings() {
+        return !IsExporting && !string.IsNullOrWhiteSpace(OutputPath);
     }
 
     [RelayCommand(CanExecute = nameof(CanSubmit))]
