@@ -31,9 +31,19 @@ public class SchemaOptions {
     public IReadOnlyList<SchemaConnection> Connections { get; init; }
 
     /// <summary>
+    /// 取得或設定上次在主視窗選取的連線名稱。
+    /// </summary>
+    public string? LastSelectedConnectionName { get; set; }
+
+    /// <summary>
     /// 取得定義篩選條件與偏好設定的可用匯出設定檔清單。
     /// </summary>
     public IReadOnlyList<ExportProfile> ExportProfiles { get; init; }
+
+    /// <summary>
+    /// 取得或設定上次在主視窗選取的匯出設定檔名稱。
+    /// </summary>
+    public string? LastSelectedProfileName { get; set; }
 
     /// <summary>
     /// 取得或設定預設的匯出結果選項，用於檔案命名與匯出後動作。

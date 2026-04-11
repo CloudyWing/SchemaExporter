@@ -16,5 +16,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SchemaExporter.Core.Tests/SchemaExporter.Core.Tests.csproj" />
+    <Project Path="tests/SchemaExporter.Tests/SchemaExporter.Tests.csproj" />
   </Folder>
 </Solution>
