@@ -24,8 +24,8 @@ internal sealed class JsonSettingsService : ISettingsService {
     /// 初始化 <see cref="JsonSettingsService"/> 類別的新執行個體，並設定 appsettings.json 與備份檔案路徑。
     /// </summary>
     public JsonSettingsService() {
-        appsettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        backupPath = Path.Combine(AppContext.BaseDirectory, "appsettings.backup.json");
+        appsettingsPath = AppPaths.UserConfigFile;
+        backupPath = Path.Combine(AppPaths.UserConfigDirectory, "appsettings.backup.json");
     }
 
     /// <inheritdoc/>

@@ -62,6 +62,9 @@ public partial class MainWindow : Window {
                 return;
             }
 
+            // 確保尚未啟動過新版的使用者，在更新前先將安裝目錄設定遷移至使用者目錄。
+            AppPaths.EnsureUserConfigExistsIfInstallConfigExists();
+
             string originalStatusMessage = viewModel.StatusMessage;
             try {
                 Progress<int> progress = new(percent => {
