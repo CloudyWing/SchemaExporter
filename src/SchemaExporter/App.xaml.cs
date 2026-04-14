@@ -37,9 +37,9 @@ public partial class App : Application {
 
         try {
             SpreadsheetExporterBootstrapper.Configure();
+            AppPaths.EnsureUserConfigExists();
             IConfiguration configuration = new ConfigurationBuilder()
-                .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile(AppPaths.UserConfigFile, optional: false, reloadOnChange: true)
                 .AddEnvironmentVariables()
                 .Build();
 
@@ -84,7 +84,7 @@ public partial class App : Application {
             MainWindow = mainWindow;
             mainWindow.Show();
             _ = mainWindow.CheckForUpdatesAsync();
-        } catch (Exception ex) when (ex is IOException or InvalidOperationException or JsonException) {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException) {
             if (isCliMode) {
                 Console.Error.WriteLine($"Startup failed: {ex.Message}");
             } else {

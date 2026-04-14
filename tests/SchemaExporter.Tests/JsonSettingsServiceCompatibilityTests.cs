@@ -1,4 +1,5 @@
 using System.IO;
+using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
@@ -12,8 +13,9 @@ namespace CloudyWing.SchemaExporter.Tests;
 public sealed class JsonSettingsServiceCompatibilityTests {
     [Test]
     public async Task ReloadSettingsAsync_WhenLegacySettingsOmitR4Fields_LoadsSuccessfully() {
-        using AppSettingsScope scope = new();
-        await File.WriteAllTextAsync(scope.AppSettingsPath, CreateLegacyAppSettingsJson());
+        using AppSettingsTestScope scope = new();
+        Directory.CreateDirectory(scope.UserConfigDirectory);
+        await File.WriteAllTextAsync(scope.UserConfigPath, CreateLegacyAppSettingsJson());
 
         JsonSettingsService settingsService = new();
         ViewModel sut = CreateViewModel(settingsService);
@@ -26,6 +28,29 @@ public sealed class JsonSettingsServiceCompatibilityTests {
             Assert.That(sut.OutputPath, Is.EqualTo(@"C:\Legacy\Exports"));
             Assert.That(sut.GenerateSchemaSnapshot, Is.True);
             Assert.That(sut.DiffSourceSnapshotPath, Is.Null);
+        }
+    }
+
+    [Test]
+    public async Task SaveAsync_WhenUserConfigExists_WritesToLocalAppDataWithoutChangingInstallTemplate() {
+        using AppSettingsTestScope scope = new();
+        string installTemplateJson = CreateLegacyAppSettingsJson();
+        await File.WriteAllTextAsync(scope.InstallConfigPath, installTemplateJson);
+        Directory.CreateDirectory(scope.UserConfigDirectory);
+        await File.WriteAllTextAsync(scope.UserConfigPath, CreateLegacyAppSettingsJson());
+
+        JsonSettingsService settingsService = new();
+        SchemaOptions options = await settingsService.LoadAsync();
+        options.ExportPath = @"C:\User\Exports";
+
+        await settingsService.SaveAsync(options);
+
+        SchemaOptions reloadedOptions = await settingsService.LoadAsync();
+        string installTemplateAfterSave = await File.ReadAllTextAsync(scope.InstallConfigPath);
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(reloadedOptions.ExportPath, Is.EqualTo(@"C:\User\Exports"));
+            Assert.That(File.Exists(scope.UserConfigPath), Is.True);
+            Assert.That(installTemplateAfterSave, Is.EqualTo(installTemplateJson));
         }
     }
 
@@ -76,40 +101,4 @@ public sealed class JsonSettingsServiceCompatibilityTests {
             """;
     }
 
-    private sealed class AppSettingsScope : IDisposable {
-        private readonly byte[]? originalAppSettings;
-        private readonly byte[]? originalBackupSettings;
-
-        public AppSettingsScope() {
-            AppSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            BackupSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.backup.json");
-            originalAppSettings = ReadBytesIfExists(AppSettingsPath);
-            originalBackupSettings = ReadBytesIfExists(BackupSettingsPath);
-        }
-
-        public string AppSettingsPath { get; }
-
-        private string BackupSettingsPath { get; }
-
-        public void Dispose() {
-            RestoreFile(AppSettingsPath, originalAppSettings);
-            RestoreFile(BackupSettingsPath, originalBackupSettings);
-        }
-
-        private static byte[]? ReadBytesIfExists(string path) {
-            return File.Exists(path) ? File.ReadAllBytes(path) : null;
-        }
-
-        private static void RestoreFile(string path, byte[]? content) {
-            if (content is null) {
-                if (File.Exists(path)) {
-                    File.Delete(path);
-                }
-
-                return;
-            }
-
-            File.WriteAllBytes(path, content);
-        }
-    }
 }
