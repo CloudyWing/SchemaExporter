@@ -560,7 +560,7 @@ protected override async void OnStartup(StartupEventArgs e) {
 
 | 命令 | 說明 |
 | --- | --- |
-| `export` | 連接資料庫並匯出 Schema 至 Excel + Sidecar 檔案 |
+| `export` | 連接資料庫並匯出 Schema 至 Excel 與附加產物 |
 | `diff` | 比較兩個 Snapshot JSON，輸出差異報告 |
 
 常用範例：
@@ -572,8 +572,8 @@ SchemaExporter.exe export --connection MyDb
 # 匯出並指定輸出目錄
 SchemaExporter.exe export --connection MyDb --output C:\Output
 
-# 匯出並同時產生 Snapshot 與 JSON sidecar
-SchemaExporter.exe export --connection MyDb --snapshot --json-sidecar
+# 匯出並同時產生 Snapshot、JSON sidecar 與 Schema Summary
+SchemaExporter.exe export --connection MyDb --snapshot --json-sidecar --schema-summary
 
 # 比較兩個 Snapshot
 SchemaExporter.exe diff \
