@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CloudyWing.SchemaExporter.Core;
-using CloudyWing.SchemaExporter.Core.Exporting;
 
 namespace CloudyWing.SchemaExporter.Services;
 
@@ -63,16 +62,7 @@ internal sealed class JsonSettingsService : ISettingsService {
 
     /// <inheritdoc/>
     public Task<bool> ValidateAsync(SchemaOptions options) {
-        ArgumentNullException.ThrowIfNull(options);
-
-        if (string.IsNullOrWhiteSpace(options.ExportPath)) {
-            throw new ExportValidationException("Schema.ExportPath 不可為空白。");
-        }
-
-        ValidateTimestampFormat(options.ExportResultOptions);
-        ValidateConnections(options.Connections);
-        ValidateProfiles(options.ExportProfiles);
-        ValidateConnectionProfileReferences(options.Connections, options.ExportProfiles);
+        SchemaOptionsValidator.Validate(options);
         return Task.FromResult(true);
     }
 
@@ -84,73 +74,5 @@ internal sealed class JsonSettingsService : ISettingsService {
         string json = await File.ReadAllTextAsync(appsettingsPath, Encoding.UTF8).ConfigureAwait(false);
         JsonNode? node = JsonNode.Parse(json);
         return node as JsonObject ?? throw new InvalidOperationException("appsettings.json 格式無效，根節點必須為 JSON 物件。");
-    }
-
-    private static void ValidateTimestampFormat(ExportResultOptions resultOptions) {
-        if (!resultOptions.UseTimestamp) {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(resultOptions.TimestampFormat)) {
-            throw new ExportValidationException("啟用時間戳記時，必須提供 TimestampFormat。");
-        }
-
-        try {
-            _ = DateTimeOffset.Now.ToString(resultOptions.TimestampFormat);
-        } catch (FormatException ex) {
-            throw new ExportValidationException($"TimestampFormat 無效：{resultOptions.TimestampFormat}", ex);
-        }
-    }
-
-    private static void ValidateConnections(IReadOnlyList<SchemaConnection> connections) {
-        HashSet<string> connectionNames = new(StringComparer.OrdinalIgnoreCase);
-        foreach (SchemaConnection connection in connections) {
-            if (string.IsNullOrWhiteSpace(connection.Name)) {
-                throw new ExportValidationException("連線名稱不可為空白。");
-            }
-
-            if (string.IsNullOrWhiteSpace(connection.ConnectionString)) {
-                throw new ExportValidationException($"連線「{connection.Name}」的 ConnectionString 不可為空白。");
-            }
-
-            if (!connectionNames.Add(connection.Name.Trim())) {
-                throw new ExportValidationException($"連線名稱不可重複：{connection.Name}");
-            }
-        }
-    }
-
-    private static void ValidateProfiles(IReadOnlyList<ExportProfile> profiles) {
-        HashSet<string> profileNames = new(StringComparer.OrdinalIgnoreCase);
-        foreach (ExportProfile profile in profiles) {
-            if (string.IsNullOrWhiteSpace(profile.Name)) {
-                throw new ExportValidationException("匯出設定檔名稱不可為空白。");
-            }
-
-            if (!profileNames.Add(profile.Name.Trim())) {
-                throw new ExportValidationException($"匯出設定檔名稱不可重複：{profile.Name}");
-            }
-        }
-    }
-
-    private static void ValidateConnectionProfileReferences(
-        IReadOnlyList<SchemaConnection> connections,
-        IReadOnlyList<ExportProfile> profiles
-    ) {
-        HashSet<string> profileNames = profiles
-            .Select(x => x.Name.Trim())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (SchemaConnection connection in connections) {
-            if (string.IsNullOrWhiteSpace(connection.ExportProfileName)) {
-                continue;
-            }
-
-            if (!profileNames.Contains(connection.ExportProfileName.Trim())) {
-                throw new ExportValidationException(
-                    $"連線「{connection.Name}」指定的匯出設定檔不存在：{connection.ExportProfileName}"
-                );
-            }
-        }
     }
 }

@@ -2,7 +2,7 @@
 
 之前撰寫了好幾個版本的工具，用於從資料庫結構中生成 Schema，但因為認為可能用不到而沒有保留，結果後來又需要使用，所以現在重新撰寫了一個版本來做備份。
 
-目前這個版本整理成共用 Core、WPF 桌面程式和 CLI。平常手動匯出可以用桌面版，要做排程、自動化或 snapshot / diff 時就用 CLI。
+目前這個版本整理成共用 Core、WPF 桌面程式和 CLI。平常手動匯出可以用桌面版，要做排程、自動化或 snapshot / diff 時就用 CLI。使用者設定會存放在 `%LocalAppData%\SchemaExporter\appsettings.json`，避免更新時覆蓋連線與匯出設定。
 
 ## 專案組成
 
@@ -18,7 +18,7 @@
 - 可選擇額外產生 manifest、JSON sidecar、Markdown sidecar
 - 可產生 schema snapshot，並和既有 snapshot 做 diff
 - 可用 export profile 控制 schema / object 篩選與是否包含 view
-- 匯出時會收集 diagnostics，方便看警告和支援狀態
+- 匯出時會收集 diagnostics，方便看資訊、警告、錯誤和支援狀態
 
 ## 文件
 

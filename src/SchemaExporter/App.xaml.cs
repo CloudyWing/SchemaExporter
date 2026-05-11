@@ -64,7 +64,8 @@ public partial class App : Application {
             ));
             serviceCollection.AddTransient<ViewModel>(sp => new ViewModel(
                 sp.GetRequiredService<ISettingsService>(),
-                sp.GetRequiredService<SchemaExportOrchestrator>()
+                sp.GetRequiredService<SchemaExportOrchestrator>(),
+                sp.GetRequiredService<SchemaExportRequestResolver>()
             ));
             serviceCollection.AddTransient<SettingsWindow>(sp => new SettingsWindow(
                 sp.GetRequiredService<SettingsViewModel>()

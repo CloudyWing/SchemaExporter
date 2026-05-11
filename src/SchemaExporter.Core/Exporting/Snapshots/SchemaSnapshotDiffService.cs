@@ -59,6 +59,28 @@ public sealed class SchemaSnapshotDiffService {
     }
 
     /// <summary>
+    /// 比較兩份已載入的結構描述快照文件。
+    /// </summary>
+    /// <param name="leftSnapshot">基準快照文件。</param>
+    /// <param name="rightSnapshot">目前快照文件。</param>
+    /// <param name="leftSnapshotPath">基準快照來源路徑。</param>
+    /// <param name="rightSnapshotPath">目前快照來源路徑。</param>
+    /// <returns>計算完成的差異比對文件。</returns>
+    public SchemaDiffDocument Compare(
+        SchemaSnapshotDocument leftSnapshot,
+        SchemaSnapshotDocument rightSnapshot,
+        string leftSnapshotPath,
+        string rightSnapshotPath
+    ) {
+        ArgumentNullException.ThrowIfNull(leftSnapshot);
+        ArgumentNullException.ThrowIfNull(rightSnapshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leftSnapshotPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rightSnapshotPath);
+
+        return BuildDiff(leftSnapshot, rightSnapshot, leftSnapshotPath, rightSnapshotPath);
+    }
+
+    /// <summary>
     /// 將差異比對文件以 JSON 格式寫出。
     /// </summary>
     /// <param name="outputPath">目標檔案路徑。</param>

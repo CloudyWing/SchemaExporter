@@ -1,13 +1,17 @@
 # 設定檔說明
 
-所有設定存放於 `appsettings.json`，結構如下：
+使用者設定存放於 `%LocalAppData%\SchemaExporter\appsettings.json`。首次啟動時，應用程式會從執行檔目錄的 `appsettings.json` 範本複製一份到使用者設定目錄。
+
+設定結構如下：
 
 ```json
 {
   "Schema": {
     "ExportPath": "...",
     "Connections": [ ... ],
+    "LastSelectedConnectionName": "...",
     "ExportProfiles": [ ... ],
+    "LastSelectedProfileName": "...",
     "ExportResultOptions": { ... }
   }
 }
@@ -79,6 +83,22 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 
 ---
 
+## Schema.LastSelectedConnectionName
+
+WPF 主畫面上次儲存的連線名稱。此欄位由「儲存設定」按鈕寫入，用於下次啟動時還原選取狀態。
+
+若欄位為空白、缺少或找不到對應連線，WPF 會改用第一筆連線。
+
+---
+
+## Schema.LastSelectedProfileName
+
+WPF 主畫面上次儲存的匯出設定檔名稱。此欄位由「儲存設定」按鈕寫入，用於下次啟動時還原選取狀態。
+
+若欄位為空白、缺少或找不到對應設定檔，WPF 會依連線的 `ExportProfileName` 或第一筆設定檔決定預設值。
+
+---
+
 ## Schema.ExportResultOptions
 
 控制輸出檔案命名與附加產物的預設行為。所有選項均可在 CLI 執行時透過參數覆蓋。
@@ -93,7 +113,7 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 | `GenerateJsonSidecar` | bool | `false` | 是否產生 JSON sidecar 檔案，包含完整 schema 結構與選用差異比對資料。 |
 | `GenerateMarkdownSidecar` | bool | `false` | 是否產生 Markdown sidecar 檔案，以可讀格式呈現 schema 結構與差異摘要。 |
 | `GenerateSchemaSnapshot` | bool | `false` | 是否產生可重複使用的 schema snapshot JSON 檔案，供後續差異比對使用。 |
-| `DiffSourceSnapshotPath` | string | 無 | 差異比對的基準 snapshot 絕對路徑。設定後會自動產生差異比對結果。 |
+| `DiffSourceSnapshotPath` | string | 無 | 差異比對的基準 snapshot 絕對路徑。CLI 會使用此設定；WPF 主畫面每次啟動會清空此欄位，不會透過「儲存設定」持久化。 |
 
 ### OverwriteStrategy 可用值
 

@@ -18,6 +18,7 @@ namespace CloudyWing.SchemaExporter;
 public partial class ViewModel : ObservableObject {
     private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
+    private readonly SchemaExportRequestResolver requestResolver;
     private SchemaOptions schemaOptions = new() { ExportPath = "" };
     private CancellationTokenSource? currentExportCancellation;
 
@@ -148,12 +149,15 @@ public partial class ViewModel : ObservableObject {
     /// <param name="exportOrchestrator">匯出流程協調器。</param>
     internal ViewModel(
         ISettingsService settingsService,
-        SchemaExportOrchestrator exportOrchestrator
+        SchemaExportOrchestrator exportOrchestrator,
+        SchemaExportRequestResolver requestResolver
     ) {
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(exportOrchestrator);
+        ArgumentNullException.ThrowIfNull(requestResolver);
         this.settingsService = settingsService;
         this.exportOrchestrator = exportOrchestrator;
+        this.requestResolver = requestResolver;
     }
 
     /// <summary>
@@ -260,25 +264,26 @@ public partial class ViewModel : ObservableObject {
         try {
             Progress<ExportProgress> progress = new(UpdateProgress);
 
-            ExportResultOptions resultOptions = new() {
-                UseTimestamp = UseTimestamp,
-                TimestampFormat = schemaOptions.ExportResultOptions.TimestampFormat,
-                OverwriteStrategy = schemaOptions.ExportResultOptions.OverwriteStrategy,
+            ExportOptionOverrides overrides = new() {
+                OutputPath = OutputPath,
                 OpenOutputFolder = AutoOpenOutputFolder,
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
-                DiffSourceSnapshotPath = string.IsNullOrWhiteSpace(DiffSourceSnapshotPath)
-                    ? null
-                    : DiffSourceSnapshotPath
+                UseTimestamp = UseTimestamp,
+                DiffSourceSnapshotPath = DiffSourceSnapshotPath,
+                OverrideDiffSourceSnapshotPath = true
             };
+            SchemaExportRequest request = requestResolver.Resolve(
+                schemaOptions,
+                Connection.Name,
+                SelectedProfile.Name,
+                overrides
+            );
 
             ExportResult result = await exportOrchestrator.ExportAsync(
-                Connection,
-                OutputPath,
-                SelectedProfile,
-                resultOptions,
+                request,
                 progress,
                 currentExportCancellation.Token
             );

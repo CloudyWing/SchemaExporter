@@ -1,5 +1,6 @@
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
 using Microsoft.Extensions.Logging;
@@ -158,9 +159,11 @@ public sealed class ViewModelSettingsBehaviorTests {
     private static ViewModel CreateViewModel(ISettingsService settingsService) {
         SchemaExportOrchestrator exportOrchestrator = new(
             Substitute.For<IDatabaseSchemaProviderFactory>(),
-            Substitute.For<ILogger<SchemaExportOrchestrator>>()
+            Substitute.For<ILogger<SchemaExportOrchestrator>>(),
+            new SchemaSnapshotBuilder(),
+            new SchemaSnapshotDiffService()
         );
-        return new ViewModel(settingsService, exportOrchestrator);
+        return new ViewModel(settingsService, exportOrchestrator, new SchemaExportRequestResolver());
     }
 
     private static SchemaOptions CreateSchemaOptions(

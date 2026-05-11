@@ -12,6 +12,11 @@ public enum DiagnosticSeverity {
     /// <summary>
     /// 關於潛在問題或限制的警告。
     /// </summary>
-    Warning = 1
+    Warning = 1,
+
+    /// <summary>
+    /// 關於已知錯誤或無法完成項目的診斷。
+    /// </summary>
+    Error = 2
 }
 

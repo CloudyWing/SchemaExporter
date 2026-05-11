@@ -8,7 +8,7 @@ schemaexporter diff --left <path> --right <path> [options]
 schemaexporter --help
 ```
 
-CLI 版從與執行檔相同目錄下的 `appsettings.json` 讀取設定。除非以參數覆蓋，否則所有預設值均來自該設定檔。
+CLI 版從 `%LocalAppData%\SchemaExporter\appsettings.json` 讀取使用者設定。若使用者設定檔尚不存在，啟動時會先從執行檔目錄的 `appsettings.json` 範本複製一份。除非以參數覆蓋，否則所有預設值均來自使用者設定檔。
 
 ---
 
@@ -55,18 +55,19 @@ schemaexporter export --connection <name> [options]
 Export completed successfully.
 Workbook: D:\SchemaExports\TableSchema_Key1_20241201_120000.xlsx
 Manifest: D:\SchemaExports\TableSchema_Key1_20241201_120000.manifest.json
-Diagnostics: 2 total, 1 warning(s).
-- [警告/檢視表支援] ...
+Diagnostics: 2 total, 1 warning(s), 0 error(s).
+警告:
+- [檢視表支援] 檢視表目前僅匯出物件與欄位中繼資料，不包含定義 SQL、相依性與索引/主鍵明細。
 ```
 
 ### 結束代碼
 
-| 代碼 | 說明 |
-| --- | --- |
-| `0` | 成功。 |
-| `1` | 參數解析失敗（顯示 usage 後結束）。 |
-| `2` | 匯出流程失敗（如驗證錯誤、連線失敗、輸出失敗）。 |
-| `3` | 未預期的錯誤。 |
+| 代碼 | 名稱 | 說明 |
+| --- | --- | --- |
+| `0` | `Success` | 成功，或使用者要求顯示 help。 |
+| `1` | `ArgumentError` | 參數解析失敗（顯示 usage 後結束）。 |
+| `2` | `WorkflowError` | 匯出流程失敗（如驗證錯誤、連線失敗、輸出失敗）。 |
+| `3` | `UnexpectedError` | 未預期的錯誤。 |
 
 ### 範例
 
@@ -114,12 +115,12 @@ schemaexporter diff --left <path> --right <path> [options]
 
 ### 結束代碼
 
-| 代碼 | 說明 |
-| --- | --- |
-| `0` | 成功。 |
-| `1` | 參數解析失敗。 |
-| `2` | 比對流程失敗（如找不到檔案、格式錯誤）。 |
-| `3` | 未預期的錯誤。 |
+| 代碼 | 名稱 | 說明 |
+| --- | --- | --- |
+| `0` | `Success` | 成功，或使用者要求顯示 help。 |
+| `1` | `ArgumentError` | 參數解析失敗。 |
+| `2` | `WorkflowError` | 比對流程失敗（如找不到檔案、格式錯誤）。 |
+| `3` | `UnexpectedError` | 未預期的錯誤。 |
 
 ### 範例
 

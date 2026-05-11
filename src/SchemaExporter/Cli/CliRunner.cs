@@ -14,6 +14,7 @@ internal sealed class CliRunner {
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private readonly SchemaSnapshotDiffService diffService;
     private readonly ISettingsService settingsService;
+    private readonly SchemaExportRequestResolver requestResolver;
 
     /// <summary>
     /// 初始化 <see cref="CliRunner"/> 類別的新執行個體。
@@ -21,18 +22,22 @@ internal sealed class CliRunner {
     /// <param name="exportOrchestrator">Schema 匯出流程協調器。</param>
     /// <param name="diffService">Schema Snapshot 差異比對服務。</param>
     /// <param name="settingsService">設定檔存取服務。</param>
+    /// <param name="requestResolver">Schema 匯出請求解析器。</param>
     public CliRunner(
         SchemaExportOrchestrator exportOrchestrator,
         SchemaSnapshotDiffService diffService,
-        ISettingsService settingsService
+        ISettingsService settingsService,
+        SchemaExportRequestResolver requestResolver
     ) {
         ArgumentNullException.ThrowIfNull(exportOrchestrator);
         ArgumentNullException.ThrowIfNull(diffService);
         ArgumentNullException.ThrowIfNull(settingsService);
+        ArgumentNullException.ThrowIfNull(requestResolver);
 
         this.exportOrchestrator = exportOrchestrator;
         this.diffService = diffService;
         this.settingsService = settingsService;
+        this.requestResolver = requestResolver;
     }
 
     /// <summary>
@@ -50,7 +55,7 @@ internal sealed class CliRunner {
             }
 
             WriteUsage();
-            return showHelp ? 0 : 1;
+            return showHelp ? (int)CliExitCode.Success : (int)CliExitCode.ArgumentError;
         }
 
         CliArguments arguments = parsedArguments ?? throw new InvalidOperationException("CLI parser returned success without arguments.");
@@ -62,31 +67,39 @@ internal sealed class CliRunner {
             };
         } catch (ExportWorkflowException ex) {
             Console.Error.WriteLine($"{GetCommandLabel(arguments)} failed: {ex.Message}");
-            return 2;
+            return (int)CliExitCode.WorkflowError;
         } catch (Exception ex) {
             Console.Error.WriteLine($"Unexpected error: {ex.Message}");
-            return 3;
+            return (int)CliExitCode.UnexpectedError;
         }
     }
 
     private async Task<int> ExecuteExportAsync(CliArguments arguments) {
         SchemaOptions schemaOptions = await settingsService.LoadAsync().ConfigureAwait(false);
-        SchemaConnection connection = ResolveConnection(schemaOptions, arguments);
-        ExportProfile profile = ResolveProfile(schemaOptions, connection, arguments);
-        ExportResultOptions resultOptions = BuildResultOptions(schemaOptions.ExportResultOptions, arguments);
-        string outputPath = string.IsNullOrWhiteSpace(arguments.OutputPath)
-            ? schemaOptions.ExportPath
-            : arguments.OutputPath;
+        ExportOptionOverrides overrides = new() {
+            OutputPath = arguments.OutputPath,
+            OpenOutputFolder = arguments.OpenOutputFolder,
+            GenerateManifest = arguments.GenerateManifest,
+            GenerateJsonSidecar = arguments.GenerateJsonSidecar,
+            GenerateMarkdownSidecar = arguments.GenerateMarkdownSidecar,
+            GenerateSchemaSnapshot = arguments.GenerateSchemaSnapshot,
+            UseTimestamp = arguments.UseTimestamp,
+            DiffSourceSnapshotPath = arguments.DiffSourceSnapshotPath,
+            OverrideDiffSourceSnapshotPath = !string.IsNullOrWhiteSpace(arguments.DiffSourceSnapshotPath)
+        };
+        SchemaExportRequest request = requestResolver.Resolve(
+            schemaOptions,
+            arguments.ConnectionName,
+            arguments.ProfileName,
+            overrides
+        );
 
         Progress<ExportProgress> progress = new(exportProgress => {
             Console.WriteLine($"[{exportProgress.Stage}] {exportProgress.Message}");
         });
 
         ExportResult result = await exportOrchestrator.ExportAsync(
-            connection,
-            outputPath,
-            profile,
-            resultOptions,
+            request,
             progress,
             CancellationToken.None
         ).ConfigureAwait(false);
@@ -100,13 +113,9 @@ internal sealed class CliRunner {
         WriteArtifactLine("Snapshot", result.SnapshotFilePath);
         WriteArtifactLine("Diff", result.DiffFilePath);
 
-        int warningCount = result.Diagnostics.Count(x => x.Severity == DiagnosticSeverity.Warning);
-        Console.WriteLine($"Diagnostics: {result.Diagnostics.Count} total, {warningCount} warning(s).");
-        foreach (ExportDiagnostic diagnostic in result.Diagnostics) {
-            Console.WriteLine($"- [{diagnostic.SeverityText}/{diagnostic.CategoryText}] {diagnostic.Message}");
-        }
+        WriteDiagnostics(result.Diagnostics);
 
-        return 0;
+        return (int)CliExitCode.Success;
     }
 
     private async Task<int> ExecuteDiffAsync(CliArguments arguments) {
@@ -120,7 +129,7 @@ internal sealed class CliRunner {
 
         if (string.IsNullOrWhiteSpace(arguments.DiffOutputPath)) {
             Console.WriteLine(diffService.BuildMarkdownReport(diff));
-            return 0;
+            return (int)CliExitCode.Success;
         }
 
         string outputPath = Path.GetFullPath(arguments.DiffOutputPath.Trim());
@@ -140,60 +149,7 @@ internal sealed class CliRunner {
         }
 
         Console.WriteLine($"Diff written: {outputPath}");
-        return 0;
-    }
-
-    private static SchemaConnection ResolveConnection(SchemaOptions schemaOptions, CliArguments arguments) {
-        string connectionName = arguments.ConnectionName
-            ?? throw new InvalidOperationException("Export command is missing the connection name.");
-        SchemaConnection? connection = schemaOptions.Connections.FirstOrDefault(x =>
-            string.Equals(x.Name, connectionName, StringComparison.OrdinalIgnoreCase)
-        );
-
-        if (connection is null) {
-            throw new ExportValidationException($"找不到名稱為「{connectionName}」的連線設定。");
-        }
-
-        return connection;
-    }
-
-    private static ExportProfile ResolveProfile(
-        SchemaOptions schemaOptions,
-        SchemaConnection connection,
-        CliArguments arguments
-    ) {
-        string? requestedProfileName = string.IsNullOrWhiteSpace(arguments.ProfileName)
-            ? connection.ExportProfileName
-            : arguments.ProfileName;
-
-        ExportProfile? profile = schemaOptions.ExportProfiles.FirstOrDefault(x =>
-            string.Equals(x.Name, requestedProfileName, StringComparison.OrdinalIgnoreCase)
-        );
-
-        if (profile is not null) {
-            return profile;
-        }
-
-        return schemaOptions.ExportProfiles.FirstOrDefault() ?? new ExportProfile {
-            Name = "Default"
-        };
-    }
-
-    private static ExportResultOptions BuildResultOptions(ExportResultOptions defaults, CliArguments arguments) {
-        ArgumentNullException.ThrowIfNull(defaults);
-        ArgumentNullException.ThrowIfNull(arguments);
-
-        return new ExportResultOptions {
-            UseTimestamp = arguments.UseTimestamp ?? defaults.UseTimestamp,
-            TimestampFormat = defaults.TimestampFormat,
-            OverwriteStrategy = defaults.OverwriteStrategy,
-            OpenOutputFolder = arguments.OpenOutputFolder ?? defaults.OpenOutputFolder,
-            GenerateManifest = arguments.GenerateManifest ?? defaults.GenerateManifest,
-            GenerateJsonSidecar = arguments.GenerateJsonSidecar ?? defaults.GenerateJsonSidecar,
-            GenerateMarkdownSidecar = arguments.GenerateMarkdownSidecar ?? defaults.GenerateMarkdownSidecar,
-            GenerateSchemaSnapshot = arguments.GenerateSchemaSnapshot ?? defaults.GenerateSchemaSnapshot,
-            DiffSourceSnapshotPath = arguments.DiffSourceSnapshotPath ?? defaults.DiffSourceSnapshotPath
-        };
+        return (int)CliExitCode.Success;
     }
 
     private static void WriteArtifactLine(string label, string? path) {
@@ -202,6 +158,33 @@ internal sealed class CliRunner {
         }
 
         Console.WriteLine($"{label}: {path}");
+    }
+
+    private static void WriteDiagnostics(IReadOnlyList<ExportDiagnostic> diagnostics) {
+        int warningCount = diagnostics.Count(x => x.Severity == DiagnosticSeverity.Warning);
+        int errorCount = diagnostics.Count(x => x.Severity == DiagnosticSeverity.Error);
+        Console.WriteLine($"Diagnostics: {diagnostics.Count} total, {warningCount} warning(s), {errorCount} error(s).");
+
+        WriteDiagnosticsBySeverity(diagnostics, DiagnosticSeverity.Error);
+        WriteDiagnosticsBySeverity(diagnostics, DiagnosticSeverity.Warning);
+        WriteDiagnosticsBySeverity(diagnostics, DiagnosticSeverity.Info);
+    }
+
+    private static void WriteDiagnosticsBySeverity(
+        IReadOnlyList<ExportDiagnostic> diagnostics,
+        DiagnosticSeverity severity
+    ) {
+        List<ExportDiagnostic> matchedDiagnostics = diagnostics
+            .Where(x => x.Severity == severity)
+            .ToList();
+        if (matchedDiagnostics.Count == 0) {
+            return;
+        }
+
+        Console.WriteLine($"{matchedDiagnostics[0].SeverityText}:");
+        foreach (ExportDiagnostic diagnostic in matchedDiagnostics) {
+            Console.WriteLine($"- [{diagnostic.CategoryText}] {diagnostic.Message}");
+        }
     }
 
     private static DiffOutputFormat ResolveDiffOutputFormat(string? configuredFormat, string outputPath) {

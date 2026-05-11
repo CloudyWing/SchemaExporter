@@ -1,4 +1,5 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Core.Tests.Infrastructure;
 using CloudyWing.SpreadsheetExporter;
@@ -12,6 +13,16 @@ public sealed class SchemaExportOrchestratorTests {
     [OneTimeSetUp]
     public void OneTimeSetUp() {
         SpreadsheetExporterBootstrapper.Configure();
+    }
+
+    [Test]
+    public void Constructor_WhenLegacySignatureIsUsed_CreatesInstance() {
+        SchemaExportOrchestrator sut = new(
+            Substitute.For<IDatabaseSchemaProviderFactory>(),
+            Substitute.For<ILogger<SchemaExportOrchestrator>>()
+        );
+
+        Assert.That(sut, Is.Not.Null);
     }
 
     [Test]
@@ -164,6 +175,24 @@ public sealed class SchemaExportOrchestratorTests {
         );
     }
 
+    [Test]
+    public async Task ExportAsync_WhenProfileContainsBlankIncludePattern_IgnoresBlankPattern() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory);
+        SchemaConnection connection = CreateConnection();
+        DatabaseSchemaExport schemaExport = SchemaTestData.CreateSchemaExport();
+        SetupProviderFactory(providerFactory, connection, schemaExport);
+        ExportProfile profile = new() {
+            Name = "Default",
+            IncludeObjects = ["   "]
+        };
+
+        ExportResult result = await sut.ExportAsync(connection, directory.Path, profile, new ExportResultOptions());
+
+        Assert.That(File.Exists(result.OutputFilePath), Is.True);
+    }
+
     private static void SetupProviderFactory(
         IDatabaseSchemaProviderFactory providerFactory,
         SchemaConnection connection,
@@ -187,7 +216,9 @@ public sealed class SchemaExportOrchestratorTests {
     private static SchemaExportOrchestrator CreateSubject(IDatabaseSchemaProviderFactory providerFactory) {
         return new SchemaExportOrchestrator(
             providerFactory,
-            Substitute.For<ILogger<SchemaExportOrchestrator>>()
+            Substitute.For<ILogger<SchemaExportOrchestrator>>(),
+            new SchemaSnapshotBuilder(),
+            new SchemaSnapshotDiffService()
         );
     }
 

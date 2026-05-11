@@ -26,6 +26,8 @@ public static class ServiceCollectionExtensions {
         services.AddSingleton<IDatabaseSchemaProvider, SqlServerDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProvider, OracleDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProviderFactory, DatabaseSchemaProviderFactory>();
+        services.AddSingleton<SchemaExportRequestResolver>();
+        services.AddSingleton<SchemaSnapshotBuilder>();
         services.AddSingleton<SchemaSnapshotDiffService>();
         services.AddSingleton<SchemaExportOrchestrator>();
 
