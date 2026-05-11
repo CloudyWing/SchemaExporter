@@ -25,6 +25,11 @@ public sealed class ExportResult {
     public string? MarkdownSidecarFilePath { get; init; }
 
     /// <summary>
+    /// 取得產生的 AI context 檔案路徑（若已建立）。
+    /// </summary>
+    public string? AiContextFilePath { get; init; }
+
+    /// <summary>
     /// 取得產生的結構描述快照檔案路徑（若已建立）。
     /// </summary>
     public string? SnapshotFilePath { get; init; }

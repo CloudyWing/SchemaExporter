@@ -40,6 +40,11 @@ internal sealed class ExportManifestResultOptions {
     public bool GenerateMarkdownSidecar { get; init; }
 
     /// <summary>
+    /// 取得或設定一個值，用以指出是否產生 AI context。
+    /// </summary>
+    public bool GenerateAiContext { get; init; }
+
+    /// <summary>
     /// 取得或設定一個值，用以指出是否產生 schema snapshot。
     /// </summary>
     public bool GenerateSchemaSnapshot { get; init; }

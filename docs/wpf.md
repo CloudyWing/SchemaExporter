@@ -20,7 +20,7 @@
 
 ### 輸出選項
 
-勾選欄位，控制本次匯出是否產生 manifest、JSON sidecar、Markdown sidecar、schema snapshot、是否使用時間戳記，以及完成後是否開啟輸出資料夾。
+勾選欄位，控制本次匯出是否產生 manifest、JSON sidecar、Markdown sidecar、AI context、schema snapshot、是否使用時間戳記，以及完成後是否開啟輸出資料夾。
 
 按下「儲存設定」後，輸出資料夾、連線、匯出設定檔與輸出選項會寫入 `%LocalAppData%\SchemaExporter\appsettings.json`。`比對快照` 不會被持久化，每次啟動都會清空。
 

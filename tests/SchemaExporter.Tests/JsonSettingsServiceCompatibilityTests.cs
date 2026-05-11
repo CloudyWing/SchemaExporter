@@ -27,6 +27,7 @@ public sealed class JsonSettingsServiceCompatibilityTests {
             Assert.That(sut.Connection?.Name, Is.EqualTo("Primary"));
             Assert.That(sut.SelectedProfile?.Name, Is.EqualTo("Default"));
             Assert.That(sut.OutputPath, Is.EqualTo(@"C:\Legacy\Exports"));
+            Assert.That(sut.GenerateAiContext, Is.False);
             Assert.That(sut.GenerateSchemaSnapshot, Is.True);
             Assert.That(sut.DiffSourceSnapshotPath, Is.Null);
         }

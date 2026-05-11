@@ -40,6 +40,11 @@ internal sealed class CliArguments {
     public bool? GenerateMarkdownSidecar { get; init; }
 
     /// <summary>
+    /// 取得或設定一個值，用以指出是否要產生 AI context 檔案。
+    /// </summary>
+    public bool? GenerateAiContext { get; init; }
+
+    /// <summary>
     /// 取得或設定一個值，用以指出是否要產生 schema snapshot 檔案。
     /// </summary>
     public bool? GenerateSchemaSnapshot { get; init; }
@@ -143,6 +148,7 @@ internal sealed class CliArguments {
         bool? generateManifest = null;
         bool? generateJsonSidecar = null;
         bool? generateMarkdownSidecar = null;
+        bool? generateAiContext = null;
         bool? generateSchemaSnapshot = null;
         string? diffSourceSnapshotPath = null;
         bool? openOutputFolder = null;
@@ -188,6 +194,9 @@ internal sealed class CliArguments {
                 case "--markdown-sidecar":
                     generateMarkdownSidecar = true;
                     break;
+                case "--ai-context":
+                    generateAiContext = true;
+                    break;
                 case "--snapshot":
                     generateSchemaSnapshot = true;
                     break;
@@ -225,6 +234,7 @@ internal sealed class CliArguments {
             GenerateManifest = generateManifest,
             GenerateJsonSidecar = generateJsonSidecar,
             GenerateMarkdownSidecar = generateMarkdownSidecar,
+            GenerateAiContext = generateAiContext,
             GenerateSchemaSnapshot = generateSchemaSnapshot,
             DiffSourceSnapshotPath = diffSourceSnapshotPath,
             OpenOutputFolder = openOutputFolder,

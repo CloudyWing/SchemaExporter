@@ -67,6 +67,7 @@ TableSchema_prod_20241201_120000.manifest.json
 | `generateManifest` | 是否產生了 manifest。 |
 | `generateJsonSidecar` | 是否產生了 JSON sidecar。 |
 | `generateMarkdownSidecar` | 是否產生了 Markdown sidecar。 |
+| `generateAiContext` | 是否產生了 AI context。 |
 | `generateSchemaSnapshot` | 是否產生了 schema snapshot。 |
 | `diffSourceSnapshotPath` | 差異比對使用的基準 snapshot 路徑（若有）。 |
 
@@ -87,7 +88,7 @@ TableSchema_prod_20241201_120000.manifest.json
 
 | 欄位 | 說明 |
 | --- | --- |
-| `severity` | 嚴重性：`Info` 或 `Warning`。 |
+| `severity` | 嚴重性：`Info`、`Warning` 或 `Error`。 |
 | `category` | 診斷類別。詳見 [diagnostics.md](diagnostics.md)。 |
 | `supportLevel` | 支援層級（選用）：`Full`、`Partial` 或 `Unsupported`。 |
 | `affectedObject` | 受影響的物件名稱（選用）。 |

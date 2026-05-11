@@ -13,6 +13,7 @@ public sealed class SchemaExportRequestResolverTests {
             GenerateManifest = true,
             GenerateJsonSidecar = true,
             GenerateMarkdownSidecar = false,
+            GenerateAiContext = true,
             GenerateSchemaSnapshot = true,
             OpenOutputFolder = true,
             UseTimestamp = false,
@@ -29,6 +30,7 @@ public sealed class SchemaExportRequestResolverTests {
             Assert.That(result.ResultOptions.GenerateManifest, Is.True);
             Assert.That(result.ResultOptions.GenerateJsonSidecar, Is.True);
             Assert.That(result.ResultOptions.GenerateMarkdownSidecar, Is.False);
+            Assert.That(result.ResultOptions.GenerateAiContext, Is.True);
             Assert.That(result.ResultOptions.GenerateSchemaSnapshot, Is.True);
             Assert.That(result.ResultOptions.OpenOutputFolder, Is.True);
             Assert.That(result.ResultOptions.UseTimestamp, Is.False);

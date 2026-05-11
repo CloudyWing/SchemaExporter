@@ -234,6 +234,7 @@ public sealed partial class SchemaExportOrchestrator {
                 ManifestFilePath = artifactOutputs.ManifestFilePath,
                 JsonSidecarFilePath = artifactOutputs.JsonSidecarFilePath,
                 MarkdownSidecarFilePath = artifactOutputs.MarkdownSidecarFilePath,
+                AiContextFilePath = artifactOutputs.AiContextFilePath,
                 SnapshotFilePath = artifactOutputs.SnapshotFilePath,
                 DiffFilePath = artifactOutputs.DiffFilePath,
                 ConnectionName = connection.Name,

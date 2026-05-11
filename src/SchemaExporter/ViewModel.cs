@@ -98,6 +98,12 @@ public partial class ViewModel : ObservableObject {
     public partial bool GenerateMarkdownSidecar { get; set; }
 
     /// <summary>
+    /// 取得或設定是否產生 AI context 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateAiContext { get; set; }
+
+    /// <summary>
     /// 取得或設定是否產生 schema snapshot 檔案。
     /// </summary>
     [ObservableProperty]
@@ -189,6 +195,7 @@ public partial class ViewModel : ObservableObject {
         GenerateManifest = schemaOptions.ExportResultOptions.GenerateManifest;
         GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
         GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
+        GenerateAiContext = schemaOptions.ExportResultOptions.GenerateAiContext;
         GenerateSchemaSnapshot = schemaOptions.ExportResultOptions.GenerateSchemaSnapshot;
         DiffSourceSnapshotPath = null;
         UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
@@ -215,6 +222,7 @@ public partial class ViewModel : ObservableObject {
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateAiContext = GenerateAiContext,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = null
             },
@@ -270,6 +278,7 @@ public partial class ViewModel : ObservableObject {
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateAiContext = GenerateAiContext,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
                 UseTimestamp = UseTimestamp,
                 DiffSourceSnapshotPath = DiffSourceSnapshotPath,
@@ -469,6 +478,12 @@ public partial class ViewModel : ObservableObject {
             messageBuilder.AppendLine();
             messageBuilder.AppendLine("Markdown Sidecar：");
             messageBuilder.AppendLine(result.MarkdownSidecarFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.AiContextFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("AI Context：");
+            messageBuilder.AppendLine(result.AiContextFilePath);
         }
 
         if (!string.IsNullOrWhiteSpace(result.SnapshotFilePath)) {

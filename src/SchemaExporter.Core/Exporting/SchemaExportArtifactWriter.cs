@@ -72,10 +72,23 @@ internal static class SchemaExportArtifactWriter {
             await WriteTextArtifactAsync(markdownSidecarFilePath, markdown, cancellationToken, "無法產生 Markdown sidecar 檔案：").ConfigureAwait(false);
         }
 
+        string? aiContextFilePath = null;
+        if (resultOptions.GenerateAiContext) {
+            aiContextFilePath = BuildArtifactPath(outputFilePath, "schema-context.md");
+            string aiContext = SchemaAiContextBuilder.BuildMarkdown(snapshot, diff);
+            await WriteTextArtifactAsync(
+                aiContextFilePath,
+                aiContext,
+                cancellationToken,
+                "無法產生 AI context 檔案："
+            ).ConfigureAwait(false);
+        }
+
         return new ArtifactOutputs {
             ManifestFilePath = manifestFilePath,
             JsonSidecarFilePath = jsonSidecarFilePath,
             MarkdownSidecarFilePath = markdownSidecarFilePath,
+            AiContextFilePath = aiContextFilePath,
             SnapshotFilePath = snapshotFilePath,
             DiffFilePath = diffFilePath
         };
@@ -307,6 +320,7 @@ internal static class SchemaExportArtifactWriter {
                 GenerateManifest = resultOptions.GenerateManifest,
                 GenerateJsonSidecar = resultOptions.GenerateJsonSidecar,
                 GenerateMarkdownSidecar = resultOptions.GenerateMarkdownSidecar,
+                GenerateAiContext = resultOptions.GenerateAiContext,
                 GenerateSchemaSnapshot = resultOptions.GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = resultOptions.DiffSourceSnapshotPath ?? ""
             },

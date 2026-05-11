@@ -15,7 +15,7 @@
 - SQL Server / Oracle 兩種資料庫
 - 透過 provider abstraction 切換資料來源
 - 主要輸出為 Excel
-- 可選擇額外產生 manifest、JSON sidecar、Markdown sidecar
+- 可選擇額外產生 manifest、JSON sidecar、Markdown sidecar、AI context
 - 可產生 schema snapshot，並和既有 snapshot 做 diff
 - 可用 export profile 控制 schema / object 篩選與是否包含 view
 - 匯出時會收集 diagnostics，方便看資訊、警告、錯誤和支援狀態
@@ -29,6 +29,7 @@
 - [Manifest 格式](docs/manifest.md)
 - [Snapshot 格式](docs/snapshot.md)
 - [Diff 格式](docs/diff.md)
+- [AI Context 格式](docs/ai-context.md)
 - [診斷資訊說明](docs/diagnostics.md)
 
 ## 建置與測試

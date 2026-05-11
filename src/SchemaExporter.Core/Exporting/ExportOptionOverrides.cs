@@ -25,6 +25,11 @@ public sealed class ExportOptionOverrides {
     public bool? GenerateMarkdownSidecar { get; init; }
 
     /// <summary>
+    /// 取得或設定是否產生 AI context 檔案的覆寫值。
+    /// </summary>
+    public bool? GenerateAiContext { get; init; }
+
+    /// <summary>
     /// 取得或設定是否產生 schema snapshot 檔案的覆寫值。
     /// </summary>
     public bool? GenerateSchemaSnapshot { get; init; }
