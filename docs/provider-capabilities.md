@@ -2,7 +2,7 @@
 
 ## 說明
 
-Provider capability matrix 描述各資料庫 provider 對 schema metadata 的支援範圍。此矩陣用於說明輸出限制，也會出現在 AI context 檔案中，協助 Agent 判斷哪些資訊可直接信任、哪些資訊可能不完整。
+Provider capability matrix 描述各資料庫 provider 對 schema metadata 的支援範圍。此矩陣用於說明輸出限制，也會出現在 Schema Summary 檔案中，協助讀者判斷哪些資訊可直接信任、哪些資訊可能不完整。
 
 ## SQL Server
 

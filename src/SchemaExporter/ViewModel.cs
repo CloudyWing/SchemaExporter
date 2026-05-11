@@ -98,10 +98,10 @@ public partial class ViewModel : ObservableObject {
     public partial bool GenerateMarkdownSidecar { get; set; }
 
     /// <summary>
-    /// 取得或設定是否產生 AI context 檔案。
+    /// 取得或設定是否產生 Schema Summary 檔案。
     /// </summary>
     [ObservableProperty]
-    public partial bool GenerateAiContext { get; set; }
+    public partial bool GenerateSchemaSummary { get; set; }
 
     /// <summary>
     /// 取得或設定是否產生 schema snapshot 檔案。
@@ -195,7 +195,7 @@ public partial class ViewModel : ObservableObject {
         GenerateManifest = schemaOptions.ExportResultOptions.GenerateManifest;
         GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
         GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
-        GenerateAiContext = schemaOptions.ExportResultOptions.GenerateAiContext;
+        GenerateSchemaSummary = schemaOptions.ExportResultOptions.GenerateSchemaSummary;
         GenerateSchemaSnapshot = schemaOptions.ExportResultOptions.GenerateSchemaSnapshot;
         DiffSourceSnapshotPath = null;
         UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
@@ -222,7 +222,7 @@ public partial class ViewModel : ObservableObject {
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
-                GenerateAiContext = GenerateAiContext,
+                GenerateSchemaSummary = GenerateSchemaSummary,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = null
             },
@@ -278,7 +278,7 @@ public partial class ViewModel : ObservableObject {
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
-                GenerateAiContext = GenerateAiContext,
+                GenerateSchemaSummary = GenerateSchemaSummary,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
                 UseTimestamp = UseTimestamp,
                 DiffSourceSnapshotPath = DiffSourceSnapshotPath,
@@ -480,10 +480,10 @@ public partial class ViewModel : ObservableObject {
             messageBuilder.AppendLine(result.MarkdownSidecarFilePath);
         }
 
-        if (!string.IsNullOrWhiteSpace(result.AiContextFilePath)) {
+        if (!string.IsNullOrWhiteSpace(result.SchemaSummaryFilePath)) {
             messageBuilder.AppendLine();
-            messageBuilder.AppendLine("AI Context：");
-            messageBuilder.AppendLine(result.AiContextFilePath);
+            messageBuilder.AppendLine("Schema Summary：");
+            messageBuilder.AppendLine(result.SchemaSummaryFilePath);
         }
 
         if (!string.IsNullOrWhiteSpace(result.SnapshotFilePath)) {

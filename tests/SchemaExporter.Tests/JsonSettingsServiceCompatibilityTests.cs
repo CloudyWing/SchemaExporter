@@ -27,7 +27,7 @@ public sealed class JsonSettingsServiceCompatibilityTests {
             Assert.That(sut.Connection?.Name, Is.EqualTo("Primary"));
             Assert.That(sut.SelectedProfile?.Name, Is.EqualTo("Default"));
             Assert.That(sut.OutputPath, Is.EqualTo(@"C:\Legacy\Exports"));
-            Assert.That(sut.GenerateAiContext, Is.False);
+            Assert.That(sut.GenerateSchemaSummary, Is.False);
             Assert.That(sut.GenerateSchemaSnapshot, Is.True);
             Assert.That(sut.DiffSourceSnapshotPath, Is.Null);
         }
@@ -54,6 +54,19 @@ public sealed class JsonSettingsServiceCompatibilityTests {
             Assert.That(File.Exists(scope.UserConfigPath), Is.True);
             Assert.That(installTemplateAfterSave, Is.EqualTo(installTemplateJson));
         }
+    }
+
+    [Test]
+    public async Task LoadAsync_WhenLegacyGenerateAiContextIsTrue_MapsToSchemaSummary() {
+        using AppSettingsTestScope scope = new();
+        Directory.CreateDirectory(scope.UserConfigDirectory);
+        await File.WriteAllTextAsync(scope.UserConfigPath, CreateLegacyAiContextAppSettingsJson());
+
+        JsonSettingsService settingsService = new();
+
+        SchemaOptions options = await settingsService.LoadAsync();
+
+        Assert.That(options.ExportResultOptions.GenerateSchemaSummary, Is.True);
     }
 
     private static ViewModel CreateViewModel(ISettingsService settingsService) {
@@ -97,6 +110,46 @@ public sealed class JsonSettingsServiceCompatibilityTests {
                   "GenerateManifest": true,
                   "GenerateJsonSidecar": false,
                   "GenerateMarkdownSidecar": true,
+                  "GenerateSchemaSnapshot": true,
+                  "DiffSourceSnapshotPath": null
+                }
+              }
+            }
+            """;
+    }
+
+    private static string CreateLegacyAiContextAppSettingsJson() {
+        return """
+            {
+              "Schema": {
+                "ExportPath": "C:\\Legacy\\Exports",
+                "Connections": [
+                  {
+                    "Name": "Primary",
+                    "DatabaseType": "SqlServer",
+                    "ConnectionString": "Server=Primary;Database=SchemaExporter;",
+                    "ExportProfileName": "Default"
+                  }
+                ],
+                "ExportProfiles": [
+                  {
+                    "Name": "Default",
+                    "IncludeSchemas": [],
+                    "ExcludeSchemas": [],
+                    "IncludeObjects": [],
+                    "ExcludeObjects": [],
+                    "IncludeViews": true
+                  }
+                ],
+                "ExportResultOptions": {
+                  "UseTimestamp": true,
+                  "TimestampFormat": "yyyyMMdd",
+                  "OverwriteStrategy": "Overwrite",
+                  "OpenOutputFolder": false,
+                  "GenerateManifest": true,
+                  "GenerateJsonSidecar": false,
+                  "GenerateMarkdownSidecar": true,
+                  "GenerateAiContext": true,
                   "GenerateSchemaSnapshot": true,
                   "DiffSourceSnapshotPath": null
                 }

@@ -97,7 +97,7 @@ public sealed class SchemaExportRequestResolver {
             GenerateManifest = overrides?.GenerateManifest ?? defaults.GenerateManifest,
             GenerateJsonSidecar = overrides?.GenerateJsonSidecar ?? defaults.GenerateJsonSidecar,
             GenerateMarkdownSidecar = overrides?.GenerateMarkdownSidecar ?? defaults.GenerateMarkdownSidecar,
-            GenerateAiContext = overrides?.GenerateAiContext ?? defaults.GenerateAiContext,
+            GenerateSchemaSummary = overrides?.GenerateSchemaSummary ?? defaults.GenerateSchemaSummary,
             GenerateSchemaSnapshot = overrides?.GenerateSchemaSnapshot ?? defaults.GenerateSchemaSnapshot,
             DiffSourceSnapshotPath = ResolveDiffSourceSnapshotPath(defaults, overrides)
         };

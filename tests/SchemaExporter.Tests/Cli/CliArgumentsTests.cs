@@ -6,7 +6,7 @@ namespace CloudyWing.SchemaExporter.Tests.Cli;
 public sealed class CliArgumentsTests {
     [Test]
     public void TryParse_WhenExportArgumentsAreValid_ReturnsExportArguments() {
-        string[] args = ["export", "--connection", "Primary", "--profile", "Default", "--manifest", "--ai-context"];
+        string[] args = ["export", "--connection", "Primary", "--profile", "Default", "--manifest", "--schema-summary"];
 
         bool result = CliArguments.TryParse(
             args,
@@ -21,7 +21,7 @@ public sealed class CliArgumentsTests {
             Assert.That(parsedArguments?.ConnectionName, Is.EqualTo("Primary"));
             Assert.That(parsedArguments?.ProfileName, Is.EqualTo("Default"));
             Assert.That(parsedArguments?.GenerateManifest, Is.True);
-            Assert.That(parsedArguments?.GenerateAiContext, Is.True);
+            Assert.That(parsedArguments?.GenerateSchemaSummary, Is.True);
             Assert.That(errorMessage, Is.Null);
             Assert.That(showHelp, Is.False);
         }

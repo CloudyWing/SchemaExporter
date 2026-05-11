@@ -4,15 +4,15 @@ using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;
 
 [TestFixture]
-public sealed class SchemaAiContextBuilderTests {
+public sealed class SchemaSummaryMarkdownBuilderTests {
     [Test]
     public void BuildMarkdown_WhenSnapshotContainsRoutineDefinition_OmitsDefinitionBody() {
         SchemaSnapshotDocument snapshot = SchemaTestData.CreateSnapshotDocument(@"C:\Exports\TableSchema.xlsx");
 
-        string result = SchemaAiContextBuilder.BuildMarkdown(snapshot, null);
+        string result = SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, null);
 
         using (Assert.EnterMultipleScope()) {
-            Assert.That(result, Does.Contain("# Schema Context"));
+            Assert.That(result, Does.Contain("# Schema Summary"));
             Assert.That(result, Does.Contain("dbo.Users"));
             Assert.That(result, Does.Contain("@IsActive bit"));
             Assert.That(result, Does.Contain("Routine definitions are omitted"));
@@ -24,7 +24,7 @@ public sealed class SchemaAiContextBuilderTests {
     public void BuildMarkdown_WhenProviderCapabilitiesExist_IncludesCapabilitySection() {
         SchemaSnapshotDocument snapshot = SchemaTestData.CreateSnapshotDocument(@"C:\Exports\TableSchema.xlsx");
 
-        string result = SchemaAiContextBuilder.BuildMarkdown(snapshot, null);
+        string result = SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, null);
 
         using (Assert.EnterMultipleScope()) {
             Assert.That(result, Does.Contain("## Provider Capabilities"));

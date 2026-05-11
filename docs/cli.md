@@ -36,7 +36,7 @@ schemaexporter export --connection <name> [options]
 | `--no-manifest` | 強制停用 manifest 產生。 |
 | `--json-sidecar` | 強制啟用 JSON sidecar 產生。 |
 | `--markdown-sidecar` | 強制啟用 Markdown sidecar 產生。 |
-| `--ai-context` | 強制啟用 AI context Markdown 產生。 |
+| `--schema-summary` | 強制啟用 Schema Summary Markdown 產生。 |
 | `--snapshot` | 強制啟用 schema snapshot 產生。 |
 | `--diff-from <path>` | 指定基準 snapshot 的絕對路徑，執行完成後自動產生差異比對結果。 |
 | `--open-output-folder` | 匯出完成後開啟輸出資料夾（僅在 Windows 桌面環境有效）。 |
@@ -56,7 +56,7 @@ schemaexporter export --connection <name> [options]
 Export completed successfully.
 Workbook: D:\SchemaExports\TableSchema_Key1_20241201_120000.xlsx
 Manifest: D:\SchemaExports\TableSchema_Key1_20241201_120000.manifest.json
-AI context: D:\SchemaExports\TableSchema_Key1_20241201_120000.schema-context.md
+Schema summary: D:\SchemaExports\TableSchema_Key1_20241201_120000.schema-summary.md
 Diagnostics: 2 total, 1 warning(s), 0 error(s).
 警告:
 - [檢視表支援] 檢視表目前僅匯出物件與欄位中繼資料，不包含定義 SQL、相依性與索引/主鍵明細。
@@ -86,8 +86,8 @@ schemaexporter export --connection prod --snapshot --manifest
 # 匯出並與基準 snapshot 產生差異比對
 schemaexporter export --connection prod --snapshot --diff-from C:\Snapshots\baseline.snapshot.json
 
-# 匯出供 Agent 讀取的 schema context
-schemaexporter export --connection prod --ai-context
+# 匯出精簡 Schema Summary
+schemaexporter export --connection prod --schema-summary
 
 # 停用時間戳記
 schemaexporter export --connection prod --no-timestamp

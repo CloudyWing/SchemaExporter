@@ -67,7 +67,7 @@ TableSchema_prod_20241201_120000.manifest.json
 | `generateManifest` | 是否產生了 manifest。 |
 | `generateJsonSidecar` | 是否產生了 JSON sidecar。 |
 | `generateMarkdownSidecar` | 是否產生了 Markdown sidecar。 |
-| `generateAiContext` | 是否產生了 AI context。 |
+| `generateSchemaSummary` | 是否產生了 Schema Summary。 |
 | `generateSchemaSnapshot` | 是否產生了 schema snapshot。 |
 | `diffSourceSnapshotPath` | 差異比對使用的基準 snapshot 路徑（若有）。 |
 

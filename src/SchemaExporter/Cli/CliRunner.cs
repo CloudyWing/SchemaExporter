@@ -82,7 +82,7 @@ internal sealed class CliRunner {
             GenerateManifest = arguments.GenerateManifest,
             GenerateJsonSidecar = arguments.GenerateJsonSidecar,
             GenerateMarkdownSidecar = arguments.GenerateMarkdownSidecar,
-            GenerateAiContext = arguments.GenerateAiContext,
+            GenerateSchemaSummary = arguments.GenerateSchemaSummary,
             GenerateSchemaSnapshot = arguments.GenerateSchemaSnapshot,
             UseTimestamp = arguments.UseTimestamp,
             DiffSourceSnapshotPath = arguments.DiffSourceSnapshotPath,
@@ -111,7 +111,7 @@ internal sealed class CliRunner {
         WriteArtifactLine("Manifest", result.ManifestFilePath);
         WriteArtifactLine("JSON sidecar", result.JsonSidecarFilePath);
         WriteArtifactLine("Markdown sidecar", result.MarkdownSidecarFilePath);
-        WriteArtifactLine("AI context", result.AiContextFilePath);
+        WriteArtifactLine("Schema summary", result.SchemaSummaryFilePath);
         WriteArtifactLine("Snapshot", result.SnapshotFilePath);
         WriteArtifactLine("Diff", result.DiffFilePath);
 
@@ -226,7 +226,7 @@ internal sealed class CliRunner {
         Console.WriteLine("  --no-manifest                Disable manifest output.");
         Console.WriteLine("  --json-sidecar               Generate a schema JSON sidecar.");
         Console.WriteLine("  --markdown-sidecar           Generate a schema Markdown sidecar.");
-        Console.WriteLine("  --ai-context                 Generate a schema context Markdown file for AI agents.");
+        Console.WriteLine("  --schema-summary             Generate a compact schema summary Markdown file.");
         Console.WriteLine("  --snapshot                   Generate a reusable schema snapshot JSON file.");
         Console.WriteLine("  --diff-from <path>           Generate a schema diff against the specified snapshot file.");
         Console.WriteLine("  --open-output-folder         Open the output folder after export completes.");

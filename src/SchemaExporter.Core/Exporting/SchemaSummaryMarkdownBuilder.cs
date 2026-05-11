@@ -6,20 +6,20 @@ using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 namespace CloudyWing.SchemaExporter.Core.Exporting;
 
 /// <summary>
-/// 建立供 AI Agent 讀取的 schema context Markdown 內容。
+/// 建立精簡 Schema Summary Markdown 內容。
 /// </summary>
-internal static class SchemaAiContextBuilder {
+internal static class SchemaSummaryMarkdownBuilder {
     /// <summary>
-    /// 建立 schema context Markdown。
+    /// 建立 Schema Summary Markdown。
     /// </summary>
     /// <param name="snapshot">目前匯出的 schema snapshot。</param>
     /// <param name="diff">與基準 snapshot 的差異；未執行差異比對時為 <see langword="null"/>。</param>
-    /// <returns>Markdown 格式的 schema context。</returns>
+    /// <returns>Markdown 格式的 Schema Summary。</returns>
     internal static string BuildMarkdown(SchemaSnapshotDocument snapshot, SchemaDiffDocument? diff) {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         StringBuilder markdown = new();
-        markdown.AppendLine("# Schema Context");
+        markdown.AppendLine("# Schema Summary");
         markdown.AppendLine();
         markdown.AppendLine("## Scope");
         markdown.AppendLine();

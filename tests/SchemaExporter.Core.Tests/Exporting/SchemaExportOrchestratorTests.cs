@@ -136,7 +136,7 @@ public sealed class SchemaExportOrchestratorTests {
             GenerateManifest = true,
             GenerateJsonSidecar = true,
             GenerateMarkdownSidecar = true,
-            GenerateAiContext = true,
+            GenerateSchemaSummary = true,
             GenerateSchemaSnapshot = true,
             DiffSourceSnapshotPath = baselineSnapshotPath
         };
@@ -148,33 +148,33 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(result.ManifestFilePath, Is.Not.Null);
         Assert.That(result.JsonSidecarFilePath, Is.Not.Null);
         Assert.That(result.MarkdownSidecarFilePath, Is.Not.Null);
-        Assert.That(result.AiContextFilePath, Is.Not.Null);
+        Assert.That(result.SchemaSummaryFilePath, Is.Not.Null);
         Assert.That(result.SnapshotFilePath, Is.Not.Null);
         Assert.That(result.DiffFilePath, Is.Not.Null);
         string manifestFilePath = result.ManifestFilePath ?? throw new AssertionException("Expected a manifest file path.");
         string jsonSidecarFilePath = result.JsonSidecarFilePath ?? throw new AssertionException("Expected a JSON sidecar file path.");
         string markdownSidecarFilePath = result.MarkdownSidecarFilePath ?? throw new AssertionException("Expected a Markdown sidecar file path.");
-        string aiContextFilePath = result.AiContextFilePath ?? throw new AssertionException("Expected an AI context file path.");
+        string schemaSummaryFilePath = result.SchemaSummaryFilePath ?? throw new AssertionException("Expected a schema summary file path.");
         string snapshotFilePath = result.SnapshotFilePath ?? throw new AssertionException("Expected a snapshot file path.");
         string diffFilePath = result.DiffFilePath ?? throw new AssertionException("Expected a diff file path.");
         Assert.That(File.Exists(manifestFilePath), Is.True);
         Assert.That(File.Exists(jsonSidecarFilePath), Is.True);
         Assert.That(File.Exists(markdownSidecarFilePath), Is.True);
-        Assert.That(File.Exists(aiContextFilePath), Is.True);
+        Assert.That(File.Exists(schemaSummaryFilePath), Is.True);
         Assert.That(File.Exists(snapshotFilePath), Is.True);
         Assert.That(File.Exists(diffFilePath), Is.True);
         Assert.That(result.Diagnostics.Any(x => x.Category == ExportDiagnosticCategory.Execution), Is.True);
 
         string diffJson = await File.ReadAllTextAsync(diffFilePath);
         string markdownSidecar = await File.ReadAllTextAsync(markdownSidecarFilePath);
-        string aiContext = await File.ReadAllTextAsync(aiContextFilePath);
+        string schemaSummary = await File.ReadAllTextAsync(schemaSummaryFilePath);
 
         Assert.That(diffJson, Does.Contain("\"AddedColumns\": 1"));
         Assert.That(diffJson, Does.Contain("\"ModifiedObjects\": 1"));
         Assert.That(markdownSidecar, Does.Contain("## Snapshot Diff"));
         Assert.That(markdownSidecar, Does.Contain("dbo.Users (TABLE)"));
-        Assert.That(aiContext, Does.Contain("# Schema Context"));
-        Assert.That(aiContext, Does.Contain("routine signatures"));
+        Assert.That(schemaSummary, Does.Contain("# Schema Summary"));
+        Assert.That(schemaSummary, Does.Contain("routine signatures"));
         await providerFactory.Received(1).LoadObjectsAsync(
             connection.DatabaseType,
             connection.ConnectionString,

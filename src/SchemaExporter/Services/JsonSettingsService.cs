@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CloudyWing.SchemaExporter.Core;
+using CloudyWing.SchemaExporter.Core.Exporting;
 
 namespace CloudyWing.SchemaExporter.Services;
 
@@ -35,6 +36,7 @@ internal sealed class JsonSettingsService : ISettingsService {
 
         SchemaOptions options = schemaNode.Deserialize<SchemaOptions>(SerializerOptions)
             ?? throw new InvalidOperationException("無法讀取 Schema 設定區段。");
+        ApplyCompatibilityDefaults(options, schemaNode);
         await ValidateAsync(options).ConfigureAwait(false);
         return options;
     }
@@ -74,5 +76,32 @@ internal sealed class JsonSettingsService : ISettingsService {
         string json = await File.ReadAllTextAsync(appsettingsPath, Encoding.UTF8).ConfigureAwait(false);
         JsonNode? node = JsonNode.Parse(json);
         return node as JsonObject ?? throw new InvalidOperationException("appsettings.json 格式無效，根節點必須為 JSON 物件。");
+    }
+
+    private static void ApplyCompatibilityDefaults(SchemaOptions options, JsonNode schemaNode) {
+        if (schemaNode["ExportResultOptions"] is not JsonObject exportResultOptionsNode) {
+            return;
+        }
+
+        if (exportResultOptionsNode.ContainsKey(nameof(ExportResultOptions.GenerateSchemaSummary))) {
+            return;
+        }
+
+        if (TryGetBoolean(exportResultOptionsNode, "GenerateAiContext", out bool generateSchemaSummary)) {
+            options.ExportResultOptions.GenerateSchemaSummary = generateSchemaSummary;
+        }
+    }
+
+    private static bool TryGetBoolean(JsonObject jsonObject, string propertyName, out bool value) {
+        value = false;
+        if (!jsonObject.TryGetPropertyValue(propertyName, out JsonNode? node)) {
+            return false;
+        }
+
+        if (node is not JsonValue jsonValue) {
+            return false;
+        }
+
+        return jsonValue.TryGetValue(out value);
     }
 }

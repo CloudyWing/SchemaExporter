@@ -20,9 +20,9 @@ internal sealed class ArtifactOutputs {
     public string? MarkdownSidecarFilePath { get; init; }
 
     /// <summary>
-    /// 取得或設定 AI context 檔案路徑。
+    /// 取得或設定 Schema Summary 檔案路徑。
     /// </summary>
-    public string? AiContextFilePath { get; init; }
+    public string? SchemaSummaryFilePath { get; init; }
 
     /// <summary>
     /// 取得或設定 schema snapshot 檔案路徑。

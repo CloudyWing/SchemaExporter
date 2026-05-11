@@ -72,15 +72,15 @@ internal static class SchemaExportArtifactWriter {
             await WriteTextArtifactAsync(markdownSidecarFilePath, markdown, cancellationToken, "無法產生 Markdown sidecar 檔案：").ConfigureAwait(false);
         }
 
-        string? aiContextFilePath = null;
-        if (resultOptions.GenerateAiContext) {
-            aiContextFilePath = BuildArtifactPath(outputFilePath, "schema-context.md");
-            string aiContext = SchemaAiContextBuilder.BuildMarkdown(snapshot, diff);
+        string? schemaSummaryFilePath = null;
+        if (resultOptions.GenerateSchemaSummary) {
+            schemaSummaryFilePath = BuildArtifactPath(outputFilePath, "schema-summary.md");
+            string schemaSummary = SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, diff);
             await WriteTextArtifactAsync(
-                aiContextFilePath,
-                aiContext,
+                schemaSummaryFilePath,
+                schemaSummary,
                 cancellationToken,
-                "無法產生 AI context 檔案："
+                "無法產生 Schema Summary 檔案："
             ).ConfigureAwait(false);
         }
 
@@ -88,7 +88,7 @@ internal static class SchemaExportArtifactWriter {
             ManifestFilePath = manifestFilePath,
             JsonSidecarFilePath = jsonSidecarFilePath,
             MarkdownSidecarFilePath = markdownSidecarFilePath,
-            AiContextFilePath = aiContextFilePath,
+            SchemaSummaryFilePath = schemaSummaryFilePath,
             SnapshotFilePath = snapshotFilePath,
             DiffFilePath = diffFilePath
         };
@@ -320,7 +320,7 @@ internal static class SchemaExportArtifactWriter {
                 GenerateManifest = resultOptions.GenerateManifest,
                 GenerateJsonSidecar = resultOptions.GenerateJsonSidecar,
                 GenerateMarkdownSidecar = resultOptions.GenerateMarkdownSidecar,
-                GenerateAiContext = resultOptions.GenerateAiContext,
+                GenerateSchemaSummary = resultOptions.GenerateSchemaSummary,
                 GenerateSchemaSnapshot = resultOptions.GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = resultOptions.DiffSourceSnapshotPath ?? ""
             },
