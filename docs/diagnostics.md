@@ -39,6 +39,8 @@
 
 部分診斷會附帶支援層級，說明目前連線資料庫對該功能的支援程度：
 
+各 provider 的完整支援範圍參閱 [provider-capabilities.md](provider-capabilities.md)。
+
 | 值 | 顯示文字 | 說明 |
 | --- | --- | --- |
 | `Full` | 完整支援 | 此功能在目前資料庫上完整可用。 |

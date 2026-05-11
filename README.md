@@ -30,6 +30,7 @@
 - [Snapshot 格式](docs/snapshot.md)
 - [Diff 格式](docs/diff.md)
 - [AI Context 格式](docs/ai-context.md)
+- [Provider Capability Matrix](docs/provider-capabilities.md)
 - [診斷資訊說明](docs/diagnostics.md)
 
 ## 建置與測試

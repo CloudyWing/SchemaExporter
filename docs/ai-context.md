@@ -34,6 +34,7 @@ TableSchema_prod_20241201_120000.schema-context.md
 | `Scope` | 匯出來源、資料庫類型、匯出設定檔、匯出時間與內容限制。 |
 | `Counts` | 物件、欄位、索引與 routines 數量。 |
 | `Diagnostics` | 匯出時收集到的資訊、警告與錯誤。 |
+| `Provider Capabilities` | 目前資料庫 provider 的 schema metadata 支援範圍。 |
 | `Diff Summary` | 指定基準 snapshot 時產生的變更摘要。 |
 | `Object Inventory` | 物件層級總覽，包含物件類型、欄位數、索引數與說明。 |
 | `Objects` | 每個資料表或檢視表的欄位與索引 metadata。 |

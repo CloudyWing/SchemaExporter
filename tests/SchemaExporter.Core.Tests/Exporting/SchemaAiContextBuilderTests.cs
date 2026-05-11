@@ -19,4 +19,18 @@ public sealed class SchemaAiContextBuilderTests {
             Assert.That(result, Does.Not.Contain("SELECT [Id], [Name] FROM [dbo].[Users];"));
         }
     }
+
+    [Test]
+    public void BuildMarkdown_WhenProviderCapabilitiesExist_IncludesCapabilitySection() {
+        SchemaSnapshotDocument snapshot = SchemaTestData.CreateSnapshotDocument(@"C:\Exports\TableSchema.xlsx");
+
+        string result = SchemaAiContextBuilder.BuildMarkdown(snapshot, null);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Does.Contain("## Provider Capabilities"));
+            Assert.That(result, Does.Contain("Tables"));
+            Assert.That(result, Does.Contain("Views"));
+            Assert.That(result, Does.Contain("Partial"));
+        }
+    }
 }

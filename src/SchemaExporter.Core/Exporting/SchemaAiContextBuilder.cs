@@ -40,6 +40,7 @@ internal static class SchemaAiContextBuilder {
         AppendTableRow(markdown, "Routines", snapshot.Counts.Routines.ToString(CultureInfo.InvariantCulture));
 
         AppendDiagnostics(markdown, snapshot.Diagnostics);
+        AppendProviderCapabilities(markdown, snapshot.DatabaseType);
         AppendDiffSummary(markdown, diff);
         AppendObjectInventory(markdown, snapshot.Objects);
         AppendObjects(markdown, snapshot.Objects);
@@ -68,6 +69,27 @@ internal static class SchemaAiContextBuilder {
                 diagnostic.Category,
                 diagnostic.AffectedObject ?? "",
                 diagnostic.Message
+            );
+        }
+    }
+
+    private static void AppendProviderCapabilities(StringBuilder markdown, string databaseType) {
+        IReadOnlyList<ProviderCapability> capabilities = ProviderCapabilityMatrix.GetCapabilities(databaseType);
+        if (capabilities.Count == 0) {
+            return;
+        }
+
+        markdown.AppendLine();
+        markdown.AppendLine("## Provider Capabilities");
+        markdown.AppendLine();
+        markdown.AppendLine("| Area | Support | Notes |");
+        markdown.AppendLine("| --- | --- | --- |");
+        foreach (ProviderCapability capability in capabilities) {
+            AppendTableRow(
+                markdown,
+                capability.Area,
+                capability.SupportLevel.ToString(),
+                capability.Notes
             );
         }
     }
