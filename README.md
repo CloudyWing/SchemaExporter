@@ -33,6 +33,7 @@
 - [Snapshot 格式](docs/snapshot.md)
 - [Diff 格式](docs/diff.md)
 - [Schema Summary 格式](docs/schema-summary.md)
+- [CI 使用範例](docs/ci.md)
 - [Provider Capability Matrix](docs/provider-capabilities.md)
 - [診斷資訊說明](docs/diagnostics.md)
 
