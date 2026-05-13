@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CloudyWing.SchemaExporter.Core.Exporting;
 
 namespace CloudyWing.SchemaExporter.Core;
@@ -22,6 +23,7 @@ public static class SchemaOptionsValidator {
         ValidateConnections(options.Connections);
         ValidateProfiles(options.ExportProfiles);
         ValidateConnectionProfileReferences(options.Connections, options.ExportProfiles);
+        ValidateRedaction(options.Redaction);
     }
 
     private static void ValidateTimestampFormat(ExportResultOptions resultOptions) {
@@ -108,6 +110,44 @@ public static class SchemaOptionsValidator {
                 throw new ExportValidationException(
                     $"Schema.Connections[{index}].ExportProfileName 指定的匯出設定檔不存在：{connection.ExportProfileName}"
                 );
+            }
+        }
+    }
+
+    private static void ValidateRedaction(SchemaRedactionOptions redaction) {
+        ArgumentNullException.ThrowIfNull(redaction);
+
+        if (!redaction.Enabled) {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(redaction.ReplacementText)) {
+            throw new ExportValidationException("Schema.Redaction.ReplacementText 不可為空白。");
+        }
+
+        ValidateRegexPatterns(redaction.SensitiveNamePatterns, "Schema.Redaction.SensitiveNamePatterns");
+        ValidateRegexPatterns(redaction.SensitiveTextPatterns, "Schema.Redaction.SensitiveTextPatterns");
+    }
+
+    private static void ValidateRegexPatterns(IReadOnlyList<string>? patterns, string path) {
+        if (patterns is null) {
+            throw new ExportValidationException($"{path} 不可為 null。");
+        }
+
+        for (int index = 0; index < patterns.Count; index++) {
+            string? pattern = patterns[index];
+            if (string.IsNullOrWhiteSpace(pattern)) {
+                continue;
+            }
+
+            try {
+                _ = new Regex(
+                    pattern.Trim(),
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(250)
+                );
+            } catch (ArgumentException ex) {
+                throw new ExportValidationException($"{path}[{index}] 不是有效的規則運算式：{pattern}", ex);
             }
         }
     }

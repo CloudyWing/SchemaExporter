@@ -79,6 +79,7 @@ public sealed partial class SchemaExportOrchestrator {
             request.ExportPath,
             request.Profile,
             request.ResultOptions,
+            request.Redaction,
             progress,
             cancellationToken
         );
@@ -102,9 +103,61 @@ public sealed partial class SchemaExportOrchestrator {
         IProgress<ExportProgress>? progress = null,
         CancellationToken cancellationToken = default
     ) {
+        return await ExportCoreAsync(
+            connection,
+            exportPath,
+            profile,
+            resultOptions,
+            new SchemaRedactionOptions(),
+            progress,
+            cancellationToken
+        ).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 非同步執行結構描述匯出作業，並依指定規則遮罩敏感 metadata。
+    /// </summary>
+    /// <param name="connection">要匯出的資料庫連線設定。</param>
+    /// <param name="exportPath">匯出檔案的目標資料夾路徑，支援絕對路徑與相對路徑。</param>
+    /// <param name="profile">控制篩選、命名與輸出行為的匯出設定檔。</param>
+    /// <param name="resultOptions">控制成品產生方式的匯出結果選項。</param>
+    /// <param name="redaction">控制敏感 metadata 遮罩方式的選項。</param>
+    /// <param name="progress">用於回報匯出進度的物件；可為 <see langword="null"/>。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>包含輸出檔案路徑、診斷訊息與各成品路徑的 <see cref="ExportResult"/>。</returns>
+    public async Task<ExportResult> ExportAsync(
+        SchemaConnection connection,
+        string exportPath,
+        ExportProfile profile,
+        ExportResultOptions resultOptions,
+        SchemaRedactionOptions redaction,
+        IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default
+    ) {
+        return await ExportCoreAsync(
+            connection,
+            exportPath,
+            profile,
+            resultOptions,
+            redaction,
+            progress,
+            cancellationToken
+        ).ConfigureAwait(false);
+    }
+
+    private async Task<ExportResult> ExportCoreAsync(
+        SchemaConnection connection,
+        string exportPath,
+        ExportProfile profile,
+        ExportResultOptions resultOptions,
+        SchemaRedactionOptions redaction,
+        IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(resultOptions);
+        ArgumentNullException.ThrowIfNull(redaction);
 
         List<ExportDiagnostic> diagnostics = [];
         ExportStage currentStage = ExportStage.Validating;
@@ -172,6 +225,7 @@ public sealed partial class SchemaExportOrchestrator {
             stageStopwatch.Restart();
             ReportProgress(progress, ExportStage.ApplyingFilters, "正在篩選程序與函數...", 40);
             FilteredSchemaExport filteredExport = BuildFilteredExport(filteredObjects, schemaDetails, profile, diagnostics);
+            filteredExport = SchemaRedactor.Apply(filteredExport, redaction, diagnostics);
             cancellationToken.ThrowIfCancellationRequested();
             executionSummary.FilteringDuration = stageStopwatch.Elapsed;
 

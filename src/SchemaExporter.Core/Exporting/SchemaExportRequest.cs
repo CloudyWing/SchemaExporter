@@ -23,4 +23,9 @@ public sealed class SchemaExportRequest {
     /// 取得實際套用的輸出結果選項。
     /// </summary>
     public required ExportResultOptions ResultOptions { get; init; }
+
+    /// <summary>
+    /// 取得實際套用的敏感 metadata 遮罩選項。
+    /// </summary>
+    public SchemaRedactionOptions Redaction { get; init; } = new();
 }

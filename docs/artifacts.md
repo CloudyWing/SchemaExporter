@@ -6,6 +6,8 @@ SchemaExporter 的主要輸出是 Excel 活頁簿，其餘檔案稱為 artifacts
 
 所有匯出時自動產生的 artifacts 會沿用主要 Excel 檔案的基本檔名，再加上固定後綴。
 
+若啟用 `Schema.Redaction`，敏感 metadata 會在 artifacts 產生前被遮罩，因此 Excel、snapshot、JSON sidecar、Markdown sidecar 與 Schema Summary 會使用一致的遮罩結果。
+
 ## Artifact 類型
 
 | 名稱 | 檔名後綴 | 主要讀者 | 用途 |

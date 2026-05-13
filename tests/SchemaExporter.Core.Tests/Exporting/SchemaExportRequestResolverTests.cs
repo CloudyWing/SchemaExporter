@@ -7,6 +7,12 @@ public sealed class SchemaExportRequestResolverTests {
     [Test]
     public void Resolve_WhenOverridesAreProvided_ReturnsMergedRequest() {
         SchemaOptions options = CreateOptions();
+        options.Redaction = new SchemaRedactionOptions {
+            Enabled = true,
+            ReplacementText = "[MASKED]",
+            SensitiveNamePatterns = ["token"],
+            SensitiveTextPatterns = ["AKIA[0-9A-Z]+"]
+        };
         SchemaExportRequestResolver sut = new();
         ExportOptionOverrides overrides = new() {
             OutputPath = @"C:\Runtime",
@@ -37,6 +43,10 @@ public sealed class SchemaExportRequestResolverTests {
             Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyyMMdd"));
             Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.AppendSuffix));
             Assert.That(result.ResultOptions.DiffSourceSnapshotPath, Is.Null);
+            Assert.That(result.Redaction.Enabled, Is.True);
+            Assert.That(result.Redaction.ReplacementText, Is.EqualTo("[MASKED]"));
+            Assert.That(result.Redaction.SensitiveNamePatterns, Is.EqualTo(new[] { "token" }));
+            Assert.That(result.Redaction.SensitiveTextPatterns, Is.EqualTo(new[] { "AKIA[0-9A-Z]+" }));
         }
     }
 

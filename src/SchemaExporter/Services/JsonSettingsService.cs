@@ -79,6 +79,8 @@ internal sealed class JsonSettingsService : ISettingsService {
     }
 
     private static void ApplyCompatibilityDefaults(SchemaOptions options, JsonNode schemaNode) {
+        options.Redaction ??= new SchemaRedactionOptions();
+
         if (schemaNode["ExportResultOptions"] is not JsonObject exportResultOptionsNode) {
             return;
         }

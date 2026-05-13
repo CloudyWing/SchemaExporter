@@ -65,6 +65,7 @@ public sealed class ExportDiagnostic {
         ExportDiagnosticCategory.Configuration => "設定",
         ExportDiagnosticCategory.RoutineSupport => "程序支援",
         ExportDiagnosticCategory.Execution => "執行",
+        ExportDiagnosticCategory.Redaction => "Redaction",
         _ => Category.ToString()
     };
 }

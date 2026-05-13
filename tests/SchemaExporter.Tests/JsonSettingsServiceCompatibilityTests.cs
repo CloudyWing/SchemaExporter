@@ -69,6 +69,24 @@ public sealed class JsonSettingsServiceCompatibilityTests {
         Assert.That(options.ExportResultOptions.GenerateSchemaSummary, Is.True);
     }
 
+    [Test]
+    public async Task LoadAsync_WhenLegacySettingsOmitRedaction_UsesRedactionDefaults() {
+        using AppSettingsTestScope scope = new();
+        Directory.CreateDirectory(scope.UserConfigDirectory);
+        await File.WriteAllTextAsync(scope.UserConfigPath, CreateLegacyAppSettingsJson());
+
+        JsonSettingsService settingsService = new();
+
+        SchemaOptions options = await settingsService.LoadAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(options.Redaction.Enabled, Is.False);
+            Assert.That(options.Redaction.ReplacementText, Is.EqualTo("[REDACTED]"));
+            Assert.That(options.Redaction.SensitiveNamePatterns, Contains.Item("password"));
+            Assert.That(options.Redaction.SensitiveTextPatterns, Is.Empty);
+        }
+    }
+
     private static ViewModel CreateViewModel(ISettingsService settingsService) {
         SchemaExportOrchestrator exportOrchestrator = new(
             Substitute.For<IDatabaseSchemaProviderFactory>(),

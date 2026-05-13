@@ -215,6 +215,60 @@ public sealed class SchemaExportOrchestratorTests {
         Assert.That(File.Exists(result.OutputFilePath), Is.True);
     }
 
+    [Test]
+    public async Task ExportAsync_WhenRedactionIsEnabled_RedactsSensitiveArtifactMetadata() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory);
+        SchemaConnection connection = CreateConnection();
+        DatabaseSchemaExport schemaExport = CreateSensitiveSchemaExport();
+        SetupProviderFactory(providerFactory, connection, schemaExport);
+        ExportResultOptions resultOptions = new() {
+            GenerateJsonSidecar = true,
+            GenerateMarkdownSidecar = true,
+            GenerateSchemaSummary = true,
+            GenerateSchemaSnapshot = true
+        };
+        SchemaRedactionOptions redaction = new() {
+            Enabled = true,
+            ReplacementText = "[MASKED]",
+            SensitiveNamePatterns = ["password"],
+            SensitiveTextPatterns = ["AKIA[0-9A-Z]+"]
+        };
+
+        ExportResult result = await sut.ExportAsync(
+            connection,
+            directory.Path,
+            CreateProfile(),
+            resultOptions,
+            redaction
+        );
+
+        string snapshotFilePath = result.SnapshotFilePath
+            ?? throw new AssertionException("Expected a snapshot file path.");
+        string jsonSidecarFilePath = result.JsonSidecarFilePath
+            ?? throw new AssertionException("Expected a JSON sidecar file path.");
+        string markdownSidecarFilePath = result.MarkdownSidecarFilePath
+            ?? throw new AssertionException("Expected a Markdown sidecar file path.");
+        string schemaSummaryFilePath = result.SchemaSummaryFilePath
+            ?? throw new AssertionException("Expected a schema summary file path.");
+        string combinedArtifacts = string.Join(
+            Environment.NewLine,
+            await File.ReadAllTextAsync(snapshotFilePath),
+            await File.ReadAllTextAsync(jsonSidecarFilePath),
+            await File.ReadAllTextAsync(markdownSidecarFilePath),
+            await File.ReadAllTextAsync(schemaSummaryFilePath)
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(combinedArtifacts, Does.Contain("[MASKED]"));
+            Assert.That(combinedArtifacts, Does.Not.Contain("AKIA1234567890ABCDEF"));
+            Assert.That(combinedArtifacts, Does.Not.Contain("not-a-real-password"));
+            Assert.That(combinedArtifacts, Does.Not.Contain("Password hash"));
+            Assert.That(result.Diagnostics.Any(x => x.Category == ExportDiagnosticCategory.Redaction), Is.True);
+        }
+    }
+
     private static void SetupProviderFactory(
         IDatabaseSchemaProviderFactory providerFactory,
         SchemaConnection connection,
@@ -233,6 +287,45 @@ public sealed class SchemaExportOrchestratorTests {
             Indexes = schemaExport.Indexes,
             Routines = schemaExport.Routines
         }));
+    }
+
+    private static DatabaseSchemaExport CreateSensitiveSchemaExport() {
+        return new DatabaseSchemaExport {
+            Objects = [
+                new DatabaseObjectSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    ObjectDescription = "Uses AKIA1234567890ABCDEF for external integration."
+                }
+            ],
+            Columns = [
+                new DatabaseColumnSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    ColumnName = "PasswordHash",
+                    ColumnType = "nvarchar(256)",
+                    IsNullable = "NO",
+                    ColumnDefault = "('not-a-real-password')",
+                    IsPrimaryKey = "NO",
+                    IsIdentity = "NO",
+                    ColumnDescription = "Password hash",
+                    ColumnOrder = 1
+                }
+            ],
+            Indexes = [],
+            Routines = [
+                new DatabaseRoutineSchema {
+                    SchemaName = "dbo",
+                    RoutineName = "usp_GetSecret",
+                    RoutineType = "PROCEDURE",
+                    ParameterSignature = "@Id int",
+                    RoutineDescription = "Returns secret value",
+                    RoutineDefinition = "SELECT 'AKIA1234567890ABCDEF';"
+                }
+            ]
+        };
     }
 
     private static SchemaExportOrchestrator CreateSubject(IDatabaseSchemaProviderFactory providerFactory) {

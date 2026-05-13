@@ -32,6 +32,7 @@
 | `Configuration` | 設定 | 與 `appsettings.json` 設定相關，如設定值無效或缺少必要設定。 |
 | `RoutineSupport` | 程序支援 | 關於特定資料庫對預存程序或函數的支援狀況。 |
 | `Execution` | 執行 | 匯出執行過程中發生的狀況，如特定物件讀取異常。 |
+| `Redaction` | Redaction | 敏感 metadata 遮罩已套用的資訊。 |
 
 ---
 

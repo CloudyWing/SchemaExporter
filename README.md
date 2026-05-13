@@ -20,6 +20,7 @@
 - 可產生 schema snapshot，並和既有 snapshot 做 diff
 - 可用 export profile 控制 schema / object 篩選與是否包含 view
 - 匯出時會收集 diagnostics，方便看資訊、警告、錯誤和支援狀態
+- 可啟用 redaction 規則，在輸出前遮罩敏感 metadata
 
 ## 文件
 

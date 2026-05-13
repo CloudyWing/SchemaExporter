@@ -36,6 +36,36 @@ public sealed class SchemaOptionsValidatorTests {
     }
 
     [Test]
+    public void Validate_WhenRedactionPatternIsInvalid_ThrowsValidationException() {
+        SchemaOptions options = CreateValidOptions();
+        options.Redaction = new SchemaRedactionOptions {
+            Enabled = true,
+            SensitiveNamePatterns = ["["]
+        };
+
+        ExportValidationException? exception = Assert.Throws<ExportValidationException>(
+            () => SchemaOptionsValidator.Validate(options)
+        );
+
+        Assert.That(exception?.Message, Does.Contain("SensitiveNamePatterns"));
+    }
+
+    [Test]
+    public void Validate_WhenRedactionPatternListIsNull_ThrowsValidationException() {
+        SchemaOptions options = CreateValidOptions();
+        options.Redaction = new SchemaRedactionOptions {
+            Enabled = true,
+            SensitiveNamePatterns = null!
+        };
+
+        ExportValidationException? exception = Assert.Throws<ExportValidationException>(
+            () => SchemaOptionsValidator.Validate(options)
+        );
+
+        Assert.That(exception?.Message, Does.Contain("SensitiveNamePatterns"));
+    }
+
+    [Test]
     public void Validate_WhenOptionsAreValid_DoesNotThrow() {
         SchemaOptions options = CreateValidOptions();
 

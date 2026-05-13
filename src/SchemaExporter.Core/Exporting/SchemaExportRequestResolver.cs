@@ -31,7 +31,8 @@ public sealed class SchemaExportRequestResolver {
             Connection = connection,
             ExportPath = exportPath,
             Profile = profile,
-            ResultOptions = resultOptions
+            ResultOptions = resultOptions,
+            Redaction = schemaOptions.Redaction
         };
     }
 
