@@ -34,6 +34,7 @@
 - [Diff 格式](docs/diff.md)
 - [Schema Summary 格式](docs/schema-summary.md)
 - [CI 使用範例](docs/ci.md)
+- [Provider Fixture 資料庫](docs/provider-fixtures.md)
 - [Provider Capability Matrix](docs/provider-capabilities.md)
 - [診斷資訊說明](docs/diagnostics.md)
 
