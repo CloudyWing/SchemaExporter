@@ -2,13 +2,15 @@
 
 ## 說明
 
-Schema Summary 是精簡的 Markdown 摘要，內容聚焦 schema metadata、物件清單、欄位、索引、routine signature、診斷資訊與差異摘要。
+Schema Summary 是精簡的 AI context Markdown，內容聚焦 schema metadata、物件清單、欄位、索引、routine signature、診斷資訊與差異摘要。
 
 此檔案不包含資料列內容、範例資料值或 routine 定義本文。
 
 ## 與 Markdown sidecar 的差異
 
 Markdown sidecar 是完整的可讀匯出，適合人工查閱完整 schema 結構。Schema Summary 是精簡摘要，適合放進 Agent、CI 或審查流程作為上下文。
+
+完整 artifact 命名與定位參閱 [artifacts.md](artifacts.md)。
 
 ## 啟用方式
 

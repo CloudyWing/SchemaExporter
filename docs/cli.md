@@ -2,7 +2,7 @@
 
 CLI 版執行檔為 `schemaexporter`，支援兩個命令：`export` 與 `diff`。
 
-```
+```text
 schemaexporter export --connection <name> [options]
 schemaexporter diff --left <path> --right <path> [options]
 schemaexporter --help
@@ -35,8 +35,8 @@ schemaexporter export --connection <name> [options]
 | `--manifest` | 強制啟用 manifest 產生，無論設定檔預設值為何。 |
 | `--no-manifest` | 強制停用 manifest 產生。 |
 | `--json-sidecar` | 強制啟用 JSON sidecar 產生。 |
-| `--markdown-sidecar` | 強制啟用 Markdown sidecar 產生。 |
-| `--schema-summary` | 強制啟用 Schema Summary Markdown 產生。 |
+| `--markdown-sidecar` | 強制啟用完整可讀 Markdown sidecar 產生。 |
+| `--schema-summary` | 強制啟用精簡 Schema Summary，也就是 AI context Markdown 產生。 |
 | `--snapshot` | 強制啟用 schema snapshot 產生。 |
 | `--diff-from <path>` | 指定基準 snapshot 的絕對路徑，執行完成後自動產生差異比對結果。 |
 | `--open-output-folder` | 匯出完成後開啟輸出資料夾（僅在 Windows 桌面環境有效）。 |
@@ -48,7 +48,9 @@ schemaexporter export --connection <name> [options]
 
 執行過程中會即時輸出進度訊息至 stdout。完成後顯示所有產生的檔案路徑及診斷摘要。
 
-```
+Artifacts 的命名與用途參閱 [artifacts.md](artifacts.md)。
+
+```text
 [Validating] 正在驗證匯出參數...
 [LoadingSchema] 正在讀取資料庫結構描述...
 ...
