@@ -5,6 +5,7 @@ using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
+using CloudyWing.SpreadsheetExporter;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 
@@ -16,6 +17,11 @@ public sealed class CliRunnerTests {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+
+    [OneTimeSetUp]
+    public void OneTimeSetUp() {
+        SpreadsheetExporterBootstrapper.Configure();
+    }
 
     [Test]
     public async Task RunAsync_WhenHelpIsRequested_ReturnsSuccessCode() {
@@ -51,6 +57,95 @@ public sealed class CliRunnerTests {
     }
 
     [Test]
+    public async Task RunAsync_WhenExportArtifactsAreRequested_WritesWorkbookAndArtifacts() {
+        string temporaryDirectory = CreateTemporaryDirectory();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        SchemaConnection connection = new() {
+            Name = "Primary",
+            DatabaseType = DatabaseType.SqlServer,
+            ConnectionString = "Server=.;Database=Inline;"
+        };
+        DatabaseSchemaExport schemaExport = CreateSchemaExport();
+        SetupProviderFactory(providerFactory, connection, schemaExport);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        string outputDirectory = Path.Combine(temporaryDirectory, "exports");
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(temporaryDirectory, connection)));
+        CliRunner sut = CreateRunner(settingsService, providerFactory);
+
+        try {
+            int result = await RunWithConsoleCaptureAsync(sut, [
+                "export",
+                "--connection",
+                connection.Name,
+                "--output",
+                outputDirectory,
+                "--manifest",
+                "--json-sidecar",
+                "--markdown-sidecar",
+                "--schema-summary",
+                "--snapshot",
+                "--no-timestamp",
+                "--no-open-output-folder"
+            ]);
+
+            string workbookPath = Path.Combine(
+                outputDirectory,
+                $"TableSchema_{connection.Name}{SpreadsheetManager.CreateDocument().FileNameExtension}"
+            );
+            string manifestPath = Path.Combine(outputDirectory, "TableSchema_Primary.manifest.json");
+            string jsonSidecarPath = Path.Combine(outputDirectory, "TableSchema_Primary.schema.json");
+            string markdownSidecarPath = Path.Combine(outputDirectory, "TableSchema_Primary.schema.md");
+            string schemaSummaryPath = Path.Combine(outputDirectory, "TableSchema_Primary.schema-summary.md");
+            string snapshotPath = Path.Combine(outputDirectory, "TableSchema_Primary.snapshot.json");
+
+            Assert.That(result, Is.EqualTo((int)CliExitCode.Success));
+            using (Assert.EnterMultipleScope()) {
+                Assert.That(File.Exists(workbookPath), Is.True);
+                Assert.That(File.Exists(manifestPath), Is.True);
+                Assert.That(File.Exists(jsonSidecarPath), Is.True);
+                Assert.That(File.Exists(markdownSidecarPath), Is.True);
+                Assert.That(File.Exists(schemaSummaryPath), Is.True);
+                Assert.That(File.Exists(snapshotPath), Is.True);
+            }
+
+            using JsonDocument manifestDocument = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
+            using JsonDocument jsonSidecarDocument = JsonDocument.Parse(await File.ReadAllTextAsync(jsonSidecarPath));
+            using JsonDocument snapshotDocument = JsonDocument.Parse(await File.ReadAllTextAsync(snapshotPath));
+            JsonElement manifestResultOptions = manifestDocument.RootElement.GetProperty("resultOptions");
+            JsonElement jsonSidecarRoot = jsonSidecarDocument.RootElement;
+            JsonElement snapshotCounts = snapshotDocument.RootElement.GetProperty("counts");
+            string markdownSidecar = await File.ReadAllTextAsync(markdownSidecarPath);
+            string schemaSummary = await File.ReadAllTextAsync(schemaSummaryPath);
+            using (Assert.EnterMultipleScope()) {
+                Assert.That(manifestResultOptions.GetProperty("useTimestamp").GetBoolean(), Is.False);
+                Assert.That(manifestResultOptions.GetProperty("openOutputFolder").GetBoolean(), Is.False);
+                Assert.That(manifestResultOptions.GetProperty("generateManifest").GetBoolean(), Is.True);
+                Assert.That(manifestResultOptions.GetProperty("generateJsonSidecar").GetBoolean(), Is.True);
+                Assert.That(manifestResultOptions.GetProperty("generateSchemaSnapshot").GetBoolean(), Is.True);
+                Assert.That(jsonSidecarRoot.TryGetProperty("snapshot", out _), Is.True);
+                Assert.That(jsonSidecarRoot.GetProperty("diff").ValueKind, Is.EqualTo(JsonValueKind.Null));
+                Assert.That(snapshotCounts.GetProperty("columns").GetInt32(), Is.EqualTo(2));
+                Assert.That(markdownSidecar, Does.Contain("# Schema Export"));
+                Assert.That(schemaSummary, Does.Contain("# Schema Summary"));
+            }
+
+            await providerFactory.Received(1).LoadObjectsAsync(
+                connection.DatabaseType,
+                connection.ConnectionString,
+                Arg.Any<CancellationToken>()
+            );
+            await providerFactory.Received(1).LoadDetailsAsync(
+                connection.DatabaseType,
+                connection.ConnectionString,
+                Arg.Any<IReadOnlyList<DatabaseObjectSchema>>(),
+                Arg.Any<CancellationToken>()
+            );
+        } finally {
+            DeleteDirectory(temporaryDirectory);
+        }
+    }
+
+    [Test]
     [NonParallelizable]
     public async Task RunAsync_WhenDiffJsonOutputIsRequestedWithRelativePaths_WritesJsonArtifact() {
         string temporaryDirectory = CreateTemporaryDirectory();
@@ -79,10 +174,12 @@ public sealed class CliRunnerTests {
             Assert.That(File.Exists(outputPath), Is.True);
             string json = await File.ReadAllTextAsync(outputPath);
             using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement summary = document.RootElement.GetProperty("summary");
+            JsonElement firstColumnChange = document.RootElement.GetProperty("columnChanges")[0];
             using (Assert.EnterMultipleScope()) {
                 Assert.That(document.RootElement.TryGetProperty("Summary", out _), Is.False);
-                Assert.That(document.RootElement.GetProperty("summary").GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
-                Assert.That(document.RootElement.GetProperty("columnChanges")[0].GetProperty("changeType").GetString(), Is.EqualTo("Added"));
+                Assert.That(summary.GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
+                Assert.That(firstColumnChange.GetProperty("changeType").GetString(), Is.EqualTo("Added"));
             }
         } finally {
             Environment.CurrentDirectory = previousCurrentDirectory;
@@ -139,9 +236,12 @@ public sealed class CliRunnerTests {
         Assert.That(result, Is.EqualTo((int)CliExitCode.UnexpectedError));
     }
 
-    private static CliRunner CreateRunner(ISettingsService? settingsService = null) {
+    private static CliRunner CreateRunner(
+        ISettingsService? settingsService = null,
+        IDatabaseSchemaProviderFactory? providerFactory = null
+    ) {
         SchemaExportOrchestrator exportOrchestrator = new(
-            Substitute.For<IDatabaseSchemaProviderFactory>(),
+            providerFactory ?? Substitute.For<IDatabaseSchemaProviderFactory>(),
             Substitute.For<ILogger<SchemaExportOrchestrator>>(),
             new SchemaSnapshotBuilder(),
             new SchemaSnapshotDiffService()
@@ -185,6 +285,108 @@ public sealed class CliRunnerTests {
         if (Directory.Exists(path)) {
             Directory.Delete(path, recursive: true);
         }
+    }
+
+    private static void SetupProviderFactory(
+        IDatabaseSchemaProviderFactory providerFactory,
+        SchemaConnection connection,
+        DatabaseSchemaExport schemaExport
+    ) {
+        providerFactory.LoadObjectsAsync(
+            connection.DatabaseType,
+            connection.ConnectionString,
+            Arg.Any<CancellationToken>()
+        )
+            .Returns(Task.FromResult(schemaExport.Objects));
+
+        providerFactory.LoadDetailsAsync(
+            connection.DatabaseType,
+            connection.ConnectionString,
+            Arg.Any<IReadOnlyList<DatabaseObjectSchema>>(),
+            Arg.Any<CancellationToken>()
+        ).Returns(Task.FromResult(new DatabaseSchemaDetails {
+            Columns = schemaExport.Columns,
+            Indexes = schemaExport.Indexes,
+            Routines = schemaExport.Routines
+        }));
+    }
+
+    private static SchemaOptions CreateSchemaOptions(string exportPath, SchemaConnection connection) {
+        return new SchemaOptions {
+            ExportPath = exportPath,
+            Connections = [connection],
+            ExportProfiles = [
+                new ExportProfile {
+                    Name = "Default"
+                }
+            ],
+            ExportResultOptions = new ExportResultOptions {
+                UseTimestamp = true,
+                OpenOutputFolder = true
+            }
+        };
+    }
+
+    private static DatabaseSchemaExport CreateSchemaExport() {
+        return new DatabaseSchemaExport {
+            Objects = [
+                new DatabaseObjectSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    ObjectDescription = "User table"
+                }
+            ],
+            Columns = [
+                new DatabaseColumnSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    ColumnName = "Id",
+                    ColumnType = "int",
+                    IsNullable = "NO",
+                    IsPrimaryKey = "YES",
+                    IsIdentity = "YES",
+                    ColumnOrder = 1
+                },
+                new DatabaseColumnSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    ColumnName = "Name",
+                    ColumnType = "nvarchar(128)",
+                    IsNullable = "NO",
+                    ColumnDefault = "('unknown')",
+                    IsPrimaryKey = "NO",
+                    IsIdentity = "NO",
+                    ColumnDescription = "Display name",
+                    ColumnOrder = 2
+                }
+            ],
+            Indexes = [
+                new DatabaseIndexSchema {
+                    SchemaName = "dbo",
+                    ObjectName = "Users",
+                    ObjectType = "TABLE",
+                    IndexName = "PK_Users",
+                    IsPrimaryKey = "YES",
+                    IsClustered = "YES",
+                    IsUnique = "YES",
+                    IsForeignKey = "NO",
+                    Columns = "Id"
+                }
+            ],
+            Routines = [
+                new DatabaseRoutineSchema {
+                    SchemaName = "dbo",
+                    RoutineName = "usp_GetUsers",
+                    RoutineType = "PROCEDURE",
+                    ParameterSignature = "@IsActive bit",
+                    RoutineDescription = "Returns users",
+                    RoutineDefinition = "SELECT [Id], [Name] FROM [dbo].[Users];"
+                }
+            ]
+        };
     }
 
     private static async Task WriteSnapshotAsync(string path, bool includeNameColumn) {
