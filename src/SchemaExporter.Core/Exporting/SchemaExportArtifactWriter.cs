@@ -276,7 +276,7 @@ internal static class SchemaExportArtifactWriter {
         string errorMessagePrefix
     ) {
         try {
-            string json = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(document, SchemaArtifactJsonSerializerOptions.Default);
             await File.WriteAllTextAsync(filePath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {
             throw new ExportOutputException($"{errorMessagePrefix}{filePath}", ex);
@@ -340,7 +340,7 @@ internal static class SchemaExportArtifactWriter {
         };
 
         try {
-            string json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(manifest, SchemaArtifactJsonSerializerOptions.Default);
             await File.WriteAllTextAsync(manifestPath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
             return manifestPath;
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or PathTooLongException) {

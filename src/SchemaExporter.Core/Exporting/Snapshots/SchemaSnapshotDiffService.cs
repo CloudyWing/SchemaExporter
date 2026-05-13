@@ -9,10 +9,7 @@ namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 /// 提供結構描述快照的可重用載入、比較與格式化支援。
 /// </summary>
 public sealed class SchemaSnapshotDiffService {
-    private static readonly JsonSerializerOptions JsonOptions = new() {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = SchemaArtifactJsonSerializerOptions.Default;
 
     /// <summary>
     /// 從磁碟載入結構描述快照文件。
@@ -392,10 +389,6 @@ public sealed class SchemaSnapshotDiffService {
         }
 
         string trimmedPath = path.Trim();
-        if (!Path.IsPathFullyQualified(trimmedPath)) {
-            throw new ExportValidationException($"快照檔必須使用絕對路徑：{trimmedPath}");
-        }
-
         string normalizedPath;
         try {
             normalizedPath = Path.GetFullPath(trimmedPath);

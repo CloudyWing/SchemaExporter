@@ -56,6 +56,32 @@ public sealed class SchemaSnapshotDiffServiceTests {
     }
 
     [Test]
+    [NonParallelizable]
+    public async Task CompareAsync_WhenSnapshotPathsAreRelative_ResolvesFromCurrentDirectory() {
+        using TempDirectoryScope directory = new();
+        SchemaSnapshotDiffService sut = new();
+        string previousCurrentDirectory = Environment.CurrentDirectory;
+        string leftSnapshotFileName = "left.snapshot.json";
+        string rightSnapshotFileName = "right.snapshot.json";
+        await SchemaTestData.WriteSnapshotAsync(Path.Combine(directory.Path, leftSnapshotFileName), includeNameColumn: false);
+        await SchemaTestData.WriteSnapshotAsync(Path.Combine(directory.Path, rightSnapshotFileName), includeNameColumn: true);
+
+        try {
+            Environment.CurrentDirectory = directory.Path;
+
+            SchemaDiffDocument diff = await sut.CompareAsync(leftSnapshotFileName, rightSnapshotFileName);
+
+            using (Assert.EnterMultipleScope()) {
+                Assert.That(diff.Summary.AddedColumns, Is.EqualTo(1));
+                Assert.That(diff.LeftSnapshotPath, Is.EqualTo(Path.Combine(directory.Path, leftSnapshotFileName)));
+                Assert.That(diff.RightSnapshotPath, Is.EqualTo(Path.Combine(directory.Path, rightSnapshotFileName)));
+            }
+        } finally {
+            Environment.CurrentDirectory = previousCurrentDirectory;
+        }
+    }
+
+    [Test]
     public async Task WriteJsonAsync_WhenDiffIsProvided_WritesSerializableJsonFile() {
         using TempDirectoryScope directory = new();
         SchemaSnapshotDiffService sut = new();
@@ -72,7 +98,11 @@ public sealed class SchemaSnapshotDiffServiceTests {
 
         using JsonDocument document = JsonDocument.Parse(json);
         Assert.That(File.Exists(outputPath), Is.True);
-        Assert.That(document.RootElement.GetProperty("Summary").GetProperty("AddedColumns").GetInt32(), Is.EqualTo(1));
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(document.RootElement.TryGetProperty("Summary", out _), Is.False);
+            Assert.That(document.RootElement.GetProperty("summary").GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
+            Assert.That(document.RootElement.GetProperty("columnChanges")[0].GetProperty("changeType").GetString(), Is.EqualTo("Added"));
+        }
     }
 }
 

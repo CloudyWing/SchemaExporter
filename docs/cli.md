@@ -99,6 +99,8 @@ schemaexporter export --connection prod --no-timestamp
 
 比對兩份 schema snapshot 檔案並輸出差異報告，不需要連線資料庫。
 
+Snapshot 路徑可使用絕對路徑或相對路徑；相對路徑會依目前工作目錄解析。
+
 ```bash
 schemaexporter diff --left <path> --right <path> [options]
 ```

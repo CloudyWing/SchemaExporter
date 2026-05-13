@@ -29,6 +29,8 @@ Diff 可在匯出時自動產生（指定基準 snapshot），也可以單獨使
 schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json
 ```
 
+`diff` 命令的 snapshot 路徑可使用絕對路徑或相對路徑；相對路徑會依目前工作目錄解析。
+
 ## 輸出格式
 
 Diff 支援兩種輸出格式：
@@ -38,7 +40,7 @@ Diff 支援兩種輸出格式：
 
 ## 檔案命名（匯出時自動產生）
 
-與主要 Excel 輸出檔案同名，後綴為 `.diff.json` 或 `.diff.md`。
+與主要 Excel 輸出檔案同名，後綴為 `.diff.json`。
 
 ## JSON 結構
 

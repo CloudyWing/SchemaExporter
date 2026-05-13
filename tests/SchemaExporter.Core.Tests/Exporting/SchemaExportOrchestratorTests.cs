@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
@@ -168,13 +169,27 @@ public sealed class SchemaExportOrchestratorTests {
         string diffJson = await File.ReadAllTextAsync(diffFilePath);
         string markdownSidecar = await File.ReadAllTextAsync(markdownSidecarFilePath);
         string schemaSummary = await File.ReadAllTextAsync(schemaSummaryFilePath);
+        using JsonDocument manifestDocument = JsonDocument.Parse(await File.ReadAllTextAsync(manifestFilePath));
+        using JsonDocument jsonSidecarDocument = JsonDocument.Parse(await File.ReadAllTextAsync(jsonSidecarFilePath));
+        using JsonDocument snapshotDocument = JsonDocument.Parse(await File.ReadAllTextAsync(snapshotFilePath));
+        using JsonDocument diffDocument = JsonDocument.Parse(diffJson);
 
-        Assert.That(diffJson, Does.Contain("\"AddedColumns\": 1"));
-        Assert.That(diffJson, Does.Contain("\"ModifiedObjects\": 1"));
-        Assert.That(markdownSidecar, Does.Contain("## Snapshot Diff"));
-        Assert.That(markdownSidecar, Does.Contain("dbo.Users (TABLE)"));
-        Assert.That(schemaSummary, Does.Contain("# Schema Summary"));
-        Assert.That(schemaSummary, Does.Contain("routine signatures"));
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(manifestDocument.RootElement.TryGetProperty("resultOptions", out JsonElement manifestResultOptions), Is.True);
+            Assert.That(manifestDocument.RootElement.TryGetProperty("ResultOptions", out _), Is.False);
+            Assert.That(manifestResultOptions.GetProperty("generateSchemaSummary").GetBoolean(), Is.True);
+            Assert.That(jsonSidecarDocument.RootElement.TryGetProperty("snapshot", out _), Is.True);
+            Assert.That(jsonSidecarDocument.RootElement.TryGetProperty("diff", out _), Is.True);
+            Assert.That(snapshotDocument.RootElement.TryGetProperty("schemaVersion", out _), Is.True);
+            Assert.That(diffDocument.RootElement.GetProperty("summary").GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
+            Assert.That(diffDocument.RootElement.GetProperty("summary").GetProperty("modifiedObjects").GetInt32(), Is.EqualTo(1));
+            Assert.That(diffDocument.RootElement.GetProperty("columnChanges")[0].GetProperty("changeType").GetString(), Is.EqualTo("Added"));
+            Assert.That(markdownSidecar, Does.Contain("## Snapshot Diff"));
+            Assert.That(markdownSidecar, Does.Contain("dbo.Users (TABLE)"));
+            Assert.That(schemaSummary, Does.Contain("# Schema Summary"));
+            Assert.That(schemaSummary, Does.Contain("routine signatures"));
+        }
+
         await providerFactory.Received(1).LoadObjectsAsync(
             connection.DatabaseType,
             connection.ConnectionString,
