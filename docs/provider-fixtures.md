@@ -8,7 +8,7 @@ Provider fixture 資料庫提供可重現的 schema metadata，供 SQL Server pr
 
 ## SQL Server fixture
 
-SQL Server fixture 使用 Docker Compose 啟動 SQL Server 2022 container，並套用 `tests/SchemaExporter.ProviderFixtures/sqlserver/schema.sql`。
+SQL Server fixture 使用 Docker Compose 啟動 SQL Server 2025 container，並套用 `tests/SchemaExporter.ProviderFixtures/sqlserver/schema.sql`。
 
 Fixture 會建立以下資料庫：
 

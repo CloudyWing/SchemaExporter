@@ -2,7 +2,7 @@ name: schemaexporter-provider-fixtures
 
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-CU23-ubuntu-22.04
+    image: mcr.microsoft.com/mssql/server:2025-CU4-GDR1-ubuntu-24.04
     container_name: schemaexporter-sqlserver
     environment:
       ACCEPT_EULA: "Y"
@@ -18,7 +18,7 @@ services:
       start_period: 20s
 
   sqlserver-init:
-    image: mcr.microsoft.com/mssql/server:2022-CU23-ubuntu-22.04
+    image: mcr.microsoft.com/mssql/server:2025-CU4-GDR1-ubuntu-24.04
     depends_on:
       sqlserver:
         condition: service_healthy
