@@ -12,7 +12,8 @@
     "LastSelectedConnectionName": "...",
     "ExportProfiles": [ ... ],
     "LastSelectedProfileName": "...",
-    "ExportResultOptions": { ... }
+    "ExportResultOptions": { ... },
+    "Redaction": { ... }
   }
 }
 ```

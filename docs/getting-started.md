@@ -2,7 +2,7 @@
 
 ## 前置需求
 
-- .NET 10.0 Runtime 或以上
+- .NET 10.0 SDK 或以上
 - 支援的資料庫：Microsoft SQL Server、Oracle Database
 - （WPF 版）Windows 10 或以上
 

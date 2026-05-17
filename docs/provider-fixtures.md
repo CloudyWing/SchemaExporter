@@ -33,14 +33,18 @@ $env:SCHEMAEXPORTER_SQLSERVER_PASSWORD = Read-Host "SQL Server fixture password"
 啟動 SQL Server container 並套用 schema：
 
 ```powershell
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver sqlserver-init
+docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver
+docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up --force-recreate sqlserver-init
 ```
+
+第二個指令會以前景執行 init container，方便直接確認 schema 套用是否成功。
 
 若本機 `11433` port 已被使用，可改用其他 port：
 
 ```powershell
 $env:SCHEMAEXPORTER_SQLSERVER_PORT = "21433"
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver sqlserver-init
+docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver
+docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up --force-recreate sqlserver-init
 ```
 
 ## 執行 provider integration tests

@@ -25,6 +25,7 @@
 ## 文件
 
 - [快速入門](docs/getting-started.md)
+- [技術棧說明](docs/tech-stack.md)
 - [設定檔說明](docs/configuration.md)
 - [WPF 版操作說明](docs/wpf.md)
 - [CLI 版操作說明](docs/cli.md)
@@ -44,6 +45,8 @@
 dotnet build .\SchemaExporter.slnx -v minimal
 dotnet test .\SchemaExporter.slnx -v minimal --no-build
 ```
+
+一般測試不需要資料庫 fixture。若要驗證 SQL Server provider 對實體資料庫的查詢行為，請先依 [Provider Fixture 資料庫](docs/provider-fixtures.md) 啟動 SQL Server fixture，再設定測試連線字串執行 provider integration tests。
 
 ## 授權
 
