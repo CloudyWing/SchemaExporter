@@ -40,13 +40,13 @@
 
 部分診斷會附帶支援層級，說明目前連線資料庫對該功能的支援程度：
 
-各 provider 的完整支援範圍參閱 [provider-capabilities.md](provider-capabilities.md)。
-
 | 值 | 顯示文字 | 說明 |
 | --- | --- | --- |
 | `Full` | 完整支援 | 此功能在目前資料庫上完整可用。 |
 | `Partial` | 部分支援 | 此功能在目前資料庫上有限制，輸出結果可能不完整。 |
 | `Unsupported` | 不支援 | 此功能在目前資料庫上不支援，相關資料不會出現在輸出中。 |
+
+各 provider 的完整支援範圍參閱 [provider-capabilities.md](provider-capabilities.md)。
 
 ---
 

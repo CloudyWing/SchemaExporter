@@ -31,7 +31,7 @@ dotnet build .\SchemaExporter.slnx -v minimal
 
 ## 使用 CLI 版
 
-```bash
+```powershell
 # 匯出
 schemaexporter export --connection Key1
 

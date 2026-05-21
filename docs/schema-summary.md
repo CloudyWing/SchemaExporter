@@ -50,4 +50,4 @@ TableSchema_prod_20241201_120000.schema-summary.md
 
 - 將資料庫結構提供給 Agent 作為需求分析或程式碼審查背景。
 - 在 CI 中保存可讀的 schema 摘要，供後續流程比對與查閱。
-- 與 `schema snapshot` 搭配使用，保留機器可讀 JSON 與人類可讀 Markdown 兩種輸出。
+- 與 Schema Snapshot 搭配使用，保留機器可讀 JSON 與人類可讀 Markdown 兩種輸出。

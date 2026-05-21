@@ -119,7 +119,7 @@ schemaexporter diff --left <path> --right <path> [options]
 | 參數 | 說明 |
 | --- | --- |
 | `--output <path>` | 將差異報告寫入指定路徑。省略時直接輸出 Markdown 至 stdout。 |
-| `--format <json\|markdown>` | 指定輸出格式。省略時依副檔名自動判斷（`.md` 為 Markdown，其餘為 JSON）。 |
+| `--format <json 或 markdown>` | 指定輸出格式。省略時依副檔名自動判斷（`.md` 為 Markdown，其餘為 JSON）。 |
 | `--help` / `-h` / `/?` | 顯示說明文字。 |
 
 ### 結束代碼

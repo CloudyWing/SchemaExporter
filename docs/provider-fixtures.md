@@ -2,13 +2,18 @@
 
 ## 目的
 
-Provider fixture 資料庫提供可重現的 schema metadata，供 SQL Server provider integration tests 驗證實際資料庫查詢行為。
+Provider fixture 資料庫提供可重現的 schema metadata，供 provider integration tests 驗證實際資料庫查詢行為。
 
-目前固定支援 SQL Server fixture。Oracle fixture SQL 保留在 repository 中，但尚未接入 Docker Compose。
+Integration tests 位於 `tests/SchemaExporter.Core.IntegrationTests`，透過 [Testcontainers](tech-stack.md#testcontainers) 自動啟動資料庫 container，並套用 `tests/SchemaExporter.ProviderFixtures` 下的 schema scripts。測試不需要手動設定連線字串環境變數。
 
-## SQL Server fixture
+## 前置條件
 
-SQL Server fixture 使用 Docker Compose 啟動 SQL Server 2025 container，並套用 `tests/SchemaExporter.ProviderFixtures/sqlserver/schema.sql`。
+- Docker Desktop 或其他 Docker API 相容的 container runtime。
+- 第一次執行時需能從 registry 拉取測試映像檔。
+
+## Fixture 內容
+
+SQL Server fixture 使用 `mcr.microsoft.com/mssql/server:2025-CU4-GDR1-ubuntu-24.04`，並套用 `tests/SchemaExporter.ProviderFixtures/sqlserver/schema.sql`。
 
 Fixture 會建立以下資料庫：
 
@@ -22,69 +27,45 @@ Fixture schema 會建立以下測試物件：
 - `dbo.usp_SE_GetCustomers`
 - `dbo.ufn_SE_CustomerDisplayName`
 
-## 啟動方式
+Oracle fixture 使用 `gvenzl/oracle-xe:21.3.0-slim-faststart`，並套用 `tests/SchemaExporter.ProviderFixtures/oracle/schema.sql`。
 
-先設定本機測試密碼。此密碼只用於本機 fixture，不應作為正式環境密碼，且需符合 SQL Server 密碼複雜度規則。
+Oracle fixture schema 會建立以下測試物件：
 
-```powershell
-$env:SCHEMAEXPORTER_SQLSERVER_PASSWORD = Read-Host "SQL Server fixture password"
-```
+- `SE_CUSTOMERS`
+- `SE_ORDERS`
+- `SE_ACTIVE_CUSTOMERS`
+- `SE_GET_CUSTOMERS`
+- `SE_CUSTOMER_DISPLAY_NAME`
+- `SE_CUSTOMER_PACKAGE`
 
-啟動 SQL Server container 並套用 schema：
+## 執行方式
 
-```powershell
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up --force-recreate sqlserver-init
-```
-
-第二個指令會以前景執行 init container，方便直接確認 schema 套用是否成功。
-
-若本機 `11433` port 已被使用，可改用其他 port：
-
-```powershell
-$env:SCHEMAEXPORTER_SQLSERVER_PORT = "21433"
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up -d sqlserver
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up --force-recreate sqlserver-init
-```
-
-## 執行 provider integration tests
-
-設定測試連線字串：
-
-```powershell
-$env:SCHEMAEXPORTER_SQLSERVER_TEST_CONNECTION = "Server=localhost,11433;Database=SchemaExporterFixture;User Id=sa;Password=$env:SCHEMAEXPORTER_SQLSERVER_PASSWORD;Encrypt=True;TrustServerCertificate=True"
-```
-
-若使用自訂 port，連線字串需同步調整。
-
-只執行 provider integration tests：
-
-```powershell
-dotnet test .\tests\SchemaExporter.Core.Tests\SchemaExporter.Core.Tests.csproj --filter "FullyQualifiedName~ProviderIntegrationTests" -v minimal
-```
-
-執行完整測試：
+執行一般測試時，provider integration tests 會因 `[Explicit]` 保持 skipped，不會啟動 container：
 
 ```powershell
 dotnet test .\SchemaExporter.slnx -v minimal
 ```
 
-若未設定 `SCHEMAEXPORTER_SQLSERVER_TEST_CONNECTION`，SQL Server provider integration test 會標示為 skipped，不影響一般測試。
-
-## 重建 fixture
-
-重新套用 schema：
+執行全部 provider integration tests：
 
 ```powershell
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml up --force-recreate sqlserver-init
+dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.IntegrationTests.csproj --filter "TestCategory=Integration" -v minimal
 ```
 
-停止並移除 fixture container：
+只執行 SQL Server provider integration tests：
 
 ```powershell
-docker compose -f .\tests\SchemaExporter.ProviderFixtures\compose.yml down
+dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.IntegrationTests.csproj --filter "TestCategory=SqlServer" -v minimal
 ```
 
-## Oracle fixture 狀態
+只執行 Oracle provider integration tests：
 
-Oracle fixture SQL 位於 `tests/SchemaExporter.ProviderFixtures/oracle/schema.sql`。目前 Oracle provider integration test 仍透過 `SCHEMAEXPORTER_ORACLE_TEST_CONNECTION` 連接既有測試資料庫，不由 Compose 啟動。
+```powershell
+dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.IntegrationTests.csproj --filter "TestCategory=Oracle" -v minimal
+```
+
+## 生命週期
+
+Testcontainers 會為每次測試建立暫時性 container，測試結束後自動移除。SQL Server fixture 會使用隨機 host port，避免與本機既有 SQL Server 或其他測試執行互相衝突。
+
+Oracle fixture image 較大，首次執行時間主要取決於 Docker registry 下載速度與本機資源。

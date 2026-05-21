@@ -27,6 +27,6 @@ SchemaExporter 的主要輸出是 Excel 活頁簿，其餘檔案稱為 artifacts
 - `Schema Summary` 是目前的 AI context Markdown 輸出；既有設定檔中的 `GenerateAiContext` 會在讀取時轉為 `GenerateSchemaSummary`。
 - `Markdown sidecar` 保留給完整人工閱讀輸出，不承擔 AI context 的精簡責任。
 
-## 自動與單獨產生
+## 產生方式
 
 匯出命令會依 `ExportResultOptions` 或 CLI 參數產生 artifacts。`schemaexporter diff` 命令也可以不連線資料庫，直接用兩份 snapshot 單獨產生 JSON 或 Markdown diff 報告。
