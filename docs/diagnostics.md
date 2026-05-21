@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | `Info` | 資訊 | 一般提示，不影響輸出結果。 |
 | `Warning` | 警告 | 匯出結果可能不完整，建議確認。 |
+| `Error` | 錯誤 | 已知問題或無法完成的項目。流程是否中止由對應例外與 CLI exit code 決定。 |
 
 ---
 
@@ -31,6 +32,7 @@
 | `Configuration` | 設定 | 與 `appsettings.json` 設定相關，如設定值無效或缺少必要設定。 |
 | `RoutineSupport` | 程序支援 | 關於特定資料庫對預存程序或函數的支援狀況。 |
 | `Execution` | 執行 | 匯出執行過程中發生的狀況，如特定物件讀取異常。 |
+| `Redaction` | Redaction | 敏感 metadata 遮罩已套用的資訊。 |
 
 ---
 
@@ -43,6 +45,8 @@
 | `Full` | 完整支援 | 此功能在目前資料庫上完整可用。 |
 | `Partial` | 部分支援 | 此功能在目前資料庫上有限制，輸出結果可能不完整。 |
 | `Unsupported` | 不支援 | 此功能在目前資料庫上不支援，相關資料不會出現在輸出中。 |
+
+各 provider 的完整支援範圍參閱 [provider-capabilities.md](provider-capabilities.md)。
 
 ---
 

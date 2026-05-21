@@ -9,10 +9,7 @@ namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 /// 提供結構描述快照的可重用載入、比較與格式化支援。
 /// </summary>
 public sealed class SchemaSnapshotDiffService {
-    private static readonly JsonSerializerOptions JsonOptions = new() {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    private static readonly JsonSerializerOptions JsonOptions = SchemaArtifactJsonSerializerOptions.Default;
 
     /// <summary>
     /// 從磁碟載入結構描述快照文件。
@@ -56,6 +53,28 @@ public sealed class SchemaSnapshotDiffService {
         SchemaSnapshotDocument leftSnapshot = await LoadSnapshotAsync(normalizedLeftPath, cancellationToken).ConfigureAwait(false);
         SchemaSnapshotDocument rightSnapshot = await LoadSnapshotAsync(normalizedRightPath, cancellationToken).ConfigureAwait(false);
         return BuildDiff(leftSnapshot, rightSnapshot, normalizedLeftPath, normalizedRightPath);
+    }
+
+    /// <summary>
+    /// 比較兩份已載入的結構描述快照文件。
+    /// </summary>
+    /// <param name="leftSnapshot">基準快照文件。</param>
+    /// <param name="rightSnapshot">目前快照文件。</param>
+    /// <param name="leftSnapshotPath">基準快照來源路徑。</param>
+    /// <param name="rightSnapshotPath">目前快照來源路徑。</param>
+    /// <returns>計算完成的差異比對文件。</returns>
+    public SchemaDiffDocument Compare(
+        SchemaSnapshotDocument leftSnapshot,
+        SchemaSnapshotDocument rightSnapshot,
+        string leftSnapshotPath,
+        string rightSnapshotPath
+    ) {
+        ArgumentNullException.ThrowIfNull(leftSnapshot);
+        ArgumentNullException.ThrowIfNull(rightSnapshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(leftSnapshotPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rightSnapshotPath);
+
+        return BuildDiff(leftSnapshot, rightSnapshot, leftSnapshotPath, rightSnapshotPath);
     }
 
     /// <summary>
@@ -370,10 +389,6 @@ public sealed class SchemaSnapshotDiffService {
         }
 
         string trimmedPath = path.Trim();
-        if (!Path.IsPathFullyQualified(trimmedPath)) {
-            throw new ExportValidationException($"快照檔必須使用絕對路徑：{trimmedPath}");
-        }
-
         string normalizedPath;
         try {
             normalizedPath = Path.GetFullPath(trimmedPath);

@@ -41,6 +41,11 @@ public sealed class ExportResultOptions {
     public bool GenerateMarkdownSidecar { get; set; }
 
     /// <summary>
+    /// 取得或設定是否產生精簡 Schema Summary Markdown 檔案。
+    /// </summary>
+    public bool GenerateSchemaSummary { get; set; }
+
+    /// <summary>
     /// 取得或設定是否寫入可重複使用的結構描述快照 JSON 檔案。
     /// </summary>
     public bool GenerateSchemaSnapshot { get; set; }

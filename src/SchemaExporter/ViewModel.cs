@@ -18,6 +18,7 @@ namespace CloudyWing.SchemaExporter;
 public partial class ViewModel : ObservableObject {
     private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
+    private readonly SchemaExportRequestResolver requestResolver;
     private SchemaOptions schemaOptions = new() { ExportPath = "" };
     private CancellationTokenSource? currentExportCancellation;
 
@@ -97,6 +98,12 @@ public partial class ViewModel : ObservableObject {
     public partial bool GenerateMarkdownSidecar { get; set; }
 
     /// <summary>
+    /// 取得或設定是否產生 Schema Summary 檔案。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool GenerateSchemaSummary { get; set; }
+
+    /// <summary>
     /// 取得或設定是否產生 schema snapshot 檔案。
     /// </summary>
     [ObservableProperty]
@@ -148,12 +155,15 @@ public partial class ViewModel : ObservableObject {
     /// <param name="exportOrchestrator">匯出流程協調器。</param>
     internal ViewModel(
         ISettingsService settingsService,
-        SchemaExportOrchestrator exportOrchestrator
+        SchemaExportOrchestrator exportOrchestrator,
+        SchemaExportRequestResolver requestResolver
     ) {
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(exportOrchestrator);
+        ArgumentNullException.ThrowIfNull(requestResolver);
         this.settingsService = settingsService;
         this.exportOrchestrator = exportOrchestrator;
+        this.requestResolver = requestResolver;
     }
 
     /// <summary>
@@ -185,6 +195,7 @@ public partial class ViewModel : ObservableObject {
         GenerateManifest = schemaOptions.ExportResultOptions.GenerateManifest;
         GenerateJsonSidecar = schemaOptions.ExportResultOptions.GenerateJsonSidecar;
         GenerateMarkdownSidecar = schemaOptions.ExportResultOptions.GenerateMarkdownSidecar;
+        GenerateSchemaSummary = schemaOptions.ExportResultOptions.GenerateSchemaSummary;
         GenerateSchemaSnapshot = schemaOptions.ExportResultOptions.GenerateSchemaSnapshot;
         DiffSourceSnapshotPath = null;
         UseTimestamp = schemaOptions.ExportResultOptions.UseTimestamp;
@@ -211,6 +222,7 @@ public partial class ViewModel : ObservableObject {
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateSchemaSummary = GenerateSchemaSummary,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = null
             },
@@ -260,25 +272,27 @@ public partial class ViewModel : ObservableObject {
         try {
             Progress<ExportProgress> progress = new(UpdateProgress);
 
-            ExportResultOptions resultOptions = new() {
-                UseTimestamp = UseTimestamp,
-                TimestampFormat = schemaOptions.ExportResultOptions.TimestampFormat,
-                OverwriteStrategy = schemaOptions.ExportResultOptions.OverwriteStrategy,
+            ExportOptionOverrides overrides = new() {
+                OutputPath = OutputPath,
                 OpenOutputFolder = AutoOpenOutputFolder,
                 GenerateManifest = GenerateManifest,
                 GenerateJsonSidecar = GenerateJsonSidecar,
                 GenerateMarkdownSidecar = GenerateMarkdownSidecar,
+                GenerateSchemaSummary = GenerateSchemaSummary,
                 GenerateSchemaSnapshot = GenerateSchemaSnapshot,
-                DiffSourceSnapshotPath = string.IsNullOrWhiteSpace(DiffSourceSnapshotPath)
-                    ? null
-                    : DiffSourceSnapshotPath
+                UseTimestamp = UseTimestamp,
+                DiffSourceSnapshotPath = DiffSourceSnapshotPath,
+                OverrideDiffSourceSnapshotPath = true
             };
+            SchemaExportRequest request = requestResolver.Resolve(
+                schemaOptions,
+                Connection.Name,
+                SelectedProfile.Name,
+                overrides
+            );
 
             ExportResult result = await exportOrchestrator.ExportAsync(
-                Connection,
-                OutputPath,
-                SelectedProfile,
-                resultOptions,
+                request,
                 progress,
                 currentExportCancellation.Token
             );
@@ -464,6 +478,12 @@ public partial class ViewModel : ObservableObject {
             messageBuilder.AppendLine();
             messageBuilder.AppendLine("Markdown Sidecar：");
             messageBuilder.AppendLine(result.MarkdownSidecarFilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.SchemaSummaryFilePath)) {
+            messageBuilder.AppendLine();
+            messageBuilder.AppendLine("Schema Summary：");
+            messageBuilder.AppendLine(result.SchemaSummaryFilePath);
         }
 
         if (!string.IsNullOrWhiteSpace(result.SnapshotFilePath)) {

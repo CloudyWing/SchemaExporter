@@ -1,4 +1,5 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
 using Microsoft.Extensions.Logging;
@@ -13,9 +14,11 @@ public sealed class ViewModelTests {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         SchemaExportOrchestrator exportOrchestrator = new(
             Substitute.For<IDatabaseSchemaProviderFactory>(),
-            Substitute.For<ILogger<SchemaExportOrchestrator>>()
+            Substitute.For<ILogger<SchemaExportOrchestrator>>(),
+            new SchemaSnapshotBuilder(),
+            new SchemaSnapshotDiffService()
         );
-        ViewModel sut = new(settingsService, exportOrchestrator);
+        ViewModel sut = new(settingsService, exportOrchestrator, new SchemaExportRequestResolver());
 
         Assert.That(sut, Is.Not.Null);
     }

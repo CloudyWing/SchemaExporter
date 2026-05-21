@@ -1,5 +1,6 @@
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,7 @@ public sealed class ViewModelSettingsBehaviorTests {
                 GenerateManifest = false,
                 GenerateJsonSidecar = false,
                 GenerateMarkdownSidecar = true,
+                GenerateSchemaSummary = false,
                 GenerateSchemaSnapshot = false,
                 DiffSourceSnapshotPath = @"C:\baseline.snapshot.json"
             }
@@ -41,6 +43,7 @@ public sealed class ViewModelSettingsBehaviorTests {
         sut.GenerateManifest = true;
         sut.GenerateJsonSidecar = true;
         sut.GenerateMarkdownSidecar = false;
+        sut.GenerateSchemaSummary = true;
         sut.GenerateSchemaSnapshot = true;
         sut.UseTimestamp = true;
         sut.AutoOpenOutputFolder = true;
@@ -59,6 +62,7 @@ public sealed class ViewModelSettingsBehaviorTests {
             Assert.That(savedOptions.ExportResultOptions.GenerateManifest, Is.True);
             Assert.That(savedOptions.ExportResultOptions.GenerateJsonSidecar, Is.True);
             Assert.That(savedOptions.ExportResultOptions.GenerateMarkdownSidecar, Is.False);
+            Assert.That(savedOptions.ExportResultOptions.GenerateSchemaSummary, Is.True);
             Assert.That(savedOptions.ExportResultOptions.GenerateSchemaSnapshot, Is.True);
             Assert.That(savedOptions.ExportResultOptions.UseTimestamp, Is.True);
             Assert.That(savedOptions.ExportResultOptions.OpenOutputFolder, Is.True);
@@ -158,9 +162,11 @@ public sealed class ViewModelSettingsBehaviorTests {
     private static ViewModel CreateViewModel(ISettingsService settingsService) {
         SchemaExportOrchestrator exportOrchestrator = new(
             Substitute.For<IDatabaseSchemaProviderFactory>(),
-            Substitute.For<ILogger<SchemaExportOrchestrator>>()
+            Substitute.For<ILogger<SchemaExportOrchestrator>>(),
+            new SchemaSnapshotBuilder(),
+            new SchemaSnapshotDiffService()
         );
-        return new ViewModel(settingsService, exportOrchestrator);
+        return new ViewModel(settingsService, exportOrchestrator, new SchemaExportRequestResolver());
     }
 
     private static SchemaOptions CreateSchemaOptions(

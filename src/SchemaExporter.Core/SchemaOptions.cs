@@ -13,6 +13,7 @@ public class SchemaOptions {
         Connections = [];
         ExportProfiles = [];
         ExportResultOptions = new ExportResultOptions();
+        Redaction = new SchemaRedactionOptions();
     }
 
     /// <summary>
@@ -49,5 +50,10 @@ public class SchemaOptions {
     /// 取得或設定預設的匯出結果選項，用於檔案命名與匯出後動作。
     /// </summary>
     public ExportResultOptions ExportResultOptions { get; set; }
+
+    /// <summary>
+    /// 取得或設定敏感 metadata 遮罩選項。
+    /// </summary>
+    public SchemaRedactionOptions Redaction { get; set; }
 }
 

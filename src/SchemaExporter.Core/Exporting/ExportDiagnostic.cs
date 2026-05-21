@@ -35,6 +35,7 @@ public sealed class ExportDiagnostic {
     public string SeverityText => Severity switch {
         DiagnosticSeverity.Info => "資訊",
         DiagnosticSeverity.Warning => "警告",
+        DiagnosticSeverity.Error => "錯誤",
         _ => Severity.ToString()
     };
 
@@ -64,6 +65,7 @@ public sealed class ExportDiagnostic {
         ExportDiagnosticCategory.Configuration => "設定",
         ExportDiagnosticCategory.RoutineSupport => "程序支援",
         ExportDiagnosticCategory.Execution => "執行",
+        ExportDiagnosticCategory.Redaction => "Redaction",
         _ => Category.ToString()
     };
 }

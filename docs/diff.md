@@ -2,13 +2,13 @@
 
 ## 說明
 
-Schema Diff 記錄兩份 schema snapshot 之間的差異，包含新增、移除、修改的物件、欄位、索引與程序。
+Schema Diff 記錄兩份 schema snapshot 之間的差異，包含新增、移除、修改的物件、欄位、索引與預存程序和函數。
 
 Diff 可在匯出時自動產生（指定基準 snapshot），也可以單獨使用 `diff` 命令對任意兩份 snapshot 進行比對。
 
 ## 啟用方式
 
-**方式一：匯出時自動產生**
+### 方式一：匯出時自動產生
 
 在 `appsettings.json` 設定基準 snapshot 路徑：
 
@@ -21,13 +21,15 @@ Diff 可在匯出時自動產生（指定基準 snapshot），也可以單獨使
 
 或 CLI 傳入 `--snapshot --diff-from <path>` 參數。
 
-**方式二：單獨比對**
+### 方式二：單獨比對
 
 使用 `diff` 命令直接比對兩份 snapshot：
 
 ```bash
 schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json
 ```
+
+`diff` 命令的 snapshot 路徑可使用絕對路徑或相對路徑；相對路徑會依目前工作目錄解析。
 
 ## 輸出格式
 
@@ -38,7 +40,7 @@ Diff 支援兩種輸出格式：
 
 ## 檔案命名（匯出時自動產生）
 
-與主要 Excel 輸出檔案同名，後綴為 `.diff.json` 或 `.diff.md`。
+與主要 Excel 輸出檔案同名，後綴為 `.diff.json`。
 
 ## JSON 結構
 
@@ -82,9 +84,9 @@ Diff 支援兩種輸出格式：
 | `addedIndexes` | 新增的索引數量。 |
 | `removedIndexes` | 移除的索引數量。 |
 | `modifiedIndexes` | 修改的索引數量。 |
-| `addedRoutines` | 新增的程序/函數數量。 |
-| `removedRoutines` | 移除的程序/函數數量。 |
-| `modifiedRoutines` | 修改的程序/函數數量。 |
+| `addedRoutines` | 新增的預存程序與函數數量。 |
+| `removedRoutines` | 移除的預存程序與函數數量。 |
+| `modifiedRoutines` | 修改的預存程序與函數數量。 |
 
 ### objectChanges / columnChanges / indexChanges / routineChanges
 

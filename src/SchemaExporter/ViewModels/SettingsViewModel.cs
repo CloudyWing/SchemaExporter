@@ -173,6 +173,7 @@ internal sealed class SettingsViewModel : ObservableObject {
                 GenerateManifest = loadedOptions.ExportResultOptions.GenerateManifest,
                 GenerateJsonSidecar = loadedOptions.ExportResultOptions.GenerateJsonSidecar,
                 GenerateMarkdownSidecar = loadedOptions.ExportResultOptions.GenerateMarkdownSidecar,
+                GenerateSchemaSummary = loadedOptions.ExportResultOptions.GenerateSchemaSummary,
                 GenerateSchemaSnapshot = loadedOptions.ExportResultOptions.GenerateSchemaSnapshot,
                 DiffSourceSnapshotPath = loadedOptions.ExportResultOptions.DiffSourceSnapshotPath
             }

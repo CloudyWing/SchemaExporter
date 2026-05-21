@@ -1,14 +1,19 @@
 # 設定檔說明
 
-所有設定存放於 `appsettings.json`，結構如下：
+使用者設定存放於 `%LocalAppData%\SchemaExporter\appsettings.json`。首次啟動時，應用程式會從執行檔目錄的 `appsettings.json` 範本複製一份到使用者設定目錄。
+
+設定結構如下：
 
 ```json
 {
   "Schema": {
     "ExportPath": "...",
     "Connections": [ ... ],
+    "LastSelectedConnectionName": "...",
     "ExportProfiles": [ ... ],
-    "ExportResultOptions": { ... }
+    "LastSelectedProfileName": "...",
+    "ExportResultOptions": { ... },
+    "Redaction": { ... }
   }
 }
 ```
@@ -67,7 +72,7 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 - `*`：代表任意數量的字元（含零個）。
 - `?`：代表單一字元。
 
-範例：`*_bak` 會排除所有以 `_bak` 結尾的物件。
+範例：`Tmp*` 比對所有以 `Tmp` 開頭的名稱、`User?` 比對 `Users`、`UserA` 等剛好五個字元的名稱。
 
 ### 篩選順序
 
@@ -76,6 +81,22 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 3. 對剩餘的結構描述套用 `IncludeObjects`（空白 = 全部通過）。
 4. 套用 `ExcludeObjects`，從已通過的結果中移除。
 5. 若 `IncludeViews` 為 `false`，移除所有檢視表。
+
+---
+
+## Schema.LastSelectedConnectionName
+
+WPF 主畫面上次儲存的連線名稱。此欄位由「儲存設定」按鈕寫入，用於下次啟動時還原選取狀態。
+
+若欄位為空白、缺少或找不到對應連線，WPF 會改用第一筆連線。
+
+---
+
+## Schema.LastSelectedProfileName
+
+WPF 主畫面上次儲存的匯出設定檔名稱。此欄位由「儲存設定」按鈕寫入，用於下次啟動時還原選取狀態。
+
+若欄位為空白、缺少或找不到對應設定檔，WPF 會依連線的 `ExportProfileName` 或第一筆設定檔決定預設值。
 
 ---
 
@@ -90,10 +111,17 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 | `OverwriteStrategy` | string | `"Overwrite"` | 檔案已存在時的處理策略，詳見下方說明。 |
 | `OpenOutputFolder` | bool | `false` | 匯出完成後是否自動以檔案總管開啟輸出資料夾。 |
 | `GenerateManifest` | bool | `false` | 是否產生 manifest 檔案，紀錄此次匯出的後設資料。 |
-| `GenerateJsonSidecar` | bool | `false` | 是否產生 JSON sidecar 檔案，包含完整 schema 結構與選用差異比對資料。 |
-| `GenerateMarkdownSidecar` | bool | `false` | 是否產生 Markdown sidecar 檔案，以可讀格式呈現 schema 結構與差異摘要。 |
+| `GenerateJsonSidecar` | bool | `false` | 是否產生 JSON sidecar 檔案，包含 snapshot 與選用 diff 的結構化資料。 |
+| `GenerateMarkdownSidecar` | bool | `false` | 是否產生 Markdown sidecar 檔案，以可讀格式呈現完整 schema 結構與差異摘要。 |
+| `GenerateSchemaSummary` | bool | `false` | 是否產生精簡 Schema Summary，也就是 AI context Markdown 檔案。 |
 | `GenerateSchemaSnapshot` | bool | `false` | 是否產生可重複使用的 schema snapshot JSON 檔案，供後續差異比對使用。 |
-| `DiffSourceSnapshotPath` | string | 無 | 差異比對的基準 snapshot 絕對路徑。設定後會自動產生差異比對結果。 |
+| `DiffSourceSnapshotPath` | string | 無 | 差異比對的基準 snapshot 絕對路徑。CLI 會使用此設定；WPF 主畫面每次啟動會清空此欄位，不會透過「儲存設定」持久化。 |
+
+各 artifacts 的定位與檔名後綴參閱 [artifacts.md](artifacts.md)。
+
+### 向下相容
+
+既有設定檔若仍包含 `GenerateAiContext`，讀取時會自動轉為 `GenerateSchemaSummary`；下次儲存後會輸出新欄位名稱。
 
 ### OverwriteStrategy 可用值
 
@@ -102,3 +130,47 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 | `Overwrite` | 直接覆寫已存在的檔案。 |
 | `AppendSuffix` | 若檔案已存在，自動在檔名後附加序號（如 `_1`、`_2`）。 |
 | `Fail` | 若檔案已存在，中止匯出並回報錯誤。 |
+
+---
+
+## Schema.Redaction
+
+控制敏感 metadata 遮罩規則。Redaction 預設停用；啟用後會在 Excel、snapshot、JSON sidecar、Markdown sidecar 與 Schema Summary 產生前套用。
+
+Redaction 只處理描述、預設值、routine 簽章與 routine 定義等 metadata 內容，不改寫 schema、object、column、index 或 routine 名稱。
+
+| 欄位 | 型別 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `Enabled` | bool | `false` | 是否啟用 redaction。 |
+| `ReplacementText` | string | `"[REDACTED]"` | 被遮罩內容的替代文字。 |
+| `SensitiveNamePatterns` | string[] | 見下方 | 用來比對物件、欄位與 routine 名稱的 .NET regex。命中後會遮罩該項目的描述、預設值或 routine 定義等 metadata。 |
+| `SensitiveTextPatterns` | string[] | `[]` | 用來比對 metadata 文字內容的 .NET regex。命中時只替換符合的文字片段。 |
+
+`SensitiveNamePatterns` 的內建預設值為：
+
+```json
+[
+  "password", "passwd", "pwd", "secret", "token",
+  "api[_-]?key", "credential", "private[_-]?key",
+  "connection[_-]?string", "salt"
+]
+```
+
+可完整覆寫此清單。覆寫後，內建規則不會保留，需自行補回需要的項目。
+
+範例（在預設規則外額外加入自訂 pattern）：
+
+```json
+"Redaction": {
+  "Enabled": true,
+  "ReplacementText": "[MASKED]",
+  "SensitiveNamePatterns": [
+    "password",
+    "token",
+    "api[_-]?key"
+  ],
+  "SensitiveTextPatterns": [
+    "AKIA[0-9A-Z]+"
+  ]
+}
+```

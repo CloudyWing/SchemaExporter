@@ -97,6 +97,9 @@
             <CheckBox Content="Markdown Sidecar"
                       IsChecked="{Binding GenerateMarkdownSidecar}"
                       Margin="0,0,16,4" />
+            <CheckBox Content="Schema Summary"
+                      IsChecked="{Binding GenerateSchemaSummary}"
+                      Margin="0,0,16,4" />
             <CheckBox Content="Schema Snapshot"
                       IsChecked="{Binding GenerateSchemaSnapshot}"
                       Margin="0,0,16,4" />

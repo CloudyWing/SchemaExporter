@@ -37,6 +37,11 @@ public enum ExportDiagnosticCategory {
     /// <summary>
     /// 執行時間與摘要資訊。
     /// </summary>
-    Execution = 6
+    Execution = 6,
+
+    /// <summary>
+    /// 敏感 metadata 遮罩資訊。
+    /// </summary>
+    Redaction = 7
 }
 

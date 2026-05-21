@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SpreadsheetExporter;
 using CloudyWing.SpreadsheetExporter.Templates.Grid;
@@ -21,6 +22,8 @@ public sealed partial class SchemaExportOrchestrator {
 
     private readonly IDatabaseSchemaProviderFactory providerFactory;
     private readonly ILogger<SchemaExportOrchestrator> logger;
+    private readonly SchemaSnapshotBuilder snapshotBuilder;
+    private readonly SchemaSnapshotDiffService diffService;
 
     /// <summary>
     /// 初始化 <see cref="SchemaExportOrchestrator"/> 類別的新執行個體。
@@ -30,12 +33,56 @@ public sealed partial class SchemaExportOrchestrator {
     public SchemaExportOrchestrator(
         IDatabaseSchemaProviderFactory providerFactory,
         ILogger<SchemaExportOrchestrator> logger
+    ) : this(providerFactory, logger, new SchemaSnapshotBuilder(), new SchemaSnapshotDiffService()) {
+    }
+
+    /// <summary>
+    /// 初始化 <see cref="SchemaExportOrchestrator"/> 類別的新執行個體。
+    /// </summary>
+    /// <param name="providerFactory">用於建立資料庫結構描述提供者的工廠。</param>
+    /// <param name="logger">用於記錄匯出過程事件的記錄器。</param>
+    /// <param name="snapshotBuilder">用於建立 snapshot 文件的服務。</param>
+    /// <param name="diffService">用於載入與比較 snapshot 的服務。</param>
+    public SchemaExportOrchestrator(
+        IDatabaseSchemaProviderFactory providerFactory,
+        ILogger<SchemaExportOrchestrator> logger,
+        SchemaSnapshotBuilder snapshotBuilder,
+        SchemaSnapshotDiffService diffService
     ) {
         ArgumentNullException.ThrowIfNull(providerFactory);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(snapshotBuilder);
+        ArgumentNullException.ThrowIfNull(diffService);
 
         this.providerFactory = providerFactory;
         this.logger = logger;
+        this.snapshotBuilder = snapshotBuilder;
+        this.diffService = diffService;
+    }
+
+    /// <summary>
+    /// 非同步執行結構描述匯出作業。
+    /// </summary>
+    /// <param name="request">完整匯出請求。</param>
+    /// <param name="progress">用於回報匯出進度的物件；可為 <see langword="null"/>。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>包含輸出檔案路徑、診斷訊息與各成品路徑的 <see cref="ExportResult"/>。</returns>
+    public Task<ExportResult> ExportAsync(
+        SchemaExportRequest request,
+        IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return ExportAsync(
+            request.Connection,
+            request.ExportPath,
+            request.Profile,
+            request.ResultOptions,
+            request.Redaction,
+            progress,
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -56,9 +103,61 @@ public sealed partial class SchemaExportOrchestrator {
         IProgress<ExportProgress>? progress = null,
         CancellationToken cancellationToken = default
     ) {
+        return await ExportCoreAsync(
+            connection,
+            exportPath,
+            profile,
+            resultOptions,
+            new SchemaRedactionOptions(),
+            progress,
+            cancellationToken
+        ).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 非同步執行結構描述匯出作業，並依指定規則遮罩敏感 metadata。
+    /// </summary>
+    /// <param name="connection">要匯出的資料庫連線設定。</param>
+    /// <param name="exportPath">匯出檔案的目標資料夾路徑，支援絕對路徑與相對路徑。</param>
+    /// <param name="profile">控制篩選、命名與輸出行為的匯出設定檔。</param>
+    /// <param name="resultOptions">控制成品產生方式的匯出結果選項。</param>
+    /// <param name="redaction">控制敏感 metadata 遮罩方式的選項。</param>
+    /// <param name="progress">用於回報匯出進度的物件；可為 <see langword="null"/>。</param>
+    /// <param name="cancellationToken">取消語彙基元。</param>
+    /// <returns>包含輸出檔案路徑、診斷訊息與各成品路徑的 <see cref="ExportResult"/>。</returns>
+    public async Task<ExportResult> ExportAsync(
+        SchemaConnection connection,
+        string exportPath,
+        ExportProfile profile,
+        ExportResultOptions resultOptions,
+        SchemaRedactionOptions redaction,
+        IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default
+    ) {
+        return await ExportCoreAsync(
+            connection,
+            exportPath,
+            profile,
+            resultOptions,
+            redaction,
+            progress,
+            cancellationToken
+        ).ConfigureAwait(false);
+    }
+
+    private async Task<ExportResult> ExportCoreAsync(
+        SchemaConnection connection,
+        string exportPath,
+        ExportProfile profile,
+        ExportResultOptions resultOptions,
+        SchemaRedactionOptions redaction,
+        IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(resultOptions);
+        ArgumentNullException.ThrowIfNull(redaction);
 
         List<ExportDiagnostic> diagnostics = [];
         ExportStage currentStage = ExportStage.Validating;
@@ -126,6 +225,7 @@ public sealed partial class SchemaExportOrchestrator {
             stageStopwatch.Restart();
             ReportProgress(progress, ExportStage.ApplyingFilters, "正在篩選程序與函數...", 40);
             FilteredSchemaExport filteredExport = BuildFilteredExport(filteredObjects, schemaDetails, profile, diagnostics);
+            filteredExport = SchemaRedactor.Apply(filteredExport, redaction, diagnostics);
             cancellationToken.ThrowIfCancellationRequested();
             executionSummary.FilteringDuration = stageStopwatch.Elapsed;
 
@@ -150,6 +250,8 @@ public sealed partial class SchemaExportOrchestrator {
                 filteredExport,
                 diagnostics,
                 resultOptions,
+                snapshotBuilder,
+                diffService,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -186,6 +288,7 @@ public sealed partial class SchemaExportOrchestrator {
                 ManifestFilePath = artifactOutputs.ManifestFilePath,
                 JsonSidecarFilePath = artifactOutputs.JsonSidecarFilePath,
                 MarkdownSidecarFilePath = artifactOutputs.MarkdownSidecarFilePath,
+                SchemaSummaryFilePath = artifactOutputs.SchemaSummaryFilePath,
                 SnapshotFilePath = artifactOutputs.SnapshotFilePath,
                 DiffFilePath = artifactOutputs.DiffFilePath,
                 ConnectionName = connection.Name,
@@ -402,24 +505,28 @@ public sealed partial class SchemaExportOrchestrator {
     }
 
     private static bool IsMatchObjectName(DatabaseObjectSchema databaseObject, IReadOnlyCollection<string> includePatterns, IReadOnlyCollection<string> excludePatterns) {
+        IReadOnlyList<string> activeIncludePatterns = GetActivePatterns(includePatterns);
+        IReadOnlyList<string> activeExcludePatterns = GetActivePatterns(excludePatterns);
         string qualifiedName = $"{databaseObject.SchemaName}.{databaseObject.ObjectName}";
-        bool isIncluded = includePatterns.Count == 0 || includePatterns.Any(pattern => MatchesObjectPattern(databaseObject.ObjectName, qualifiedName, pattern));
-        if (!isIncluded || excludePatterns.Count == 0) {
+        bool isIncluded = activeIncludePatterns.Count == 0 || activeIncludePatterns.Any(pattern => MatchesObjectPattern(databaseObject.ObjectName, qualifiedName, pattern));
+        if (!isIncluded || activeExcludePatterns.Count == 0) {
             return isIncluded;
         }
 
-        return !excludePatterns.Any(pattern => MatchesObjectPattern(databaseObject.ObjectName, qualifiedName, pattern));
+        return !activeExcludePatterns.Any(pattern => MatchesObjectPattern(databaseObject.ObjectName, qualifiedName, pattern));
     }
 
     private static bool IsMatchRoutineName(DatabaseRoutineSchema routine, IReadOnlyCollection<string> includePatterns, IReadOnlyCollection<string> excludePatterns) {
+        IReadOnlyList<string> activeIncludePatterns = GetActivePatterns(includePatterns);
+        IReadOnlyList<string> activeExcludePatterns = GetActivePatterns(excludePatterns);
         string schemaQualifiedName = routine.QualifiedName;
         string packageQualifiedName = string.IsNullOrWhiteSpace(routine.ContainerName) ? "" : $"{routine.ContainerName}.{routine.RoutineName}";
-        bool isIncluded = includePatterns.Count == 0 || includePatterns.Any(pattern => MatchesRoutinePattern(routine.RoutineName, packageQualifiedName, schemaQualifiedName, pattern));
-        if (!isIncluded || excludePatterns.Count == 0) {
+        bool isIncluded = activeIncludePatterns.Count == 0 || activeIncludePatterns.Any(pattern => MatchesRoutinePattern(routine.RoutineName, packageQualifiedName, schemaQualifiedName, pattern));
+        if (!isIncluded || activeExcludePatterns.Count == 0) {
             return isIncluded;
         }
 
-        return !excludePatterns.Any(pattern => MatchesRoutinePattern(routine.RoutineName, packageQualifiedName, schemaQualifiedName, pattern));
+        return !activeExcludePatterns.Any(pattern => MatchesRoutinePattern(routine.RoutineName, packageQualifiedName, schemaQualifiedName, pattern));
     }
 
     private static bool MatchesObjectPattern(string objectName, string qualifiedName, string pattern) {
@@ -438,12 +545,21 @@ public sealed partial class SchemaExportOrchestrator {
     }
 
     private static bool IsMatch(string value, IReadOnlyCollection<string> includePatterns, IReadOnlyCollection<string> excludePatterns) {
-        bool isIncluded = includePatterns.Count == 0 || includePatterns.Any(pattern => MatchesPattern(value, pattern));
-        if (!isIncluded || excludePatterns.Count == 0) {
+        IReadOnlyList<string> activeIncludePatterns = GetActivePatterns(includePatterns);
+        IReadOnlyList<string> activeExcludePatterns = GetActivePatterns(excludePatterns);
+        bool isIncluded = activeIncludePatterns.Count == 0 || activeIncludePatterns.Any(pattern => MatchesPattern(value, pattern));
+        if (!isIncluded || activeExcludePatterns.Count == 0) {
             return isIncluded;
         }
 
-        return !excludePatterns.Any(pattern => MatchesPattern(value, pattern));
+        return !activeExcludePatterns.Any(pattern => MatchesPattern(value, pattern));
+    }
+
+    private static IReadOnlyList<string> GetActivePatterns(IEnumerable<string> patterns) {
+        return patterns
+            .Select(pattern => pattern.Trim())
+            .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
+            .ToList();
     }
 
     private static bool MatchesPattern(string value, string pattern) {
