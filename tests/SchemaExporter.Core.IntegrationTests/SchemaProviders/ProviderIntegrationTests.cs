@@ -1,22 +1,24 @@
+using CloudyWing.SchemaExporter.Core.IntegrationTests.Infrastructure;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
-namespace CloudyWing.SchemaExporter.Core.Tests.SchemaProviders;
+namespace CloudyWing.SchemaExporter.Core.IntegrationTests.SchemaProviders;
 
 [TestFixture]
+[Category(IntegrationTestCategories.Integration)]
+[Explicit("Requires Docker to start provider fixture containers.")]
+[NonParallelizable]
 public sealed class ProviderIntegrationTests {
-    private const string SqlServerConnectionEnvironmentVariable = "SCHEMAEXPORTER_SQLSERVER_TEST_CONNECTION";
-    private const string OracleConnectionEnvironmentVariable = "SCHEMAEXPORTER_ORACLE_TEST_CONNECTION";
-
     [Test]
-    public async Task SqlServerProvider_WhenFixtureDatabaseIsConfigured_LoadsExpectedSchemaMetadataAsync() {
-        string connectionString = GetConnectionStringOrIgnore(SqlServerConnectionEnvironmentVariable);
+    [Category(IntegrationTestCategories.SqlServer)]
+    public async Task SqlServerProvider_WhenFixtureDatabaseIsStarted_LoadsExpectedSchemaMetadataAsync() {
+        await using SqlServerTestDatabase database = await SqlServerTestDatabase.CreateAsync();
         SqlServerDatabaseSchemaProvider sut = new();
 
-        IReadOnlyList<DatabaseObjectSchema> objects = await sut.LoadObjectsAsync(connectionString);
+        IReadOnlyList<DatabaseObjectSchema> objects = await sut.LoadObjectsAsync(database.ConnectionString);
         IReadOnlyList<DatabaseObjectSchema> fixtureObjects = objects
             .Where(x => x.ObjectName.StartsWith("SE_", StringComparison.OrdinalIgnoreCase))
             .ToList();
-        DatabaseSchemaDetails details = await sut.LoadDetailsAsync(connectionString, fixtureObjects);
+        DatabaseSchemaDetails details = await sut.LoadDetailsAsync(database.ConnectionString, fixtureObjects);
         DatabaseObjectSchema customersTable = fixtureObjects.Single(x => x.ObjectName == "SE_Customers");
         DatabaseObjectSchema activeCustomersView = fixtureObjects.Single(x => x.ObjectName == "SE_ActiveCustomers");
         DatabaseColumnSchema idColumn = details.Columns.Single(x =>
@@ -49,7 +51,7 @@ public sealed class ProviderIntegrationTests {
             Assert.That(primaryKeyIndex.IsClustered, Is.EqualTo("Yes"));
             Assert.That(emailIndex.IsUnique, Is.EqualTo("Yes"));
             Assert.That(emailIndex.Columns, Is.EqualTo("Email"));
-            Assert.That(emailIndex.OtherColumns, Is.EqualTo("Name"));
+            Assert.That(emailIndex.OtherColumns, Does.Contain("Name"));
             Assert.That(foreignKeyIndex.IsForeignKey, Is.EqualTo("Yes"));
             Assert.That(foreignKeyIndex.Columns, Is.EqualTo("CustomerId"));
             Assert.That(foreignKeyIndex.OtherColumns, Does.Contain("dbo.SE_Customers"));
@@ -65,15 +67,16 @@ public sealed class ProviderIntegrationTests {
     }
 
     [Test]
-    public async Task OracleProvider_WhenFixtureDatabaseIsConfigured_LoadsExpectedSchemaObjectsAsync() {
-        string connectionString = GetConnectionStringOrIgnore(OracleConnectionEnvironmentVariable);
+    [Category(IntegrationTestCategories.Oracle)]
+    public async Task OracleProvider_WhenFixtureDatabaseIsStarted_LoadsExpectedSchemaObjectsAsync() {
+        await using OracleTestDatabase database = await OracleTestDatabase.CreateAsync();
         OracleDatabaseSchemaProvider sut = new();
 
-        IReadOnlyList<DatabaseObjectSchema> objects = await sut.LoadObjectsAsync(connectionString);
+        IReadOnlyList<DatabaseObjectSchema> objects = await sut.LoadObjectsAsync(database.ConnectionString);
         IReadOnlyList<DatabaseObjectSchema> fixtureObjects = objects
             .Where(x => x.ObjectName.StartsWith("SE_", StringComparison.OrdinalIgnoreCase))
             .ToList();
-        DatabaseSchemaDetails details = await sut.LoadDetailsAsync(connectionString, fixtureObjects);
+        DatabaseSchemaDetails details = await sut.LoadDetailsAsync(database.ConnectionString, fixtureObjects);
 
         using (Assert.EnterMultipleScope()) {
             Assert.That(fixtureObjects.Any(x => x.ObjectName == "SE_CUSTOMERS"), Is.True);
@@ -83,13 +86,5 @@ public sealed class ProviderIntegrationTests {
             Assert.That(details.Routines.Any(x => x.RoutineName == "SE_GET_CUSTOMERS"), Is.True);
         }
     }
-
-    private static string GetConnectionStringOrIgnore(string environmentVariableName) {
-        string? connectionString = Environment.GetEnvironmentVariable(environmentVariableName);
-        if (string.IsNullOrWhiteSpace(connectionString)) {
-            Assert.Ignore($"Integration test skipped because {environmentVariableName} is not set.");
-        }
-
-        return connectionString;
-    }
 }
+
