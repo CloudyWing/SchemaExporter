@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Dapper;
+using CloudyWing.SchemaExporter.Core.Exporting;
 using Microsoft.Data.SqlClient;
 
 namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
@@ -66,11 +67,37 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
             ).ConfigureAwait(false)
         ];
 
+        List<ExportDiagnostic> diagnostics = [];
+        IReadOnlyList<DatabaseForeignKeySchema> relationships = [];
+        try {
+            relationships = [
+                ..await connection.QueryAsync<DatabaseForeignKeySchema>(
+                    new CommandDefinition(
+                        BuildQueryRelationshipsSql(tableInClause),
+                        cancellationToken: cancellationToken
+                    )
+                ).ConfigureAwait(false)
+            ];
+        } catch (SqlException exception) when (IsForeignKeyCatalogPermissionDenied(exception.Number)) {
+            diagnostics.Add(new ExportDiagnostic {
+                Severity = DiagnosticSeverity.Warning,
+                Category = ExportDiagnosticCategory.Execution,
+                Message = "FK catalog permission denied; relationships were not retrieved."
+            });
+        }
+
         return new DatabaseSchemaDetails {
             Columns = columns,
             Indexes = indexes,
-            Routines = routines
+            Routines = routines,
+            Relationships = relationships,
+            Diagnostics = diagnostics
         };
+    }
+
+    internal static bool IsForeignKeyCatalogPermissionDenied(int errorNumber) {
+        // SQL Server errors 229, 230, 262 and 297 indicate permission failures for catalog access.
+        return errorNumber is 229 or 230 or 262 or 297;
     }
 
     private static string BuildObjectInClause(IReadOnlyList<DatabaseObjectSchema> objects) {
@@ -178,7 +205,7 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
 
     private static string BuildQueryIndexesSql(string tableInClause) {
         if (string.IsNullOrEmpty(tableInClause)) {
-            return "SELECT NULL AS SchemaName, NULL AS ObjectName, NULL AS ObjectType, NULL AS IndexName, NULL AS IsPrimaryKey, NULL AS IsClustered, NULL AS IsUnique, NULL AS IsForeignKey, NULL AS Columns, NULL AS OtherColumns WHERE 1 = 0";
+            return "SELECT NULL AS SchemaName, NULL AS ObjectName, NULL AS ObjectType, NULL AS IndexName, NULL AS IsPrimaryKey, NULL AS IsClustered, NULL AS IsUnique, NULL AS Columns, NULL AS IncludedColumns WHERE 1 = 0";
         }
 
         return $"""
@@ -190,7 +217,6 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
                 CASE WHEN ind.is_primary_key = 1 THEN 'Yes' ELSE 'No' END AS IsPrimaryKey,
                 CASE WHEN ind.type_desc = 'CLUSTERED' THEN 'Yes' ELSE 'No' END AS IsClustered,
                 CASE WHEN ind.is_unique = 1 THEN 'Yes' ELSE 'No' END AS IsUnique,
-                'No' AS IsForeignKey,
                 COALESCE(STUFF((
                     SELECT CHAR(10) + COL_NAME(ic.object_id, ic.column_id)
                     FROM sys.index_columns AS ic
@@ -208,7 +234,7 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
                         AND ic.is_included_column = 1
                     ORDER BY ic.index_column_id
                     FOR XML PATH(''), TYPE
-                ).value('.', 'nvarchar(max)'), 1, 2, ''), '') AS OtherColumns
+                ).value('.', 'nvarchar(max)'), 1, 2, ''), '') AS IncludedColumns
             FROM sys.indexes AS ind
             INNER JOIN sys.tables AS t ON t.object_id = ind.object_id
             INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
@@ -216,48 +242,49 @@ internal sealed class SqlServerDatabaseSchemaProvider : IDatabaseSchemaProvider 
                 AND ind.name IS NOT NULL
                 AND s.name + '.' + t.name IN ({tableInClause})
 
-            UNION ALL
-
-            SELECT DISTINCT
-                s.name AS SchemaName,
-                t.name AS ObjectName,
-                'BASE TABLE' AS ObjectType,
-                fk.name AS IndexName,
-                'No' AS IsPrimaryKey,
-                'No' AS IsClustered,
-                'No' AS IsUnique,
-                'Yes' AS IsForeignKey,
-                COALESCE(STUFF((
-                    SELECT CHAR(10) + COL_NAME(fkc1.parent_object_id, fkc1.parent_column_id)
-                    FROM sys.foreign_key_columns AS fkc1
-                    WHERE fkc1.constraint_object_id = fk.object_id
-                    ORDER BY fkc1.constraint_column_id
-                    FOR XML PATH(''), TYPE
-                ).value('.', 'nvarchar(max)'), 1, 1, ''), '') AS Columns,
-                CONCAT(
-                    rs.name,
-                    '.',
-                    rt.name,
-                    ':',
-                    CHAR(10),
-                    COALESCE(STUFF((
-                        SELECT ',' + CHAR(10) + COL_NAME(fkc2.referenced_object_id, fkc2.referenced_column_id)
-                        FROM sys.foreign_key_columns AS fkc2
-                        WHERE fkc2.constraint_object_id = fk.object_id
-                        ORDER BY fkc2.constraint_column_id
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'nvarchar(max)'), 1, 2, ''), '')
-                ) AS OtherColumns
-            FROM sys.foreign_keys AS fk
-            INNER JOIN sys.foreign_key_columns AS fkc ON fkc.constraint_object_id = fk.object_id
-            INNER JOIN sys.tables AS t ON t.object_id = fk.parent_object_id
-            INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
-            INNER JOIN sys.tables AS rt ON rt.object_id = fk.referenced_object_id
-            INNER JOIN sys.schemas AS rs ON rs.schema_id = rt.schema_id
-            WHERE t.is_ms_shipped = 0
-                AND s.name + '.' + t.name IN ({tableInClause})
-
             ORDER BY SchemaName, ObjectName, IndexName;
+        """;
+    }
+
+    private static string BuildQueryRelationshipsSql(string tableInClause) {
+        if (string.IsNullOrEmpty(tableInClause)) {
+            return "SELECT NULL AS ForeignKeyName, NULL AS SourceSchemaName, NULL AS SourceTableName, NULL AS SourceColumnName, NULL AS ReferencedSchemaName, NULL AS ReferencedTableName, NULL AS ReferencedColumnName, NULL AS ColumnOrder WHERE 1 = 0";
+        }
+
+        return $"""
+            SELECT
+                fk.name AS ForeignKeyName,
+                sourceSchema.name AS SourceSchemaName,
+                sourceTable.name AS SourceTableName,
+                sourceColumn.name AS SourceColumnName,
+                referencedSchema.name AS ReferencedSchemaName,
+                referencedTable.name AS ReferencedTableName,
+                referencedColumn.name AS ReferencedColumnName,
+                fkc.constraint_column_id AS ColumnOrder
+            FROM sys.foreign_keys AS fk
+            INNER JOIN sys.foreign_key_columns AS fkc
+                ON fkc.constraint_object_id = fk.object_id
+            INNER JOIN sys.tables AS sourceTable
+                ON sourceTable.object_id = fkc.parent_object_id
+            INNER JOIN sys.schemas AS sourceSchema
+                ON sourceSchema.schema_id = sourceTable.schema_id
+            INNER JOIN sys.columns AS sourceColumn
+                ON sourceColumn.object_id = fkc.parent_object_id
+                AND sourceColumn.column_id = fkc.parent_column_id
+            INNER JOIN sys.tables AS referencedTable
+                ON referencedTable.object_id = fkc.referenced_object_id
+            INNER JOIN sys.schemas AS referencedSchema
+                ON referencedSchema.schema_id = referencedTable.schema_id
+            INNER JOIN sys.columns AS referencedColumn
+                ON referencedColumn.object_id = fkc.referenced_object_id
+                AND referencedColumn.column_id = fkc.referenced_column_id
+            WHERE sourceTable.is_ms_shipped = 0
+                AND sourceSchema.name + '.' + sourceTable.name IN ({tableInClause})
+            ORDER BY
+                sourceSchema.name,
+                sourceTable.name,
+                fk.name,
+                fkc.constraint_column_id;
         """;
     }
 

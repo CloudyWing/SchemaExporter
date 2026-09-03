@@ -47,6 +47,7 @@ internal static class SchemaRedactor {
                 ref redactedValueCount
             ),
             Indexes = source.Indexes.Select(CloneIndex).ToList(),
+            Relationships = source.Relationships.Select(CloneRelationship).ToList(),
             Routines = RedactRoutines(
                 source.Routines,
                 namePatterns,
@@ -196,9 +197,21 @@ internal static class SchemaRedactor {
             IsPrimaryKey = index.IsPrimaryKey,
             IsClustered = index.IsClustered,
             IsUnique = index.IsUnique,
-            IsForeignKey = index.IsForeignKey,
             Columns = index.Columns,
-            OtherColumns = index.OtherColumns
+            IncludedColumns = index.IncludedColumns
+        };
+    }
+
+    private static DatabaseForeignKeySchema CloneRelationship(DatabaseForeignKeySchema relationship) {
+        return new DatabaseForeignKeySchema {
+            ForeignKeyName = relationship.ForeignKeyName,
+            SourceSchemaName = relationship.SourceSchemaName,
+            SourceTableName = relationship.SourceTableName,
+            SourceColumnName = relationship.SourceColumnName,
+            ReferencedSchemaName = relationship.ReferencedSchemaName,
+            ReferencedTableName = relationship.ReferencedTableName,
+            ReferencedColumnName = relationship.ReferencedColumnName,
+            ColumnOrder = relationship.ColumnOrder
         };
     }
 

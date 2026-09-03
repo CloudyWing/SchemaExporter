@@ -50,6 +50,21 @@ public sealed class SchemaDiffSummary {
     public int ModifiedIndexes { get; init; }
 
     /// <summary>
+    /// 取得或設定新增的外鍵關聯數量。
+    /// </summary>
+    public int AddedRelationships { get; init; }
+
+    /// <summary>
+    /// 取得或設定移除的外鍵關聯數量。
+    /// </summary>
+    public int RemovedRelationships { get; init; }
+
+    /// <summary>
+    /// 取得或設定修改的外鍵關聯數量。
+    /// </summary>
+    public int ModifiedRelationships { get; init; }
+
+    /// <summary>
     /// 取得或設定新增的程序與函數數量。
     /// </summary>
     public int AddedRoutines { get; init; }

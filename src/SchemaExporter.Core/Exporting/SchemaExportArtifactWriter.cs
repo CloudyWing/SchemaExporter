@@ -9,6 +9,8 @@ namespace CloudyWing.SchemaExporter.Core.Exporting;
 /// 負責寫入次要匯出成品，包含資訊清單、附屬檔案、快照與差異比對結果。
 /// </summary>
 internal static class SchemaExportArtifactWriter {
+    private const int SchemaSummarySplitThreshold = 50;
+
     /// <summary>
     /// 依據匯出設定非同步產生所有次要成品，並回傳各成品的輸出路徑。
     /// </summary>
@@ -75,10 +77,10 @@ internal static class SchemaExportArtifactWriter {
         string? schemaSummaryFilePath = null;
         if (resultOptions.GenerateSchemaSummary) {
             schemaSummaryFilePath = BuildArtifactPath(outputFilePath, "schema-summary.md");
-            string schemaSummary = SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, diff);
-            await WriteTextArtifactAsync(
+            await WriteSchemaSummaryAsync(
                 schemaSummaryFilePath,
-                schemaSummary,
+                snapshot,
+                diff,
                 cancellationToken,
                 "無法產生 Schema Summary 檔案："
             ).ConfigureAwait(false);
@@ -94,6 +96,521 @@ internal static class SchemaExportArtifactWriter {
         };
     }
 
+    private static async Task WriteSchemaSummaryAsync(
+        string schemaSummaryFilePath,
+        SchemaSnapshotDocument snapshot,
+        SchemaDiffDocument? diff,
+        CancellationToken cancellationToken,
+        string errorMessagePrefix
+    ) {
+        string? entryDirectoryPath = Path.GetDirectoryName(schemaSummaryFilePath);
+        string entryStem = Path.GetFileNameWithoutExtension(schemaSummaryFilePath);
+        string objectsDirectoryName = entryStem + ".objects";
+        string objectsDirectoryPath = Path.Combine(entryDirectoryPath ?? "", objectsDirectoryName);
+        int detailCount = snapshot.Objects.Count + snapshot.Routines.Count;
+
+        ValidateObjectsDirectoryPath(objectsDirectoryPath, entryDirectoryPath, objectsDirectoryName);
+        IReadOnlySet<string> previousDetailFilePaths = await LoadLinkedDetailFilesAsync(
+            schemaSummaryFilePath,
+            objectsDirectoryPath,
+            objectsDirectoryName,
+            cancellationToken
+        ).ConfigureAwait(false);
+        if (detailCount <= SchemaSummarySplitThreshold) {
+            string temporaryEntryPath = BuildTemporaryFilePath(schemaSummaryFilePath);
+            EnsureTemporaryFileIsAvailable(temporaryEntryPath);
+            try {
+                await WriteTextArtifactAsync(
+                    temporaryEntryPath,
+                    SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, diff),
+                    cancellationToken,
+                    errorMessagePrefix
+                ).ConfigureAwait(false);
+                ReplaceArtifactFile(temporaryEntryPath, schemaSummaryFilePath);
+                DeleteDerivedObjectFiles(
+                    previousDetailFilePaths,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    objectsDirectoryPath,
+                    entryDirectoryPath,
+                    objectsDirectoryName
+                );
+            } finally {
+                TryDeleteFile(temporaryEntryPath);
+            }
+
+            return;
+        }
+
+        string stagingDirectoryPath = BuildTemporaryDirectoryPath(entryDirectoryPath, objectsDirectoryName, "staging");
+        string backupDirectoryPath = BuildTemporaryDirectoryPath(entryDirectoryPath, objectsDirectoryName, "backup");
+        List<string> stagedFilePaths = [];
+        List<string> publishedDetailFilePaths = [];
+        List<(string OriginalPath, string BackupPath)> backedUpDetailFiles = [];
+        HashSet<string> currentDetailFilePaths = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> detailLinks = [];
+        bool objectsDirectoryCreated = false;
+        bool stagingDirectoryCreated = false;
+        bool backupDirectoryCreated = false;
+        bool entryPublished = false;
+        try {
+            EnsureTemporaryDirectoryIsAvailable(stagingDirectoryPath);
+            EnsureTemporaryDirectoryIsAvailable(backupDirectoryPath);
+            Directory.CreateDirectory(stagingDirectoryPath);
+            stagingDirectoryCreated = true;
+
+            int ordinal = 1;
+            foreach (SchemaSnapshotObjectDocument databaseObject in OrderObjects(snapshot.Objects)) {
+                string fileName = BuildDetailFileName(
+                    ordinal,
+                    "object",
+                    databaseObject.SchemaName,
+                    databaseObject.ObjectName
+                );
+                string finalFilePath = Path.Combine(objectsDirectoryPath, fileName);
+                string stagedFilePath = Path.Combine(stagingDirectoryPath, fileName);
+                IReadOnlyList<SchemaSnapshotRelationshipDocument> relationships = snapshot.Relationships
+                    .Where(x => IsRelationshipForObject(x, databaseObject))
+                    .ToList();
+                stagedFilePaths.Add(stagedFilePath);
+                await WriteTextArtifactAsync(
+                    stagedFilePath,
+                    SchemaSummaryMarkdownBuilder.BuildObjectMarkdown(
+                        databaseObject,
+                        relationships,
+                        snapshot.Diagnostics
+                    ),
+                    cancellationToken,
+                    errorMessagePrefix
+                ).ConfigureAwait(false);
+                currentDetailFilePaths.Add(Path.GetFullPath(finalFilePath));
+                detailLinks[SchemaSummaryMarkdownBuilder.BuildObjectDetailKey(databaseObject)] =
+                    BuildDetailLink(objectsDirectoryName, fileName);
+                ordinal++;
+            }
+
+            foreach (SchemaSnapshotRoutineDocument routine in OrderRoutines(snapshot.Routines)) {
+                string fileName = BuildDetailFileName(ordinal, "routine", routine.SchemaName, routine.RoutineName);
+                string finalFilePath = Path.Combine(objectsDirectoryPath, fileName);
+                string stagedFilePath = Path.Combine(stagingDirectoryPath, fileName);
+                stagedFilePaths.Add(stagedFilePath);
+                await WriteTextArtifactAsync(
+                    stagedFilePath,
+                    SchemaSummaryMarkdownBuilder.BuildRoutineMarkdown(routine),
+                    cancellationToken,
+                    errorMessagePrefix
+                ).ConfigureAwait(false);
+                currentDetailFilePaths.Add(Path.GetFullPath(finalFilePath));
+                detailLinks[SchemaSummaryMarkdownBuilder.BuildRoutineDetailKey(routine)] =
+                    BuildDetailLink(objectsDirectoryName, fileName);
+                ordinal++;
+            }
+
+            ValidateObjectsDirectoryPath(objectsDirectoryPath, entryDirectoryPath, objectsDirectoryName);
+            bool objectsDirectoryExisted = Directory.Exists(objectsDirectoryPath);
+            Directory.CreateDirectory(objectsDirectoryPath);
+            objectsDirectoryCreated = !objectsDirectoryExisted;
+            EnsureDetailDestinationsAreSafe(currentDetailFilePaths, previousDetailFilePaths, objectsDirectoryPath);
+            Directory.CreateDirectory(backupDirectoryPath);
+            backupDirectoryCreated = true;
+
+            foreach (string previousDetailFilePath in previousDetailFilePaths) {
+                if (!currentDetailFilePaths.Contains(previousDetailFilePath)) {
+                    continue;
+                }
+
+                string backupFilePath = Path.Combine(backupDirectoryPath, Path.GetFileName(previousDetailFilePath));
+                backedUpDetailFiles.Add((previousDetailFilePath, backupFilePath));
+                File.Move(previousDetailFilePath, backupFilePath);
+            }
+
+            foreach (string stagedFilePath in stagedFilePaths) {
+                string fileName = Path.GetFileName(stagedFilePath);
+                string finalFilePath = Path.Combine(objectsDirectoryPath, fileName);
+                PublishDetailFile(stagedFilePath, finalFilePath);
+                publishedDetailFilePaths.Add(finalFilePath);
+            }
+
+            string temporaryEntryPath = BuildTemporaryFilePath(schemaSummaryFilePath);
+            EnsureTemporaryFileIsAvailable(temporaryEntryPath);
+            try {
+                await WriteTextArtifactAsync(
+                    temporaryEntryPath,
+                    SchemaSummaryMarkdownBuilder.BuildMarkdown(snapshot, diff, detailLinks),
+                    cancellationToken,
+                    errorMessagePrefix
+                ).ConfigureAwait(false);
+                ReplaceArtifactFile(temporaryEntryPath, schemaSummaryFilePath);
+                entryPublished = true;
+            } finally {
+                TryDeleteFile(temporaryEntryPath);
+            }
+
+            DeleteDerivedObjectFiles(
+                previousDetailFilePaths,
+                currentDetailFilePaths,
+                objectsDirectoryPath,
+                entryDirectoryPath,
+                objectsDirectoryName
+            );
+            foreach ((string _, string backupFilePath) in backedUpDetailFiles) {
+                TryDeleteFile(backupFilePath);
+            }
+        } catch (Exception exception) {
+            if (!entryPublished && !TryRestorePreviousDetails(publishedDetailFilePaths, backedUpDetailFiles)) {
+                throw new ExportOutputException("Schema Summary 發佈失敗，且無法完整還原既有明細檔案。", exception);
+            }
+
+            throw;
+        } finally {
+            foreach (string stagedFilePath in stagedFilePaths) {
+                TryDeleteFile(stagedFilePath);
+            }
+
+            foreach ((string _, string backupFilePath) in backedUpDetailFiles) {
+                TryDeleteFile(backupFilePath);
+            }
+
+            if (stagingDirectoryCreated) {
+                TryDeleteEmptyDirectory(stagingDirectoryPath);
+            }
+
+            if (backupDirectoryCreated) {
+                TryDeleteEmptyDirectory(backupDirectoryPath);
+            }
+
+            if (objectsDirectoryCreated && !entryPublished) {
+                TryDeleteEmptyDirectory(objectsDirectoryPath);
+            }
+        }
+    }
+
+    private static bool IsRelationshipForObject(
+        SchemaSnapshotRelationshipDocument relationship,
+        SchemaSnapshotObjectDocument databaseObject
+    ) {
+        bool isSourceObject = string.Equals(
+            relationship.SourceSchemaName,
+            databaseObject.SchemaName,
+            StringComparison.OrdinalIgnoreCase
+        ) && string.Equals(
+            relationship.SourceTableName,
+            databaseObject.ObjectName,
+            StringComparison.OrdinalIgnoreCase
+        );
+        bool isReferencedObject = string.Equals(
+            relationship.ReferencedSchemaName,
+            databaseObject.SchemaName,
+            StringComparison.OrdinalIgnoreCase
+        ) && string.Equals(
+            relationship.ReferencedTableName,
+            databaseObject.ObjectName,
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        return isSourceObject || isReferencedObject;
+    }
+
+    private static IEnumerable<SchemaSnapshotObjectDocument> OrderObjects(
+        IEnumerable<SchemaSnapshotObjectDocument> objects
+    ) {
+        return objects
+            .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ObjectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ObjectType, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<SchemaSnapshotRoutineDocument> OrderRoutines(
+        IEnumerable<SchemaSnapshotRoutineDocument> routines
+    ) {
+        return routines
+            .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ContainerName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.RoutineName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.RoutineType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.OverloadIdentifier, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string BuildDetailFileName(int ordinal, string kind, string schemaName, string objectName) {
+        return $"{ordinal:D3}_{kind}_{SanitizeFileNamePart(schemaName)}_{SanitizeFileNamePart(objectName)}.md";
+    }
+
+    private static string SanitizeFileNamePart(string value) {
+        StringBuilder sanitized = new();
+        foreach (char character in value) {
+            bool isAllowed = character is >= 'A' and <= 'Z'
+                or >= 'a' and <= 'z'
+                or >= '0' and <= '9'
+                or '_' or '-' or '.';
+            sanitized.Append(isAllowed ? character : '_');
+        }
+
+        return sanitized.Length == 0 ? "_" : sanitized.ToString();
+    }
+
+    private static async Task<IReadOnlySet<string>> LoadLinkedDetailFilesAsync(
+        string schemaSummaryFilePath,
+        string objectsDirectoryPath,
+        string objectsDirectoryName,
+        CancellationToken cancellationToken
+    ) {
+        if (!File.Exists(schemaSummaryFilePath)) {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        string summary;
+        try {
+            summary = await File.ReadAllTextAsync(schemaSummaryFilePath, cancellationToken).ConfigureAwait(false);
+        } catch (Exception ex) when (
+            ex is ArgumentException
+                or IOException
+                or UnauthorizedAccessException
+                or NotSupportedException
+                or PathTooLongException
+        ) {
+            throw new ExportOutputException($"無法讀取既有 Schema Summary 檔案：{schemaSummaryFilePath}", ex);
+        }
+
+        HashSet<string> linkedDetailFilePaths = new(StringComparer.OrdinalIgnoreCase);
+        const string linkPrefix = "[details](";
+        int searchStart = 0;
+        while (searchStart < summary.Length) {
+            int linkStart = summary.IndexOf(linkPrefix, searchStart, StringComparison.Ordinal);
+            if (linkStart < 0) {
+                break;
+            }
+
+            int linkValueStart = linkStart + linkPrefix.Length;
+            int linkEnd = summary.IndexOf(')', linkValueStart);
+            if (linkEnd < 0) {
+                break;
+            }
+
+            string relativeLink = summary[linkValueStart..linkEnd];
+            if (TryResolveDetailFilePath(
+                    relativeLink,
+                    objectsDirectoryPath,
+                    objectsDirectoryName,
+                    out string? filePath
+                ) && filePath is not null) {
+                linkedDetailFilePaths.Add(filePath);
+            }
+
+            searchStart = linkEnd + 1;
+        }
+
+        return linkedDetailFilePaths;
+    }
+
+    private static bool TryResolveDetailFilePath(
+        string relativeLink,
+        string objectsDirectoryPath,
+        string objectsDirectoryName,
+        out string? filePath
+    ) {
+        filePath = null;
+        string encodedDirectoryName = Uri.EscapeDataString(objectsDirectoryName);
+        string? encodedFileName = relativeLink.StartsWith($"{encodedDirectoryName}/", StringComparison.Ordinal)
+            ? relativeLink[(encodedDirectoryName.Length + 1)..]
+            : relativeLink.StartsWith($"{objectsDirectoryName}/", StringComparison.Ordinal)
+                ? relativeLink[(objectsDirectoryName.Length + 1)..]
+                : null;
+        if (string.IsNullOrEmpty(encodedFileName) || encodedFileName.Contains('/')) {
+            return false;
+        }
+
+        string decodedFileName;
+        try {
+            decodedFileName = Uri.UnescapeDataString(encodedFileName);
+        } catch (UriFormatException) {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(decodedFileName) || decodedFileName.Contains('/') || decodedFileName.Contains('\\')) {
+            return false;
+        }
+
+        string normalizedDirectoryPath = Path.GetFullPath(objectsDirectoryPath);
+        string normalizedFilePath = Path.GetFullPath(Path.Combine(normalizedDirectoryPath, decodedFileName));
+        if (!string.Equals(
+                Path.GetDirectoryName(normalizedFilePath),
+                normalizedDirectoryPath,
+                StringComparison.OrdinalIgnoreCase
+            ) || !File.Exists(normalizedFilePath)) {
+            return false;
+        }
+
+        filePath = normalizedFilePath;
+        return true;
+    }
+
+    private static void ValidateObjectsDirectoryPath(
+        string objectsDirectoryPath,
+        string? entryDirectoryPath,
+        string objectsDirectoryName
+    ) {
+        string normalizedObjectsDirectoryPath = Path.GetFullPath(objectsDirectoryPath);
+        string normalizedEntryDirectoryPath = Path.GetFullPath(entryDirectoryPath ?? "");
+        string? actualParentPath = Path.GetDirectoryName(normalizedObjectsDirectoryPath);
+        string actualDirectoryName = Path.GetFileName(normalizedObjectsDirectoryPath);
+        if (!string.Equals(actualParentPath, normalizedEntryDirectoryPath, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(actualDirectoryName, objectsDirectoryName, StringComparison.Ordinal)) {
+            throw new ExportOutputException($"Schema Summary 明細資料夾路徑無效：{objectsDirectoryPath}");
+        }
+    }
+
+    private static void EnsureDetailDestinationsAreSafe(
+        IEnumerable<string> detailFilePaths,
+        IReadOnlySet<string> previousDetailFilePaths,
+        string objectsDirectoryPath
+    ) {
+        string normalizedDirectoryPath = Path.GetFullPath(objectsDirectoryPath);
+        foreach (string detailFilePath in detailFilePaths) {
+            string normalizedFilePath = Path.GetFullPath(detailFilePath);
+            if (!string.Equals(
+                    Path.GetDirectoryName(normalizedFilePath),
+                    normalizedDirectoryPath,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new ExportOutputException($"Schema Summary 明細檔案路徑無效：{detailFilePath}");
+            }
+
+            if (File.Exists(normalizedFilePath) && !previousDetailFilePaths.Contains(normalizedFilePath)) {
+                throw new ExportOutputException($"Schema Summary 明細檔案已存在且未由現有 entry 參照：{normalizedFilePath}");
+            }
+        }
+    }
+
+    private static void DeleteDerivedObjectFiles(
+        IEnumerable<string> previousDetailFilePaths,
+        IReadOnlySet<string> currentDetailFilePaths,
+        string objectsDirectoryPath,
+        string? entryDirectoryPath,
+        string objectsDirectoryName
+    ) {
+        ValidateObjectsDirectoryPath(objectsDirectoryPath, entryDirectoryPath, objectsDirectoryName);
+        string normalizedDirectoryPath = Path.GetFullPath(objectsDirectoryPath);
+        foreach (string previousDetailFilePath in previousDetailFilePaths) {
+            string normalizedFilePath = Path.GetFullPath(previousDetailFilePath);
+            if (currentDetailFilePaths.Contains(normalizedFilePath)
+                || !string.Equals(
+                    Path.GetDirectoryName(normalizedFilePath),
+                    normalizedDirectoryPath,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                continue;
+            }
+
+            TryDeleteFile(normalizedFilePath);
+        }
+
+        TryDeleteEmptyDirectory(normalizedDirectoryPath);
+    }
+
+    private static bool TryRestorePreviousDetails(
+        IEnumerable<string> publishedDetailFilePaths,
+        IEnumerable<(string OriginalPath, string BackupPath)> backedUpDetailFiles
+    ) {
+        bool restored = true;
+        foreach (string publishedDetailFilePath in publishedDetailFilePaths) {
+            restored &= TryDeleteFile(publishedDetailFilePath);
+        }
+
+        foreach ((string originalPath, string backupPath) in backedUpDetailFiles) {
+            if (!File.Exists(backupPath)) {
+                continue;
+            }
+
+            try {
+                File.Move(backupPath, originalPath, overwrite: true);
+            } catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) {
+                restored = false;
+            }
+        }
+
+        return restored;
+    }
+
+    private static void PublishDetailFile(string stagedFilePath, string finalFilePath) {
+        try {
+            File.Move(stagedFilePath, finalFilePath, overwrite: true);
+        } catch (Exception ex) when (
+            ex is ArgumentException
+                or IOException
+                or UnauthorizedAccessException
+                or NotSupportedException
+                or PathTooLongException
+        ) {
+            throw new ExportOutputException($"無法發佈 Schema Summary 明細檔案：{finalFilePath}", ex);
+        }
+    }
+
+    private static void ReplaceArtifactFile(string temporaryFilePath, string targetFilePath) {
+        try {
+            File.Move(temporaryFilePath, targetFilePath, overwrite: true);
+        } catch (Exception ex) when (
+            ex is ArgumentException
+                or IOException
+                or UnauthorizedAccessException
+                or NotSupportedException
+                or PathTooLongException
+        ) {
+            throw new ExportOutputException($"無法取代 Schema Summary 檔案：{targetFilePath}", ex);
+        }
+    }
+
+    private static void EnsureTemporaryDirectoryIsAvailable(string directoryPath) {
+        if (Directory.Exists(directoryPath) || File.Exists(directoryPath)) {
+            throw new ExportOutputException($"Schema Summary 暫存路徑已存在：{directoryPath}");
+        }
+    }
+
+    private static void EnsureTemporaryFileIsAvailable(string filePath) {
+        if (File.Exists(filePath) || Directory.Exists(filePath)) {
+            throw new ExportOutputException($"Schema Summary 暫存檔案已存在：{filePath}");
+        }
+    }
+
+    private static string BuildDetailLink(string objectsDirectoryName, string fileName) {
+        return $"{Uri.EscapeDataString(objectsDirectoryName)}/{Uri.EscapeDataString(fileName)}";
+    }
+
+    private static string BuildTemporaryFilePath(string filePath) {
+        return $"{filePath}.tmp-{Guid.NewGuid():N}";
+    }
+
+    private static string BuildTemporaryDirectoryPath(
+        string? entryDirectoryPath,
+        string objectsDirectoryName,
+        string suffix
+    ) {
+        return Path.Combine(
+            entryDirectoryPath ?? "",
+            $"{objectsDirectoryName}.{suffix}-{Guid.NewGuid():N}"
+        );
+    }
+
+    private static bool TryDeleteFile(string filePath) {
+        try {
+            File.Delete(filePath);
+            return true;
+        } catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) {
+            return false;
+        }
+    }
+
+    private static bool TryDeleteEmptyDirectory(string directoryPath) {
+        try {
+            if (!Directory.Exists(directoryPath) || Directory.EnumerateFileSystemEntries(directoryPath).Any()) {
+                return false;
+            }
+
+            Directory.Delete(directoryPath);
+            return true;
+        } catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) {
+            return false;
+        }
+    }
+
     private static string BuildMarkdownSidecar(SchemaSnapshotDocument snapshot, SchemaDiffDocument? diff) {
         StringBuilder markdown = new();
         markdown.AppendLine("# Schema Export Sidecar");
@@ -106,6 +623,7 @@ internal static class SchemaExportArtifactWriter {
         markdown.AppendLine($"- Objects: {snapshot.Counts.Objects}");
         markdown.AppendLine($"- Columns: {snapshot.Counts.Columns}");
         markdown.AppendLine($"- Indexes: {snapshot.Counts.Indexes}");
+        markdown.AppendLine($"- Relationships: {snapshot.Counts.Relationships}");
         markdown.AppendLine($"- Routines: {snapshot.Counts.Routines}");
         if (diff is not null) {
             markdown.AppendLine();
@@ -122,12 +640,16 @@ internal static class SchemaExportArtifactWriter {
             markdown.AppendLine($"- Added Indexes: {diff.Summary.AddedIndexes}");
             markdown.AppendLine($"- Removed Indexes: {diff.Summary.RemovedIndexes}");
             markdown.AppendLine($"- Modified Indexes: {diff.Summary.ModifiedIndexes}");
+            markdown.AppendLine($"- Added Relationships: {diff.Summary.AddedRelationships}");
+            markdown.AppendLine($"- Removed Relationships: {diff.Summary.RemovedRelationships}");
+            markdown.AppendLine($"- Modified Relationships: {diff.Summary.ModifiedRelationships}");
             markdown.AppendLine($"- Added Routines: {diff.Summary.AddedRoutines}");
             markdown.AppendLine($"- Removed Routines: {diff.Summary.RemovedRoutines}");
             markdown.AppendLine($"- Modified Routines: {diff.Summary.ModifiedRoutines}");
             AppendDiffSection(markdown, "Object Changes", diff.ObjectChanges);
             AppendDiffSection(markdown, "Column Changes", diff.ColumnChanges);
             AppendDiffSection(markdown, "Index Changes", diff.IndexChanges);
+            AppendDiffSection(markdown, "Relationship Changes", diff.RelationshipChanges);
             AppendDiffSection(markdown, "Routine Changes", diff.RoutineChanges);
         }
 
@@ -144,6 +666,7 @@ internal static class SchemaExportArtifactWriter {
             }
         }
 
+        AppendRelationships(markdown, snapshot.Relationships, snapshot.Diagnostics);
         markdown.AppendLine();
         markdown.AppendLine("## Objects");
         foreach (SchemaSnapshotObjectDocument databaseObject in snapshot.Objects) {
@@ -171,11 +694,11 @@ internal static class SchemaExportArtifactWriter {
                 markdown.AppendLine();
                 markdown.AppendLine("#### Indexes");
                 markdown.AppendLine();
-                markdown.AppendLine("| Name | PK | Clustered | Unique | Foreign Key | Columns | Other Columns |");
-                markdown.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
+                markdown.AppendLine("| Name | PK | Clustered | Unique | Columns | Included Columns |");
+                markdown.AppendLine("| --- | --- | --- | --- | --- | --- |");
                 foreach (SchemaSnapshotIndexDocument index in databaseObject.Indexes) {
                     markdown.AppendLine(
-                        $"| {EscapeMarkdown(index.IndexName)} | {EscapeMarkdown(index.IsPrimaryKey)} | {EscapeMarkdown(index.IsClustered)} | {EscapeMarkdown(index.IsUnique)} | {EscapeMarkdown(index.IsForeignKey)} | {EscapeMarkdown(index.Columns)} | {EscapeMarkdown(index.OtherColumns)} |"
+                        $"| {EscapeMarkdown(index.IndexName)} | {EscapeMarkdown(index.IsPrimaryKey)} | {EscapeMarkdown(index.IsClustered)} | {EscapeMarkdown(index.IsUnique)} | {EscapeMarkdown(index.Columns)} | {EscapeMarkdown(index.IncludedColumns)} |"
                     );
                 }
             }
@@ -201,19 +724,57 @@ internal static class SchemaExportArtifactWriter {
                 if (!string.IsNullOrWhiteSpace(routine.RoutineDescription)) {
                     markdown.AppendLine($"- Description: {EscapeMarkdown(routine.RoutineDescription)}");
                 }
-
-                if (!string.IsNullOrWhiteSpace(routine.RoutineDefinition)) {
-                    markdown.AppendLine();
-                    markdown.AppendLine("#### Definition");
-                    markdown.AppendLine();
-                    markdown.AppendLine("```sql");
-                    markdown.AppendLine(routine.RoutineDefinition);
-                    markdown.AppendLine("```");
-                }
             }
         }
 
         return markdown.ToString();
+    }
+
+    private static void AppendRelationships(
+        StringBuilder markdown,
+        IReadOnlyCollection<SchemaSnapshotRelationshipDocument> relationships,
+        IReadOnlyCollection<SchemaSnapshotDiagnostic> diagnostics
+    ) {
+        markdown.AppendLine();
+        markdown.AppendLine("## Relationships");
+        markdown.AppendLine();
+
+        List<SchemaSnapshotRelationshipDocument> completeRelationships = relationships
+            .Where(HasCompleteRelationship)
+            .OrderBy(x => x.SourceSchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SourceTableName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ColumnOrder)
+            .ToList();
+        if (completeRelationships.Count == 0) {
+            bool permissionDenied = diagnostics.Any(x => string.Equals(
+                x.Message,
+                "FK catalog permission denied; relationships were not retrieved.",
+                StringComparison.Ordinal
+            ));
+            markdown.AppendLine(permissionDenied
+                ? "Relationships unavailable: FK catalog permission denied."
+                : "No relationships found.");
+            return;
+        }
+
+        markdown.AppendLine("| Constraint | Source Table | Source Column | Referenced Table | Referenced Column |");
+        markdown.AppendLine("| --- | --- | --- | --- | --- |");
+        foreach (SchemaSnapshotRelationshipDocument relationship in completeRelationships) {
+            markdown.AppendLine(
+                $"| {EscapeMarkdown(relationship.ForeignKeyName)} | {EscapeMarkdown(relationship.SourceSchemaName)}.{EscapeMarkdown(relationship.SourceTableName)} | {EscapeMarkdown(relationship.SourceColumnName)} | {EscapeMarkdown(relationship.ReferencedSchemaName)}.{EscapeMarkdown(relationship.ReferencedTableName)} | {EscapeMarkdown(relationship.ReferencedColumnName)} |"
+            );
+        }
+    }
+
+    private static bool HasCompleteRelationship(SchemaSnapshotRelationshipDocument relationship) {
+        return !string.IsNullOrWhiteSpace(relationship.ForeignKeyName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceSchemaName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceTableName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceColumnName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedSchemaName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedTableName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedColumnName);
     }
 
     private static void AppendDiffSection(StringBuilder markdown, string title, IReadOnlyCollection<SchemaDiffEntry> entries) {
@@ -328,7 +889,8 @@ internal static class SchemaExportArtifactWriter {
                 Objects = filteredExport.Objects.Count,
                 Columns = filteredExport.Columns.Count,
                 Indexes = filteredExport.Indexes.Count,
-                Routines = filteredExport.Routines.Count
+                Routines = filteredExport.Routines.Count,
+                Relationships = filteredExport.Relationships.Count
             },
             Diagnostics = diagnostics.Select(x => new ExportManifestDiagnostic {
                 Severity = x.SeverityText,

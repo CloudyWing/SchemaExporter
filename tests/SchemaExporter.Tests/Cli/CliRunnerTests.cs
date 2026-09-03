@@ -372,7 +372,6 @@ public sealed class CliRunnerTests {
                     IsPrimaryKey = "YES",
                     IsClustered = "YES",
                     IsUnique = "YES",
-                    IsForeignKey = "NO",
                     Columns = "Id"
                 }
             ],
@@ -449,9 +448,8 @@ public sealed class CliRunnerTests {
                             IsPrimaryKey = "YES",
                             IsClustered = "YES",
                             IsUnique = "YES",
-                            IsForeignKey = "NO",
                             Columns = "Id",
-                            OtherColumns = ""
+                            IncludedColumns = ""
                         }
                     ]
                 }

@@ -53,5 +53,10 @@ public sealed class SchemaSnapshotDocument {
     /// 取得或設定程序與函數集合。
     /// </summary>
     public required IReadOnlyList<SchemaSnapshotRoutineDocument> Routines { get; init; }
+
+    /// <summary>
+    /// 取得或設定外鍵欄位配對集合。
+    /// </summary>
+    public IReadOnlyList<SchemaSnapshotRelationshipDocument> Relationships { get; init; } = [];
 }
 

@@ -25,18 +25,13 @@ public sealed class SchemaSnapshotIndexDocument {
     public required string IsUnique { get; init; }
 
     /// <summary>
-    /// 取得此索引是否為外部索引鍵的描述。
-    /// </summary>
-    public required string IsForeignKey { get; init; }
-
-    /// <summary>
     /// 取得此索引包含的資料行。
     /// </summary>
     public required string Columns { get; init; }
 
     /// <summary>
-    /// 取得與此索引相關的其他資料行。
+    /// 取得此索引的 INCLUDE 資料行。
     /// </summary>
-    public required string OtherColumns { get; init; }
+    public required string IncludedColumns { get; init; }
 }
 

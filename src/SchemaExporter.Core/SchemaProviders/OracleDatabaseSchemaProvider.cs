@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Dapper;
+using CloudyWing.SchemaExporter.Core.Exporting;
 using Oracle.ManagedDataAccess.Client;
 
 namespace CloudyWing.SchemaExporter.Core.SchemaProviders;
@@ -93,11 +94,37 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
             await FillRoutineDefinitionsAsync(connection, routines, cancellationToken).ConfigureAwait(false);
         }
 
+        List<ExportDiagnostic> diagnostics = [];
+        IReadOnlyList<DatabaseForeignKeySchema> relationships = [];
+        try {
+            relationships = [
+                ..await connection.QueryAsync<DatabaseForeignKeySchema>(
+                    new CommandDefinition(
+                        BuildQueryRelationshipsSql(tableInClause),
+                        cancellationToken: cancellationToken
+                    )
+                ).ConfigureAwait(false)
+            ];
+        } catch (OracleException exception) when (IsForeignKeyCatalogPermissionDenied(exception.Number)) {
+            diagnostics.Add(new ExportDiagnostic {
+                Severity = DiagnosticSeverity.Warning,
+                Category = ExportDiagnosticCategory.Execution,
+                Message = "FK catalog permission denied; relationships were not retrieved."
+            });
+        }
+
         return new DatabaseSchemaDetails {
             Columns = columns,
             Indexes = indexes,
-            Routines = routines
+            Routines = routines,
+            Relationships = relationships,
+            Diagnostics = diagnostics
         };
+    }
+
+    internal static bool IsForeignKeyCatalogPermissionDenied(int errorNumber) {
+        // Oracle errors ORA-00942 and ORA-01031 are returned as 942 and 1031 by OracleException.Number.
+        return errorNumber is 942 or 1031;
     }
 
     private static string BuildObjectInClause(IReadOnlyList<DatabaseObjectSchema> objects) {
@@ -194,7 +221,7 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
 
     private static string BuildQueryIndexesSql(string tableInClause) {
         if (string.IsNullOrEmpty(tableInClause)) {
-            return "SELECT NULL AS SchemaName, NULL AS ObjectName, NULL AS ObjectType, NULL AS IndexName, NULL AS IsPrimaryKey, NULL AS IsClustered, NULL AS IsUnique, NULL AS IsForeignKey, NULL AS Columns, NULL AS OtherColumns FROM DUAL WHERE 1 = 0";
+            return "SELECT NULL AS SchemaName, NULL AS ObjectName, NULL AS ObjectType, NULL AS IndexName, NULL AS IsPrimaryKey, NULL AS IsClustered, NULL AS IsUnique, NULL AS Columns, NULL AS IncludedColumns FROM DUAL WHERE 1 = 0";
         }
 
         return $"""
@@ -206,9 +233,8 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
                 CASE WHEN pk.constraint_name IS NOT NULL THEN 'Yes' ELSE 'No' END AS IsPrimaryKey,
                 'No' AS IsClustered,
                 CASE WHEN i.uniqueness = 'UNIQUE' THEN 'Yes' ELSE 'No' END AS IsUnique,
-                'No' AS IsForeignKey,
                 NVL(LISTAGG(ic.column_name, CHR(10)) WITHIN GROUP (ORDER BY ic.column_position), '') AS Columns,
-                '' AS OtherColumns
+                '' AS IncludedColumns
             FROM user_indexes i
             INNER JOIN user_ind_columns ic
                 ON ic.index_name = i.index_name
@@ -225,20 +251,25 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
                 pk.constraint_name,
                 i.uniqueness
 
-            UNION ALL
+            ORDER BY SchemaName, ObjectName, IndexName
+            """;
+    }
 
+    private static string BuildQueryRelationshipsSql(string tableInClause) {
+        if (string.IsNullOrEmpty(tableInClause)) {
+            return "SELECT NULL AS ForeignKeyName, NULL AS SourceSchemaName, NULL AS SourceTableName, NULL AS SourceColumnName, NULL AS ReferencedSchemaName, NULL AS ReferencedTableName, NULL AS ReferencedColumnName, NULL AS ColumnOrder FROM DUAL WHERE 1 = 0";
+        }
+
+        return $"""
             SELECT
-                USER AS SchemaName,
-                fk.table_name AS ObjectName,
-                'BASE TABLE' AS ObjectType,
-                fk.constraint_name AS IndexName,
-                'No' AS IsPrimaryKey,
-                'No' AS IsClustered,
-                'No' AS IsUnique,
-                'Yes' AS IsForeignKey,
-                NVL(LISTAGG(fkc.column_name, CHR(10)) WITHIN GROUP (ORDER BY fkc.position), '') AS Columns,
-                fk.r_owner || '.' || ref.table_name || ':' || CHR(10)
-                    || NVL(LISTAGG(rcc.column_name, ',' || CHR(10)) WITHIN GROUP (ORDER BY rcc.position), '') AS OtherColumns
+                fk.constraint_name AS ForeignKeyName,
+                USER AS SourceSchemaName,
+                fkc.table_name AS SourceTableName,
+                fkc.column_name AS SourceColumnName,
+                ref.owner AS ReferencedSchemaName,
+                ref.table_name AS ReferencedTableName,
+                rcc.column_name AS ReferencedColumnName,
+                fkc.position AS ColumnOrder
             FROM user_constraints fk
             INNER JOIN user_cons_columns fkc
                 ON fkc.table_name = fk.table_name
@@ -246,20 +277,18 @@ internal sealed class OracleDatabaseSchemaProvider : IDatabaseSchemaProvider {
             INNER JOIN all_constraints ref
                 ON ref.owner = fk.r_owner
                 AND ref.constraint_name = fk.r_constraint_name
+                AND ref.constraint_type IN ('P', 'U')
             INNER JOIN all_cons_columns rcc
                 ON rcc.owner = ref.owner
                 AND rcc.constraint_name = ref.constraint_name
                 AND rcc.position = fkc.position
             WHERE fk.constraint_type = 'R'
-                AND fk.table_name IN ({tableInClause})
-            GROUP BY
-                fk.table_name,
+                AND fkc.table_name IN ({tableInClause})
+            ORDER BY
+                fkc.table_name,
                 fk.constraint_name,
-                fk.r_owner,
-                ref.table_name
-
-            ORDER BY SchemaName, ObjectName, IndexName
-            """;
+                fkc.position
+        """;
     }
 
     private static async Task FillRoutineDefinitionsAsync(

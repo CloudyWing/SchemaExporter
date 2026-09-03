@@ -2,7 +2,7 @@
 
 ## 說明
 
-Schema Diff 記錄兩份 schema snapshot 之間的差異，包含新增、移除、修改的物件、欄位、索引與預存程序和函數。
+Schema Diff 記錄兩份 schema snapshot 之間的差異，包含新增、移除、修改的物件、欄位、索引、外鍵關聯與預存程序和函數。
 
 Diff 可在匯出時自動產生（指定基準 snapshot），也可以單獨使用 `diff` 命令對任意兩份 snapshot 進行比對。
 
@@ -46,7 +46,7 @@ Diff 支援兩種輸出格式：
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": "2024-12-01T12:00:00+08:00",
   "leftSnapshotPath": "D:\\Snapshots\\baseline.snapshot.json",
   "rightSnapshotPath": "D:\\SchemaExports\\TableSchema_prod_20241201_120000.snapshot.json",
@@ -54,7 +54,8 @@ Diff 支援兩種輸出格式：
   "objectChanges": [ ... ],
   "columnChanges": [ ... ],
   "indexChanges": [ ... ],
-  "routineChanges": [ ... ]
+  "routineChanges": [ ... ],
+  "relationshipChanges": [ ... ]
 }
 ```
 
@@ -84,11 +85,14 @@ Diff 支援兩種輸出格式：
 | `addedIndexes` | 新增的索引數量。 |
 | `removedIndexes` | 移除的索引數量。 |
 | `modifiedIndexes` | 修改的索引數量。 |
+| `addedRelationships` | 新增的外鍵關聯數量。 |
+| `removedRelationships` | 移除的外鍵關聯數量。 |
+| `modifiedRelationships` | 修改的外鍵關聯數量。 |
 | `addedRoutines` | 新增的預存程序與函數數量。 |
 | `removedRoutines` | 移除的預存程序與函數數量。 |
 | `modifiedRoutines` | 修改的預存程序與函數數量。 |
 
-### objectChanges / columnChanges / indexChanges / routineChanges
+### objectChanges / columnChanges / indexChanges / relationshipChanges / routineChanges
 
 各層級的差異項目陣列，每筆結構相同：
 
@@ -97,6 +101,8 @@ Diff 支援兩種輸出格式：
 | `changeType` | 變更類型：`Added`、`Removed` 或 `Modified`。 |
 | `identifier` | 識別此項目的字串，格式因層級而異（如物件為 `dbo.Users`，欄位為 `dbo.Users.Id`）。 |
 | `propertyChanges` | 屬性變更的字典（僅 `Modified` 項目有值，其他為空）。每個 key 為屬性名稱，value 包含 `previous` 與 `current` 兩個欄位。 |
+
+`relationshipChanges` 的識別字由 constraint name、source schema、source table 與 source column 組成。參考 schema、參考 table、參考欄位與 `columnOrder` 的變化會列在 `propertyChanges`。若任一側 Snapshot 版本低於 v3，關聯差異集合保持空白，其餘層級照常比對。
 
 ### propertyChanges 範例
 

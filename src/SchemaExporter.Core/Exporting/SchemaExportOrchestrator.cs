@@ -17,8 +17,13 @@ namespace CloudyWing.SchemaExporter.Core.Exporting;
 /// 協調結構描述匯出工作流程，涵蓋驗證、篩選、診斷與進度回報。
 /// </summary>
 public sealed partial class SchemaExportOrchestrator {
+    private const string RedactedSecretText = "[REDACTED]";
     private const int MaxSheetNameLength = 31;
     private static readonly char[] InvalidSheetNameCharacters = [':', '\\', '/', '?', '*', '[', ']'];
+    private static readonly Regex ConnectionStringPasswordPattern = new(
+        @"(?<key>\b(?:password|pwd)\b)\s*=\s*(?<value>""(?:[^""]|"""")*""|'(?:[^']|'')*'|[^;]*)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase
+    );
 
     private readonly IDatabaseSchemaProviderFactory providerFactory;
     private readonly ILogger<SchemaExportOrchestrator> logger;
@@ -58,6 +63,96 @@ public sealed partial class SchemaExportOrchestrator {
         this.logger = logger;
         this.snapshotBuilder = snapshotBuilder;
         this.diffService = diffService;
+    }
+
+    /// <summary>
+    /// 建立外層與內部訊息均已遮罩連線秘密的例外副本。
+    /// </summary>
+    /// <param name="exception">要遮罩的例外。</param>
+    /// <param name="connectionString">本次執行使用的連線字串；可為 <see langword="null"/>。</param>
+    /// <returns>訊息與內部例外訊息均已遮罩的例外副本。</returns>
+    public static Exception RedactException(Exception exception, string? connectionString) {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        List<string> sensitiveValues = BuildSensitiveValues(connectionString);
+        return RedactExceptionCore(exception, sensitiveValues);
+    }
+
+    private static List<string> BuildSensitiveValues(string? connectionString) {
+        List<string> sensitiveValues = [];
+        if (string.IsNullOrWhiteSpace(connectionString)) {
+            return sensitiveValues;
+        }
+
+        AddSensitiveValue(sensitiveValues, connectionString);
+        AddSensitiveValue(sensitiveValues, connectionString.Trim());
+        try {
+            DbConnectionStringBuilder builder = new() {
+                ConnectionString = connectionString
+            };
+            foreach (string key in builder.Keys) {
+                if (IsPasswordKey(key)) {
+                    AddSensitiveValue(sensitiveValues, builder[key]?.ToString());
+                }
+            }
+        } catch (ArgumentException) {
+            // 連線字串格式不完整時，仍由正規表示式遮罩 Password 與 Pwd 片段。
+        }
+
+        foreach (Match match in ConnectionStringPasswordPattern.Matches(connectionString)) {
+            string passwordValue = match.Groups["value"].Value.Trim().Trim('"', '\'');
+            AddSensitiveValue(sensitiveValues, passwordValue);
+        }
+
+        return sensitiveValues
+            .OrderByDescending(value => value.Length)
+            .ToList();
+    }
+
+    private static void AddSensitiveValue(List<string> sensitiveValues, string? value) {
+        if (!string.IsNullOrEmpty(value)
+            && !sensitiveValues.Any(existing => string.Equals(existing, value, StringComparison.Ordinal))) {
+            sensitiveValues.Add(value);
+        }
+    }
+
+    private static bool IsPasswordKey(string key) {
+        return string.Equals(key, "Password", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "Pwd", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Exception RedactExceptionCore(Exception exception, IReadOnlyCollection<string> sensitiveValues) {
+        string redactedMessage = RedactSensitiveText(exception.Message, sensitiveValues);
+        if (exception is AggregateException aggregateException) {
+            return new AggregateException(
+                redactedMessage,
+                aggregateException.InnerExceptions.Select(innerException =>
+                    RedactExceptionCore(innerException, sensitiveValues)
+                )
+            );
+        }
+
+        Exception? redactedInnerException = exception.InnerException is null
+            ? null
+            : RedactExceptionCore(exception.InnerException, sensitiveValues);
+        return new RedactedException(redactedMessage, redactedInnerException);
+    }
+
+    private static string RedactSensitiveText(string text, IReadOnlyCollection<string> sensitiveValues) {
+        string redactedText = text;
+        foreach (string sensitiveValue in sensitiveValues) {
+            redactedText = redactedText.Replace(sensitiveValue, RedactedSecretText, StringComparison.Ordinal);
+        }
+
+        return ConnectionStringPasswordPattern.Replace(
+            redactedText,
+            match => $"{match.Groups["key"].Value}={RedactedSecretText}"
+        );
+    }
+
+    private sealed class RedactedException : Exception {
+        public RedactedException(string message, Exception? innerException) : base(message, innerException) {
+        }
     }
 
     /// <summary>
@@ -164,6 +259,7 @@ public sealed partial class SchemaExportOrchestrator {
         Stopwatch totalStopwatch = Stopwatch.StartNew();
         ExportExecutionSummary executionSummary = new();
         string? outputFilePath = null;
+        string? connectionStringForRedaction = connection.ConnectionString;
 
         try {
             LogExportStarted(logger, connection.Name, connection.DatabaseType, profile.Name);
@@ -220,6 +316,7 @@ public sealed partial class SchemaExportOrchestrator {
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            diagnostics.AddRange(schemaDetails.Diagnostics);
             executionSummary.SchemaLoadDuration = stageStopwatch.Elapsed;
 
             stageStopwatch.Restart();
@@ -271,6 +368,7 @@ public sealed partial class SchemaExportOrchestrator {
                 filteredExport.Objects.Count,
                 filteredExport.Columns.Count,
                 filteredExport.Indexes.Count,
+                filteredExport.Relationships.Count,
                 filteredExport.Routines.Count,
                 warningCount,
                 outputPlan.FilePath,
@@ -301,7 +399,7 @@ public sealed partial class SchemaExportOrchestrator {
         } catch (Exception ex) {
             LogExportFailed(
                 logger,
-                ex,
+                RedactException(ex, connectionStringForRedaction),
                 connection.Name,
                 currentStage,
                 totalStopwatch.Elapsed.TotalMilliseconds,
@@ -460,6 +558,13 @@ public sealed partial class SchemaExportOrchestrator {
             .ThenBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        List<DatabaseForeignKeySchema> relationships = schemaDetails.Relationships
+            .OrderBy(x => x.SourceSchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SourceTableName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ColumnOrder)
+            .ToList();
+
         foreach (DatabaseObjectSchema viewObject in filteredObjects.Where(x => IsViewObjectType(x.ObjectType))) {
             diagnostics.Add(new ExportDiagnostic {
                 Severity = DiagnosticSeverity.Warning,
@@ -484,7 +589,8 @@ public sealed partial class SchemaExportOrchestrator {
             Objects = filteredObjects,
             Columns = filteredColumns,
             Indexes = filteredIndexes,
-            Routines = filteredRoutines
+            Routines = filteredRoutines,
+            Relationships = relationships
         };
     }
 
@@ -659,11 +765,24 @@ public sealed partial class SchemaExportOrchestrator {
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在建立程序與函數清單工作表...", 64);
                 cancellationToken.ThrowIfCancellationRequested();
 
+                BuildRelationshipListSheet(document, filteredExport.Relationships);
+                ReportProgress(progress, ExportStage.GeneratingExport, "正在建立外鍵關聯清單工作表...", 66);
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (diagnostics.Count > 0) {
                     BuildDiagnosticsSheet(document, diagnostics);
                 }
 
-                BuildTableDetailSheets(document, filteredExport.Objects, filteredExport.Columns, filteredExport.Indexes, sheetNames, progress, cancellationToken);
+                BuildTableDetailSheets(
+                    document,
+                    filteredExport.Objects,
+                    filteredExport.Columns,
+                    filteredExport.Indexes,
+                    filteredExport.Relationships,
+                    sheetNames,
+                    progress,
+                    cancellationToken
+                );
                 cancellationToken.ThrowIfCancellationRequested();
                 ReportProgress(progress, ExportStage.GeneratingExport, "正在寫入 Excel 檔案...", 88);
                 document.ExportFile(filePath, SpreadsheetFileMode.Create);
@@ -696,7 +815,7 @@ public sealed partial class SchemaExportOrchestrator {
         diagnostics.Add(new ExportDiagnostic {
             Severity = DiagnosticSeverity.Info,
             Category = ExportDiagnosticCategory.Execution,
-            Message = string.Create(CultureInfo.InvariantCulture, $"匯出摘要：耗時 {executionSummary.TotalDuration.TotalMilliseconds:N0} ms；物件 {filteredExport.Objects.Count}、欄位 {filteredExport.Columns.Count}、索引 {filteredExport.Indexes.Count}、程序/函數 {filteredExport.Routines.Count}；警告 {warningCount}。各階段耗時：驗證 {executionSummary.ValidationDuration.TotalMilliseconds:N0} ms、載入 {executionSummary.SchemaLoadDuration.TotalMilliseconds:N0} ms、篩選 {executionSummary.FilteringDuration.TotalMilliseconds:N0} ms、Excel {executionSummary.WorkbookDuration.TotalMilliseconds:N0} ms、收尾 {executionSummary.ArtifactDuration.TotalMilliseconds:N0} ms。")
+            Message = string.Create(CultureInfo.InvariantCulture, $"匯出摘要：耗時 {executionSummary.TotalDuration.TotalMilliseconds:N0} ms；物件 {filteredExport.Objects.Count}、欄位 {filteredExport.Columns.Count}、索引 {filteredExport.Indexes.Count}、關聯 {filteredExport.Relationships.Count}、程序/函數 {filteredExport.Routines.Count}；警告 {warningCount}。各階段耗時：驗證 {executionSummary.ValidationDuration.TotalMilliseconds:N0} ms、載入 {executionSummary.SchemaLoadDuration.TotalMilliseconds:N0} ms、篩選 {executionSummary.FilteringDuration.TotalMilliseconds:N0} ms、Excel {executionSummary.WorkbookDuration.TotalMilliseconds:N0} ms、收尾 {executionSummary.ArtifactDuration.TotalMilliseconds:N0} ms。")
         });
     }
 
@@ -784,6 +903,37 @@ public sealed partial class SchemaExportOrchestrator {
             .SetColumnWidth(8, 90D);
     }
 
+    private static void BuildRelationshipListSheet(
+        SpreadsheetDocument document,
+        IReadOnlyCollection<DatabaseForeignKeySchema> relationships
+    ) {
+        CellStyle centerFieldStyle = SpreadsheetManager.DefaultCellStyles.FieldStyle with {
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        RecordSetTemplate<DatabaseForeignKeySchema> template = new(relationships) {
+            RecordHeight = Constants.AutoFitRowHeight
+        };
+        template.Columns.Add("外鍵名稱", x => x.ForeignKeyName)
+            .Add("來源 Schema", x => x.SourceSchemaName)
+            .Add("來源資料表", x => x.SourceTableName)
+            .Add("來源欄位", x => x.SourceColumnName)
+            .Add("參考 Schema", x => x.ReferencedSchemaName)
+            .Add("參考資料表", x => x.ReferencedTableName)
+            .Add("參考欄位", x => x.ReferencedColumnName)
+            .Add("欄位順序", x => x.ColumnOrder, fieldStyleGenerator: _ => centerFieldStyle);
+
+        document.CreateSheet("外鍵關聯清單")
+            .AddTemplate(template)
+            .SetColumnWidth(0, 36D)
+            .SetColumnWidth(1, 18D)
+            .SetColumnWidth(2, 32D)
+            .SetColumnWidth(3, 28D)
+            .SetColumnWidth(4, 18D)
+            .SetColumnWidth(5, 32D)
+            .SetColumnWidth(6, 28D)
+            .SetColumnWidth(7, 12D);
+    }
+
     private static void BuildDiagnosticsSheet(SpreadsheetDocument document, IReadOnlyCollection<ExportDiagnostic> diagnostics) {
         RecordSetTemplate<ExportDiagnostic> template = new(diagnostics) {
             RecordHeight = Constants.AutoFitRowHeight
@@ -803,9 +953,22 @@ public sealed partial class SchemaExportOrchestrator {
             .SetColumnWidth(4, 80D);
     }
 
-    private static void BuildTableDetailSheets(SpreadsheetDocument document, IReadOnlyList<DatabaseObjectSchema> databaseObjects, IReadOnlyList<DatabaseColumnSchema> columns, IReadOnlyList<DatabaseIndexSchema> indexes, IReadOnlyDictionary<DatabaseObjectKey, string> sheetNames, IProgress<ExportProgress>? progress, CancellationToken cancellationToken) {
+    private static void BuildTableDetailSheets(
+        SpreadsheetDocument document,
+        IReadOnlyList<DatabaseObjectSchema> databaseObjects,
+        IReadOnlyList<DatabaseColumnSchema> columns,
+        IReadOnlyList<DatabaseIndexSchema> indexes,
+        IReadOnlyList<DatabaseForeignKeySchema> relationships,
+        IReadOnlyDictionary<DatabaseObjectKey, string> sheetNames,
+        IProgress<ExportProgress>? progress,
+        CancellationToken cancellationToken
+    ) {
         ILookup<DatabaseObjectKey, DatabaseColumnSchema> columnsByObject = columns.ToLookup(x => x.ObjectKey);
         ILookup<DatabaseObjectKey, DatabaseIndexSchema> indexesByObject = indexes.ToLookup(x => x.ObjectKey);
+        ILookup<string, DatabaseForeignKeySchema> relationshipsByObject = relationships.ToLookup(
+            x => BuildObjectNameKey(x.SourceSchemaName, x.SourceTableName),
+            StringComparer.OrdinalIgnoreCase
+        );
 
         int totalObjects = Math.Max(1, databaseObjects.Count);
         for (int index = 0; index < databaseObjects.Count; index++) {
@@ -817,7 +980,11 @@ public sealed partial class SchemaExportOrchestrator {
             BuildTableDetailSheet(
                 sheet, databaseObject,
                 columnsByObject[objectKey].OrderBy(x => x.ColumnOrder).ToList(),
-                indexesByObject[objectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).ToList()
+                indexesByObject[objectKey].OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase).ToList(),
+                relationshipsByObject[BuildObjectNameKey(databaseObject.SchemaName, databaseObject.ObjectName)]
+                    .OrderBy(x => x.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(x => x.ColumnOrder)
+                    .ToList()
             );
 
             int percent = 68 + (int)Math.Round((double)(index + 1) / totalObjects * 17, MidpointRounding.AwayFromZero);
@@ -829,7 +996,13 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static void BuildTableDetailSheet(SheetDefinition sheet, DatabaseObjectSchema databaseObject, IReadOnlyCollection<DatabaseColumnSchema> columns, IReadOnlyCollection<DatabaseIndexSchema> indexes) {
+    private static void BuildTableDetailSheet(
+        SheetDefinition sheet,
+        DatabaseObjectSchema databaseObject,
+        IReadOnlyCollection<DatabaseColumnSchema> columns,
+        IReadOnlyCollection<DatabaseIndexSchema> indexes,
+        IReadOnlyCollection<DatabaseForeignKeySchema> relationships
+    ) {
         CellStyle defaultGridStyle = SpreadsheetManager.DefaultCellStyles.GridCellStyle;
         CellFont defaultFont = SpreadsheetManager.DefaultCellStyles.GridCellStyle.Font;
 
@@ -871,27 +1044,45 @@ public sealed partial class SchemaExportOrchestrator {
                 .Add("是否為 PK", x => x.IsPrimaryKey, fieldStyleGenerator: _ => centerFieldStyle)
                 .Add("是否為叢集索引", x => x.IsClustered, fieldStyleGenerator: _ => centerFieldStyle)
                 .Add("是否為唯一索引", x => x.IsUnique, fieldStyleGenerator: _ => centerFieldStyle)
-                .Add("是否為外鍵", x => x.IsForeignKey, fieldStyleGenerator: _ => centerFieldStyle)
                 .Add("欄位", x => x.Columns, x => x.UseValue(static value => NormalizeMultilineText(value.Value)))
-                .Add("Include/外鍵 欄位", x => x.OtherColumns, x => x.UseValue(static value => NormalizeMultilineText(value.Value)));
+                .Add("Include 欄位", x => x.IncludedColumns, x => x.UseValue(static value => NormalizeMultilineText(value.Value)));
 
             sheet.AddTemplate(new GridTemplate().CreateRow())
                 .AddTemplate(indexesTemplate);
+        }
+
+        if (relationships.Count > 0) {
+            RecordSetTemplate<DatabaseForeignKeySchema> relationshipsTemplate = new(relationships) {
+                RecordHeight = Constants.AutoFitRowHeight
+            };
+            relationshipsTemplate.Columns.Add("外鍵名稱", x => x.ForeignKeyName)
+                .Add("來源欄位", x => x.SourceColumnName)
+                .Add("參考 Schema", x => x.ReferencedSchemaName)
+                .Add("參考資料表", x => x.ReferencedTableName)
+                .Add("參考欄位", x => x.ReferencedColumnName)
+                .Add("欄位順序", x => x.ColumnOrder, fieldStyleGenerator: _ => centerFieldStyle);
+
+            sheet.AddTemplate(new GridTemplate().CreateRow())
+                .AddTemplate(relationshipsTemplate);
         }
 
         sheet.SetColumnWidth(0, 40D)
             .SetColumnWidth(1, 15D)
             .SetColumnWidth(2, 15D)
             .SetColumnWidth(3, 15D)
-            .SetColumnWidth(4, 15D)
-            .SetColumnWidth(5, 25D)
-            .SetColumnWidth(6, 50D);
+            .SetColumnWidth(4, 25D)
+            .SetColumnWidth(5, 50D)
+            .SetColumnWidth(6, 18D);
+    }
+
+    private static string BuildObjectNameKey(string schemaName, string objectName) {
+        return schemaName + "\0" + objectName;
     }
 
     private static Dictionary<DatabaseObjectKey, string> BuildSheetNames(IEnumerable<DatabaseObjectSchema> databaseObjects, List<ExportDiagnostic> diagnostics) {
         Dictionary<DatabaseObjectKey, string> sheetNames = [];
         HashSet<string> usedSheetNames = new(StringComparer.OrdinalIgnoreCase) {
-            "資料表清單", "資料表欄位清單", "程序與函數清單", "匯出診斷"
+            "資料表清單", "資料表欄位清單", "程序與函數清單", "外鍵關聯清單", "匯出診斷"
         };
         foreach (DatabaseObjectSchema databaseObject in databaseObjects) {
             string originalName = $"{databaseObject.SchemaName}.{databaseObject.ObjectName}";
@@ -970,8 +1161,8 @@ public sealed partial class SchemaExportOrchestrator {
     [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Starting schema export for connection {connectionName} ({databaseType}) using profile {profileName}.")]
     private static partial void LogExportStarted(ILogger logger, string connectionName, DatabaseType databaseType, string profileName);
 
-    [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Schema export completed for {connectionName} in {elapsedMilliseconds} ms. Objects={objectCount}, Columns={columnCount}, Indexes={indexCount}, Routines={routineCount}, Warnings={warningCount}, Output={outputFilePath}. Validation={validationMilliseconds} ms, Load={loadMilliseconds} ms, Filter={filterMilliseconds} ms, Workbook={workbookMilliseconds} ms, Finalize={finalizeMilliseconds} ms.")]
-    private static partial void LogExportCompleted(ILogger logger, string connectionName, double elapsedMilliseconds, int objectCount, int columnCount, int indexCount, int routineCount, int warningCount, string outputFilePath, double validationMilliseconds, double loadMilliseconds, double filterMilliseconds, double workbookMilliseconds, double finalizeMilliseconds);
+    [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Schema export completed for {connectionName} in {elapsedMilliseconds} ms. Objects={objectCount}, Columns={columnCount}, Indexes={indexCount}, Relationships={relationshipCount}, Routines={routineCount}, Warnings={warningCount}, Output={outputFilePath}. Validation={validationMilliseconds} ms, Load={loadMilliseconds} ms, Filter={filterMilliseconds} ms, Workbook={workbookMilliseconds} ms, Finalize={finalizeMilliseconds} ms.")]
+    private static partial void LogExportCompleted(ILogger logger, string connectionName, double elapsedMilliseconds, int objectCount, int columnCount, int indexCount, int relationshipCount, int routineCount, int warningCount, string outputFilePath, double validationMilliseconds, double loadMilliseconds, double filterMilliseconds, double workbookMilliseconds, double finalizeMilliseconds);
 
     [LoggerMessage(EventId = 2002, Level = LogLevel.Warning, Message = "Schema export for {connectionName} was cancelled during {stage} after {elapsedMilliseconds} ms.")]
     private static partial void LogExportCancelled(ILogger logger, string connectionName, ExportStage stage, double elapsedMilliseconds);

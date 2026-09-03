@@ -59,22 +59,31 @@ internal sealed class CliRunner {
         }
 
         CliArguments arguments = parsedArguments ?? throw new InvalidOperationException("CLI parser returned success without arguments.");
+        string? connectionStringForRedaction = null;
 
         try {
             return arguments.Command switch {
                 CliCommand.Diff => await ExecuteDiffAsync(arguments).ConfigureAwait(false),
-                _ => await ExecuteExportAsync(arguments).ConfigureAwait(false)
+                _ => await ExecuteExportAsync(
+                    arguments,
+                    connectionString => connectionStringForRedaction = connectionString
+                ).ConfigureAwait(false)
             };
         } catch (ExportWorkflowException ex) {
-            Console.Error.WriteLine($"{GetCommandLabel(arguments)} failed: {ex.Message}");
+            Exception redactedException = SchemaExportOrchestrator.RedactException(ex, connectionStringForRedaction);
+            Console.Error.WriteLine($"{GetCommandLabel(arguments)} failed: {redactedException.Message}");
             return (int)CliExitCode.WorkflowError;
         } catch (Exception ex) {
-            Console.Error.WriteLine($"Unexpected error: {ex.Message}");
+            Exception redactedException = SchemaExportOrchestrator.RedactException(ex, connectionStringForRedaction);
+            Console.Error.WriteLine($"Unexpected error: {redactedException.Message}");
             return (int)CliExitCode.UnexpectedError;
         }
     }
 
-    private async Task<int> ExecuteExportAsync(CliArguments arguments) {
+    private async Task<int> ExecuteExportAsync(
+        CliArguments arguments,
+        Action<string?> setConnectionStringForRedaction
+    ) {
         SchemaOptions schemaOptions = await settingsService.LoadAsync().ConfigureAwait(false);
         ExportOptionOverrides overrides = new() {
             OutputPath = arguments.OutputPath,
@@ -94,6 +103,7 @@ internal sealed class CliRunner {
             arguments.ProfileName,
             overrides
         );
+        setConnectionStringForRedaction(request.Connection.ConnectionString);
 
         Progress<ExportProgress> progress = new(exportProgress => {
             Console.WriteLine($"[{exportProgress.Stage}] {exportProgress.Message}");

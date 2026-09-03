@@ -25,5 +25,10 @@ internal sealed class FilteredSchemaExport {
     /// 取得篩選後的資料庫程序與函數清單。
     /// </summary>
     public required IReadOnlyList<DatabaseRoutineSchema> Routines { get; init; }
+
+    /// <summary>
+    /// 取得篩選後的外鍵欄位配對。
+    /// </summary>
+    public IReadOnlyList<DatabaseForeignKeySchema> Relationships { get; init; } = [];
 }
 

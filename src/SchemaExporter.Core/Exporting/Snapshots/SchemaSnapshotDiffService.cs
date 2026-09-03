@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 
 namespace CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
@@ -23,7 +24,10 @@ public sealed class SchemaSnapshotDiffService {
         string normalizedPath = NormalizePath(snapshotPath);
         try {
             string json = await File.ReadAllTextAsync(normalizedPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
-            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(json, JsonOptions)
+            SchemaSnapshotDocument? snapshot = JsonSerializer.Deserialize<SchemaSnapshotDocument>(
+                NormalizeLegacySnapshotJson(json),
+                JsonOptions
+            )
                 ?? throw new ExportValidationException($"無法讀取 schema snapshot 檔案：{normalizedPath}");
 
             return snapshot;
@@ -133,6 +137,9 @@ public sealed class SchemaSnapshotDiffService {
         markdown.AppendLine($"- Added Indexes: {diff.Summary.AddedIndexes}");
         markdown.AppendLine($"- Removed Indexes: {diff.Summary.RemovedIndexes}");
         markdown.AppendLine($"- Modified Indexes: {diff.Summary.ModifiedIndexes}");
+        markdown.AppendLine($"- Added Relationships: {diff.Summary.AddedRelationships}");
+        markdown.AppendLine($"- Removed Relationships: {diff.Summary.RemovedRelationships}");
+        markdown.AppendLine($"- Modified Relationships: {diff.Summary.ModifiedRelationships}");
         markdown.AppendLine($"- Added Routines: {diff.Summary.AddedRoutines}");
         markdown.AppendLine($"- Removed Routines: {diff.Summary.RemovedRoutines}");
         markdown.AppendLine($"- Modified Routines: {diff.Summary.ModifiedRoutines}");
@@ -140,6 +147,7 @@ public sealed class SchemaSnapshotDiffService {
         AppendDiffSection(markdown, "Object Changes", diff.ObjectChanges);
         AppendDiffSection(markdown, "Column Changes", diff.ColumnChanges);
         AppendDiffSection(markdown, "Index Changes", diff.IndexChanges);
+        AppendDiffSection(markdown, "Relationship Changes", diff.RelationshipChanges);
         AppendDiffSection(markdown, "Routine Changes", diff.RoutineChanges);
         return markdown.ToString();
     }
@@ -208,9 +216,8 @@ public sealed class SchemaSnapshotDiffService {
                 [nameof(SchemaSnapshotIndexDocument.IsPrimaryKey)] = NormalizeComparableValue(x.Index.IsPrimaryKey),
                 [nameof(SchemaSnapshotIndexDocument.IsClustered)] = NormalizeComparableValue(x.Index.IsClustered),
                 [nameof(SchemaSnapshotIndexDocument.IsUnique)] = NormalizeComparableValue(x.Index.IsUnique),
-                [nameof(SchemaSnapshotIndexDocument.IsForeignKey)] = NormalizeComparableValue(x.Index.IsForeignKey),
                 [nameof(SchemaSnapshotIndexDocument.Columns)] = NormalizeComparableValue(x.Index.Columns),
-                [nameof(SchemaSnapshotIndexDocument.OtherColumns)] = NormalizeComparableValue(x.Index.OtherColumns)
+                [nameof(SchemaSnapshotIndexDocument.IncludedColumns)] = NormalizeComparableValue(x.Index.IncludedColumns)
             }
         );
 
@@ -227,8 +234,23 @@ public sealed class SchemaSnapshotDiffService {
             }
         );
 
+        List<SchemaDiffEntry> relationshipChanges = leftSnapshot.SchemaVersion >= 3 && rightSnapshot.SchemaVersion >= 3
+            ? BuildChangeEntries(
+                leftSnapshot.Relationships,
+                rightSnapshot.Relationships,
+                static x => BuildRelationshipKey(x),
+                static x => BuildRelationshipIdentifier(x),
+                static x => new Dictionary<string, string?> {
+                    [nameof(SchemaSnapshotRelationshipDocument.ReferencedSchemaName)] = NormalizeComparableValue(x.ReferencedSchemaName),
+                    [nameof(SchemaSnapshotRelationshipDocument.ReferencedTableName)] = NormalizeComparableValue(x.ReferencedTableName),
+                    [nameof(SchemaSnapshotRelationshipDocument.ReferencedColumnName)] = NormalizeComparableValue(x.ReferencedColumnName),
+                    [nameof(SchemaSnapshotRelationshipDocument.ColumnOrder)] = x.ColumnOrder.ToString(CultureInfo.InvariantCulture)
+                }
+            )
+            : [];
+
         return new SchemaDiffDocument {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             GeneratedAt = DateTimeOffset.Now,
             LeftSnapshotPath = leftSnapshotPath,
             RightSnapshotPath = rightSnapshotPath,
@@ -244,12 +266,16 @@ public sealed class SchemaSnapshotDiffService {
                 ModifiedIndexes = CountChanges(indexChanges, SchemaChangeType.Modified),
                 AddedRoutines = CountChanges(routineChanges, SchemaChangeType.Added),
                 RemovedRoutines = CountChanges(routineChanges, SchemaChangeType.Removed),
-                ModifiedRoutines = CountChanges(routineChanges, SchemaChangeType.Modified)
+                ModifiedRoutines = CountChanges(routineChanges, SchemaChangeType.Modified),
+                AddedRelationships = CountChanges(relationshipChanges, SchemaChangeType.Added),
+                RemovedRelationships = CountChanges(relationshipChanges, SchemaChangeType.Removed),
+                ModifiedRelationships = CountChanges(relationshipChanges, SchemaChangeType.Modified)
             },
             ObjectChanges = objectChanges,
             ColumnChanges = columnChanges,
             IndexChanges = indexChanges,
-            RoutineChanges = routineChanges
+            RoutineChanges = routineChanges,
+            RelationshipChanges = relationshipChanges
         };
     }
 
@@ -365,6 +391,20 @@ public sealed class SchemaSnapshotDiffService {
             : $"{qualifiedName}#{overloadIdentifier} ({routineType})";
     }
 
+    private static string BuildRelationshipKey(SchemaSnapshotRelationshipDocument relationship) {
+        return string.Join(
+            "\0",
+            relationship.ForeignKeyName,
+            relationship.SourceSchemaName,
+            relationship.SourceTableName,
+            relationship.SourceColumnName
+        );
+    }
+
+    private static string BuildRelationshipIdentifier(SchemaSnapshotRelationshipDocument relationship) {
+        return $"{relationship.ForeignKeyName}: {relationship.SourceSchemaName}.{relationship.SourceTableName}.{relationship.SourceColumnName}";
+    }
+
     private static string NormalizeComparableValue(string? value) {
         return string.IsNullOrWhiteSpace(value)
             ? ""
@@ -381,6 +421,37 @@ public sealed class SchemaSnapshotDiffService {
             .Replace("|", "\\|", StringComparison.Ordinal)
             .Replace("\r\n", "<br />", StringComparison.Ordinal)
             .Replace("\n", "<br />", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeLegacySnapshotJson(string json) {
+        JsonNode? rootNode = JsonNode.Parse(json);
+        if (rootNode is not JsonObject rootObject
+            || rootObject["objects"] is not JsonArray objects) {
+            return json;
+        }
+
+        foreach (JsonNode? objectNode in objects) {
+            if (objectNode is not JsonObject objectObject
+                || objectObject["indexes"] is not JsonArray indexes) {
+                continue;
+            }
+
+            foreach (JsonNode? indexNode in indexes) {
+                if (indexNode is not JsonObject indexObject) {
+                    continue;
+                }
+
+                if (!indexObject.ContainsKey("includedColumns")
+                    && indexObject.TryGetPropertyValue("otherColumns", out JsonNode? legacyIncludedColumns)) {
+                    indexObject["includedColumns"] = legacyIncludedColumns?.DeepClone();
+                }
+
+                indexObject.Remove("otherColumns");
+                indexObject.Remove("isForeignKey");
+            }
+        }
+
+        return rootObject.ToJsonString();
     }
 
     private static string NormalizePath(string path) {

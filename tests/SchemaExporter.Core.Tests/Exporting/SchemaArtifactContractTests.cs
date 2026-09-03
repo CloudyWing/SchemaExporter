@@ -2,6 +2,7 @@ using System.Text.Json;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;
 
@@ -31,7 +32,8 @@ public sealed class SchemaArtifactContractTests {
                 Objects = 1,
                 Columns = 2,
                 Indexes = 1,
-                Routines = 0
+                Routines = 0,
+                Relationships = 0
             },
             Diagnostics = [
                 new ExportManifestDiagnostic {
@@ -66,6 +68,7 @@ public sealed class SchemaArtifactContractTests {
             "objects": 1,
             "columns": 2,
             "indexes": 1,
+            "relationships": 0,
             "routines": 0
           },
           "diagnostics": [
@@ -88,7 +91,7 @@ public sealed class SchemaArtifactContractTests {
     [Test]
     public void Serialize_WhenSnapshotIsProvided_UsesStableCamelCaseContract() {
         SchemaSnapshotDocument snapshot = new() {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             ExportedAt = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
             ConnectionName = "Primary",
             DatabaseType = "SqlServer",
@@ -98,7 +101,8 @@ public sealed class SchemaArtifactContractTests {
                 Objects = 1,
                 Columns = 1,
                 Indexes = 0,
-                Routines = 0
+                Routines = 0,
+                Relationships = 1
             },
             Diagnostics = [],
             Objects = [
@@ -122,11 +126,23 @@ public sealed class SchemaArtifactContractTests {
                     Indexes = []
                 }
             ],
-            Routines = []
+            Routines = [],
+            Relationships = [
+                new SchemaSnapshotRelationshipDocument {
+                    ForeignKeyName = "FK_Users_Customers",
+                    SourceSchemaName = "dbo",
+                    SourceTableName = "Users",
+                    SourceColumnName = "Id",
+                    ReferencedSchemaName = "dbo",
+                    ReferencedTableName = "Customers",
+                    ReferencedColumnName = "Id",
+                    ColumnOrder = 1
+                }
+            ]
         };
         string expectedJson = """
         {
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "exportedAt": "2024-01-01T00:00:00+00:00",
           "connectionName": "Primary",
           "databaseType": "SqlServer",
@@ -136,7 +152,8 @@ public sealed class SchemaArtifactContractTests {
             "objects": 1,
             "columns": 1,
             "indexes": 0,
-            "routines": 0
+            "routines": 0,
+            "relationships": 1
           },
           "diagnostics": [],
           "objects": [
@@ -160,7 +177,19 @@ public sealed class SchemaArtifactContractTests {
               "indexes": []
             }
           ],
-          "routines": []
+          "routines": [],
+          "relationships": [
+            {
+              "foreignKeyName": "FK_Users_Customers",
+              "sourceSchemaName": "dbo",
+              "sourceTableName": "Users",
+              "sourceColumnName": "Id",
+              "referencedSchemaName": "dbo",
+              "referencedTableName": "Customers",
+              "referencedColumnName": "Id",
+              "columnOrder": 1
+            }
+          ]
         }
         """;
 
@@ -172,7 +201,7 @@ public sealed class SchemaArtifactContractTests {
     [Test]
     public void Serialize_WhenDiffIsProvided_UsesStableCamelCaseContractAndStringEnums() {
         SchemaDiffDocument diff = new() {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             GeneratedAt = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
             LeftSnapshotPath = "C:/Exports/baseline.snapshot.json",
             RightSnapshotPath = "C:/Exports/current.snapshot.json",
@@ -204,11 +233,12 @@ public sealed class SchemaArtifactContractTests {
                 }
             ],
             IndexChanges = [],
-            RoutineChanges = []
+            RoutineChanges = [],
+            RelationshipChanges = []
         };
         string expectedJson = """
         {
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "generatedAt": "2024-01-01T00:00:00+00:00",
           "leftSnapshotPath": "C:/Exports/baseline.snapshot.json",
           "rightSnapshotPath": "C:/Exports/current.snapshot.json",
@@ -222,6 +252,9 @@ public sealed class SchemaArtifactContractTests {
             "addedIndexes": 0,
             "removedIndexes": 0,
             "modifiedIndexes": 0,
+            "addedRelationships": 0,
+            "removedRelationships": 0,
+            "modifiedRelationships": 0,
             "addedRoutines": 0,
             "removedRoutines": 0,
             "modifiedRoutines": 0
@@ -251,13 +284,62 @@ public sealed class SchemaArtifactContractTests {
             }
           ],
           "indexChanges": [],
-          "routineChanges": []
+          "routineChanges": [],
+          "relationshipChanges": []
         }
         """;
 
         string actualJson = JsonSerializer.Serialize(diff, SchemaArtifactJsonSerializerOptions.Default);
 
         AssertJson(actualJson, expectedJson);
+    }
+
+    [TestCase(229, true)]
+    [TestCase(230, true)]
+    [TestCase(262, true)]
+    [TestCase(297, true)]
+    [TestCase(156, false)]
+    public void SqlServerProvider_IsForeignKeyCatalogPermissionDenied_ClassifiesErrorNumber(
+        int errorNumber,
+        bool expected
+    ) {
+        bool actual = SqlServerDatabaseSchemaProvider.IsForeignKeyCatalogPermissionDenied(errorNumber);
+
+        Assert.That(actual, Is.EqualTo(expected));
+    }
+
+    [TestCase(942, true)]
+    [TestCase(1031, true)]
+    [TestCase(904, false)]
+    public void OracleProvider_IsForeignKeyCatalogPermissionDenied_ClassifiesErrorNumber(
+        int errorNumber,
+        bool expected
+    ) {
+        bool actual = OracleDatabaseSchemaProvider.IsForeignKeyCatalogPermissionDenied(errorNumber);
+
+        Assert.That(actual, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RedactException_WhenMessagesContainConnectionString_RedactsOuterAndInnerMessages() {
+        const string connectionString =
+            "Server=secret-host;Database=secret-db;User Id=secret-user;Password=secret-value;";
+        Exception exception = new InvalidOperationException(
+            $"Provider failed for {connectionString}",
+            new ArgumentException("Login failed for Password=secret-value; Pwd=secret-value")
+        );
+
+        Exception redacted = SchemaExportOrchestrator.RedactException(exception, connectionString);
+        Exception redactedInner = redacted.InnerException
+            ?? throw new AssertionException("Expected a redacted inner exception.");
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(redacted.Message, Does.Not.Contain(connectionString));
+            Assert.That(redacted.Message, Does.Contain("[REDACTED]"));
+            Assert.That(redacted.Message, Does.Not.Contain("secret-value"));
+            Assert.That(redactedInner.Message, Does.Contain("[REDACTED]"));
+            Assert.That(redactedInner.Message, Does.Not.Contain("secret-value"));
+        }
     }
 
     private static void AssertJson(string actualJson, string expectedJson) {
