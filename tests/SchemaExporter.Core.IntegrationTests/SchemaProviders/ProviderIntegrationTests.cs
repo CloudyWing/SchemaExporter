@@ -147,7 +147,7 @@ public sealed class ProviderIntegrationTests {
     public async Task OracleProvider_WhenForeignKeyCatalogPermissionIsDenied_ReturnsDiagnosticAndOtherMetadata() {
         await using OracleTestDatabase database = await OracleTestDatabase.CreateAsync();
         (string restrictedConnectionString, string userName) = await CreateOracleRestrictedSchemaAsync(
-            database.ConnectionString
+            database.AdminConnectionString
         );
         await CreateOracleRestrictedSchemaObjectsAsync(restrictedConnectionString);
         OracleDatabaseSchemaProvider sut = new();
@@ -211,7 +211,7 @@ public sealed class ProviderIntegrationTests {
         string userName = $"SE_LIMITED_{suffix}";
         string password = $"P@ss_{suffix}Aa1!";
         await ExecuteOracleNonQueryAsync(adminConnectionString, $"CREATE USER {userName} IDENTIFIED BY \"{password}\"");
-        await ExecuteOracleNonQueryAsync(adminConnectionString, $"GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW TO {userName}");
+        await ExecuteOracleNonQueryAsync(adminConnectionString, $"GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE SYNONYM TO {userName}");
         await ExecuteOracleNonQueryAsync(adminConnectionString, $"ALTER USER {userName} QUOTA 100M ON USERS");
         OracleConnectionStringBuilder restrictedBuilder = new(adminConnectionString) {
             UserID = userName,
@@ -244,15 +244,15 @@ public sealed class ProviderIntegrationTests {
         );
         await ExecuteOracleNonQueryAsync(
             connectionString,
-            "CREATE UNIQUE INDEX IX_SE_LIMITED_CUSTOMERS_ID ON SE_LIMITED_CUSTOMERS (ID)"
+            "CREATE INDEX IX_SE_LIMITED_ORDERS_CUSTOMER_ID ON SE_LIMITED_ORDERS (CUSTOMER_ID)"
         );
         await ExecuteOracleNonQueryAsync(
             connectionString,
-            "CREATE FORCE VIEW ALL_CONSTRAINTS AS SELECT * FROM SYS.DBA_CONSTRAINTS"
+            "CREATE SYNONYM ALL_CONSTRAINTS FOR SYS.DBA_CONSTRAINTS"
         );
         await ExecuteOracleNonQueryAsync(
             connectionString,
-            "CREATE FORCE VIEW ALL_CONS_COLUMNS AS SELECT * FROM SYS.DBA_CONS_COLUMNS"
+            "CREATE SYNONYM ALL_CONS_COLUMNS FOR SYS.DBA_CONS_COLUMNS"
         );
     }
 

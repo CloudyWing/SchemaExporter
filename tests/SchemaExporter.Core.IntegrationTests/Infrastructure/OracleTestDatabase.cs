@@ -1,4 +1,5 @@
 using DotNet.Testcontainers.Containers;
+using Oracle.ManagedDataAccess.Client;
 using Testcontainers.Oracle;
 
 namespace CloudyWing.SchemaExporter.Core.IntegrationTests.Infrastructure;
@@ -10,9 +11,12 @@ internal sealed class OracleTestDatabase : IAsyncDisposable {
     private OracleTestDatabase(OracleContainer container) {
         this.container = container;
         ConnectionString = container.GetConnectionString();
+        AdminConnectionString = new OracleConnectionStringBuilder(ConnectionString) { UserID = "system" }.ConnectionString;
     }
 
     public string ConnectionString { get; }
+
+    public string AdminConnectionString { get; }
 
     public static async Task<OracleTestDatabase> CreateAsync() {
         OracleContainer container = new OracleBuilder(ImageName).Build();
