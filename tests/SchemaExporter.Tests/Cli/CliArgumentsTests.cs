@@ -86,4 +86,27 @@ public sealed class CliArgumentsTests {
             Assert.That(showHelp, Is.False);
         }
     }
+
+    [TestCase("--connection-string-env")]
+    [TestCase("--connection-string-stdin")]
+    [TestCase("--database-type")]
+    public void TryParse_WhenRemovedConnectionOptionIsUsed_ReturnsUnknownArgumentWithoutEchoingValue(string option) {
+        const string FakeSecret = "Server=db;Password=fake-secret-value";
+        string[] args = ["export", "--connection", "LocalDev", option, FakeSecret];
+
+        bool result = CliArguments.TryParse(
+            args,
+            out CliArguments? parsedArguments,
+            out string? errorMessage,
+            out bool showHelp
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            Assert.That(parsedArguments, Is.Null);
+            Assert.That(errorMessage, Is.EqualTo($"Unknown argument: {option}"));
+            Assert.That(errorMessage, Does.Not.Contain(FakeSecret));
+            Assert.That(showHelp, Is.False);
+        }
+    }
 }
