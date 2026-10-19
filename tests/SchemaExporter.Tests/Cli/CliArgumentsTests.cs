@@ -87,6 +87,66 @@ public sealed class CliArgumentsTests {
         }
     }
 
+    [Test]
+    public void TryParse_WhenCommentSqlArgumentsAreValid_ReturnsCommentSqlArguments() {
+        string[] args = ["comment-sql", "--snapshot", "db.snapshot.json", "--comments", "comments.json", "--output", "out.sql"];
+
+        bool result = CliArguments.TryParse(
+            args,
+            out CliArguments? parsedArguments,
+            out string? errorMessage,
+            out bool showHelp
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.True);
+            Assert.That(parsedArguments?.Command, Is.EqualTo(CliCommand.CommentSql));
+            Assert.That(parsedArguments?.CommentSnapshotPath, Is.EqualTo("db.snapshot.json"));
+            Assert.That(parsedArguments?.CommentListPath, Is.EqualTo("comments.json"));
+            Assert.That(parsedArguments?.CommentSqlOutputPath, Is.EqualTo("out.sql"));
+            Assert.That(errorMessage, Is.Null);
+            Assert.That(showHelp, Is.False);
+        }
+    }
+
+    [TestCase(new[] { "comment-sql", "--comments", "c.json", "--output", "o.sql" }, "--snapshot is required.")]
+    [TestCase(new[] { "comment-sql", "--snapshot", "s.json", "--output", "o.sql" }, "--comments is required.")]
+    [TestCase(new[] { "comment-sql", "--snapshot", "s.json", "--comments", "c.json" }, "--output is required.")]
+    [TestCase(new[] { "comment-sql", "--snapshot" }, "Missing value for --snapshot.")]
+    [TestCase(new[] { "comment-sql", "--snapshot", "s.json", "--comments", "c.json", "--output", "o.sql", "--connection", "x" }, "Unknown argument: --connection")]
+    public void TryParse_WhenCommentSqlArgumentsAreInvalid_ReturnsArgumentError(string[] args, string expectedMessage) {
+        bool result = CliArguments.TryParse(
+            args,
+            out CliArguments? parsedArguments,
+            out string? errorMessage,
+            out bool showHelp
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            Assert.That(parsedArguments, Is.Null);
+            Assert.That(errorMessage, Is.EqualTo(expectedMessage));
+            Assert.That(showHelp, Is.False);
+        }
+    }
+
+    [Test]
+    public void TryParse_WhenCommentSqlHelpIsRequested_ShowsHelp() {
+        bool result = CliArguments.TryParse(
+            ["comment-sql", "--help"],
+            out CliArguments? parsedArguments,
+            out string? errorMessage,
+            out bool showHelp
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            Assert.That(parsedArguments, Is.Null);
+            Assert.That(errorMessage, Is.Null);
+            Assert.That(showHelp, Is.True);
+        }
+    }
+
     [TestCase("--connection-string-env")]
     [TestCase("--connection-string-stdin")]
     [TestCase("--database-type")]

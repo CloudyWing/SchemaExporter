@@ -12,5 +12,10 @@ internal enum CliCommand {
     /// <summary>
     /// 比對兩個 schema snapshot 並輸出差異報告。
     /// </summary>
-    Diff
-}
+    Diff,
+
+    /// <summary>
+    /// 依 schema snapshot 與註解清單產生資料表與欄位註解的 SQL 腳本。
+    /// </summary>
+    CommentSql
+}

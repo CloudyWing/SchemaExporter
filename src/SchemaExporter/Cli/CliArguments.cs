@@ -85,6 +85,21 @@ internal sealed class CliArguments {
     public string? DiffOutputFormat { get; init; }
 
     /// <summary>
+    /// 取得或設定 comment-sql 命令的 schema snapshot 路徑。
+    /// </summary>
+    public string? CommentSnapshotPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 comment-sql 命令的註解清單路徑。
+    /// </summary>
+    public string? CommentListPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 comment-sql 命令的輸出 SQL 檔案路徑。
+    /// </summary>
+    public string? CommentSqlOutputPath { get; init; }
+
+    /// <summary>
     /// 解析命令列引數並建立 <see cref="CliArguments"/> 執行個體。
     /// </summary>
     /// <param name="args">原始命令列引數。</param>
@@ -115,6 +130,9 @@ internal sealed class CliArguments {
             } else if (string.Equals(normalizedArgs[0], "diff", StringComparison.OrdinalIgnoreCase)) {
                 command = CliCommand.Diff;
                 normalizedArgs.RemoveAt(0);
+            } else if (string.Equals(normalizedArgs[0], "comment-sql", StringComparison.OrdinalIgnoreCase)) {
+                command = CliCommand.CommentSql;
+                normalizedArgs.RemoveAt(0);
             } else if (!IsHelpArgument(normalizedArgs[0])) {
                 errorMessage = $"Unknown command: {normalizedArgs[0]}";
                 return false;
@@ -128,6 +146,7 @@ internal sealed class CliArguments {
 
         return command switch {
             CliCommand.Diff => TryParseDiff(normalizedArgs, out parsedArguments, out errorMessage, out showHelp),
+            CliCommand.CommentSql => TryParseCommentSql(normalizedArgs, out parsedArguments, out errorMessage, out showHelp),
             _ => TryParseExport(normalizedArgs, out parsedArguments, out errorMessage, out showHelp)
         };
     }
@@ -312,6 +331,76 @@ internal sealed class CliArguments {
             RightSnapshotPath = rightSnapshotPath,
             DiffOutputPath = outputPath,
             DiffOutputFormat = outputFormat
+        };
+        return true;
+    }
+
+    private static bool TryParseCommentSql(
+        IReadOnlyList<string> args,
+        out CliArguments? parsedArguments,
+        out string? errorMessage,
+        out bool showHelp
+    ) {
+        parsedArguments = null;
+        errorMessage = null;
+        showHelp = false;
+
+        string? snapshotPath = null;
+        string? commentListPath = null;
+        string? outputPath = null;
+
+        for (int index = 0; index < args.Count; index++) {
+            string argument = args[index];
+            switch (argument) {
+                case "--help":
+                case "-h":
+                case "/?":
+                    showHelp = true;
+                    return false;
+                case "--snapshot":
+                    if (!TryReadValue(args, ref index, out snapshotPath)) {
+                        errorMessage = "Missing value for --snapshot.";
+                        return false;
+                    }
+                    break;
+                case "--comments":
+                    if (!TryReadValue(args, ref index, out commentListPath)) {
+                        errorMessage = "Missing value for --comments.";
+                        return false;
+                    }
+                    break;
+                case "--output":
+                    if (!TryReadValue(args, ref index, out outputPath)) {
+                        errorMessage = "Missing value for --output.";
+                        return false;
+                    }
+                    break;
+                default:
+                    errorMessage = $"Unknown argument: {argument}";
+                    return false;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshotPath)) {
+            errorMessage = "--snapshot is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(commentListPath)) {
+            errorMessage = "--comments is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath)) {
+            errorMessage = "--output is required.";
+            return false;
+        }
+
+        parsedArguments = new CliArguments {
+            Command = CliCommand.CommentSql,
+            CommentSnapshotPath = snapshotPath,
+            CommentListPath = commentListPath,
+            CommentSqlOutputPath = outputPath
         };
         return true;
     }

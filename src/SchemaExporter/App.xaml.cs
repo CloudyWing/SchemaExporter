@@ -111,6 +111,7 @@ public partial class App : Application {
             || firstArgument is "-h" or "/?"
             || string.Equals(firstArgument, "export", StringComparison.OrdinalIgnoreCase)
             || string.Equals(firstArgument, "diff", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(firstArgument, "comment-sql", StringComparison.OrdinalIgnoreCase)
             || string.Equals(firstArgument, "--help", StringComparison.OrdinalIgnoreCase);
     }
 }

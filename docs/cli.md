@@ -1,10 +1,11 @@
 # CLI 版操作說明
 
-CLI 版執行檔為 `schemaexporter`，支援兩個命令：`export` 與 `diff`。
+CLI 版執行檔為 `schemaexporter`，支援三個命令：`export`、`diff` 與 `comment-sql`。
 
 ```text
 schemaexporter export --connection <name> [options]
 schemaexporter diff --left <path> --right <path> [options]
+schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>
 schemaexporter --help
 ```
 
@@ -146,3 +147,38 @@ schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json 
 # 明確指定格式
 schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output report.txt --format markdown
 ```
+
+---
+
+## comment-sql 命令
+
+依 schema snapshot 與註解清單產生資料表與欄位註解的 SQL 檔，不連線資料庫，也不執行 SQL。
+
+```bash
+schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>
+```
+
+### 必要參數
+
+| 參數 | 說明 |
+| --- | --- |
+| `--snapshot <path>` | schema snapshot 檔案的路徑，提供名稱、資料庫類型與現有註解。 |
+| `--comments <path>` | 註解清單 JSON 檔案的路徑，欄位為 `schema`、`object`、`column`、`comment`。 |
+| `--output <path>` | 要寫入的 `.sql` 檔案路徑，既有檔案會被覆寫。 |
+
+### 結束代碼
+
+| 代碼 | 名稱 | 說明 |
+| --- | --- | --- |
+| `0` | `Success` | 成功，或使用者要求顯示 help。 |
+| `1` | `ArgumentError` | 參數解析失敗。 |
+| `2` | `WorkflowError` | 輸入檔無法讀取或格式錯誤，或清單有無法產生 SQL 的項目，不會寫出輸出檔。 |
+| `3` | `UnexpectedError` | 未預期的錯誤。 |
+
+### 範例
+
+```bash
+schemaexporter comment-sql --snapshot db.snapshot.json --comments comments.json --output comments.sql
+```
+
+清單格式、輸出規則、各資料庫的跳脫與長度上限參閱 [comment-sql.md](comment-sql.md)。

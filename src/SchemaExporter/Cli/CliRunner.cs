@@ -1,6 +1,7 @@
 using System.IO;
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.CommentSql;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Services;
@@ -13,6 +14,7 @@ namespace CloudyWing.SchemaExporter.Cli;
 internal sealed class CliRunner {
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private readonly SchemaSnapshotDiffService diffService;
+    private readonly CommentSqlService commentSqlService;
     private readonly ISettingsService settingsService;
     private readonly SchemaExportRequestResolver requestResolver;
 
@@ -21,21 +23,25 @@ internal sealed class CliRunner {
     /// </summary>
     /// <param name="exportOrchestrator">Schema 匯出流程協調器。</param>
     /// <param name="diffService">Schema Snapshot 差異比對服務。</param>
+    /// <param name="commentSqlService">註解 SQL 產生服務。</param>
     /// <param name="settingsService">設定檔存取服務。</param>
     /// <param name="requestResolver">Schema 匯出請求解析器。</param>
     public CliRunner(
         SchemaExportOrchestrator exportOrchestrator,
         SchemaSnapshotDiffService diffService,
+        CommentSqlService commentSqlService,
         ISettingsService settingsService,
         SchemaExportRequestResolver requestResolver
     ) {
         ArgumentNullException.ThrowIfNull(exportOrchestrator);
         ArgumentNullException.ThrowIfNull(diffService);
+        ArgumentNullException.ThrowIfNull(commentSqlService);
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(requestResolver);
 
         this.exportOrchestrator = exportOrchestrator;
         this.diffService = diffService;
+        this.commentSqlService = commentSqlService;
         this.settingsService = settingsService;
         this.requestResolver = requestResolver;
     }
@@ -64,6 +70,7 @@ internal sealed class CliRunner {
         try {
             return arguments.Command switch {
                 CliCommand.Diff => await ExecuteDiffAsync(arguments).ConfigureAwait(false),
+                CliCommand.CommentSql => await ExecuteCommentSqlAsync(arguments).ConfigureAwait(false),
                 _ => await ExecuteExportAsync(
                     arguments,
                     connectionString => connectionStringForRedaction = connectionString
@@ -164,6 +171,31 @@ internal sealed class CliRunner {
         return (int)CliExitCode.Success;
     }
 
+    private async Task<int> ExecuteCommentSqlAsync(CliArguments arguments) {
+        string snapshotPath = arguments.CommentSnapshotPath ?? throw new InvalidOperationException("Comment SQL command is missing the snapshot path.");
+        string commentListPath = arguments.CommentListPath ?? throw new InvalidOperationException("Comment SQL command is missing the comments path.");
+        string outputPath = arguments.CommentSqlOutputPath ?? throw new InvalidOperationException("Comment SQL command is missing the output path.");
+
+        CommentSqlResult result = await commentSqlService.GenerateToFileAsync(
+            snapshotPath,
+            commentListPath,
+            outputPath,
+            CancellationToken.None
+        ).ConfigureAwait(false);
+
+        Console.WriteLine($"Comment SQL written: {Path.GetFullPath(outputPath.Trim())}");
+        Console.WriteLine($"Database type: {result.DatabaseType}");
+        Console.WriteLine(
+            $"Add: {result.AddCount}, Update: {result.UpdateCount}, "
+            + $"Unchanged (skipped): {result.UnchangedCount}, Empty comment (skipped): {result.SkippedEmptyCount}"
+        );
+        foreach (string warning in result.Warnings) {
+            Console.WriteLine($"Warning: {warning}");
+        }
+
+        return (int)CliExitCode.Success;
+    }
+
     private static void WriteArtifactLine(string label, string? path) {
         if (string.IsNullOrWhiteSpace(path)) {
             return;
@@ -216,6 +248,7 @@ internal sealed class CliRunner {
     private static string GetCommandLabel(CliArguments arguments) {
         return arguments.Command switch {
             CliCommand.Diff => "Diff",
+            CliCommand.CommentSql => "Comment SQL",
             _ => "Export"
         };
     }
@@ -226,6 +259,7 @@ internal sealed class CliRunner {
         Console.WriteLine("Usage:");
         Console.WriteLine("  schemaexporter export --connection <name> [options]");
         Console.WriteLine("  schemaexporter diff --left <path> --right <path> [options]");
+        Console.WriteLine("  schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>");
         Console.WriteLine("  schemaexporter --help");
         Console.WriteLine();
         Console.WriteLine("Export options:");
@@ -248,6 +282,12 @@ internal sealed class CliRunner {
         Console.WriteLine("  --right <path>               Required. Current snapshot or schema JSON file.");
         Console.WriteLine("  --output <path>              Optional output file. Defaults to console Markdown.");
         Console.WriteLine("  --format <json|markdown>     Optional output format when --output is provided.");
+        Console.WriteLine();
+        Console.WriteLine("Comment SQL options (offline: never connects to or queries a database):");
+        Console.WriteLine("  --snapshot <path>            Required. Schema snapshot JSON file (provides names and existing comments).");
+        Console.WriteLine("  --comments <path>            Required. JSON array of { schema, object, column, comment }; column is empty for tables and views.");
+        Console.WriteLine("  --output <path>              Required. SQL file to write. SQL Server: UTF-8 with BOM; Oracle: UTF-8 without BOM.");
+        Console.WriteLine();
         Console.WriteLine("  --help                       Show this help text.");
     }
 }
