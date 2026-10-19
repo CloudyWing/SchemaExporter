@@ -38,6 +38,26 @@ internal sealed class SqlServerTestDatabase : IAsyncDisposable {
         }
     }
 
+    /// <summary>
+    /// 把 SQL 檔案原樣複製進容器，並以容器內的 <c>sqlcmd -i</c> 執行（不指定 <c>-f</c>，驗證 sqlcmd 能自行辨識 BOM）。
+    /// </summary>
+    public async Task<ScriptExecutionResult> ExecuteSqlFileAsync(byte[] fileContent) {
+        const string ScriptPath = "/tmp/comment-sql.sql";
+        await container.CopyAsync(fileContent, ScriptPath);
+
+        ExecResult result = await container.ExecAsync([
+            "/opt/mssql-tools18/bin/sqlcmd",
+            "-C",
+            "-S", "localhost",
+            "-U", MsSqlBuilder.DefaultUsername,
+            "-P", MsSqlBuilder.DefaultPassword,
+            "-d", DatabaseName,
+            "-b",
+            "-i", ScriptPath
+        ]);
+        return new ScriptExecutionResult(result.ExitCode ?? -1, result.Stdout, result.Stderr);
+    }
+
     public async ValueTask DisposeAsync() {
         await container.DisposeAsync();
     }

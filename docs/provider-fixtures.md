@@ -64,6 +64,18 @@ dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.Int
 dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.IntegrationTests.csproj --filter "TestCategory=Oracle" -v minimal
 ```
 
+## 註解 SQL 整合測試
+
+`tests/SchemaExporter.Core.IntegrationTests/CommentSql` 的測試使用同樣的 SQL Server 與 Oracle 映像檔，各自啟動拋棄式 container，自行建立測試資料表，不使用 `SE_` fixture 物件，也不連線任何使用者資料庫。
+
+測試把 `comment-sql` 產生的 SQL 檔複製進 container，SQL Server 以容器內的 `sqlcmd -i` 執行，Oracle 以容器內的 `sqlplus` 執行，讓 `SET DEFINE OFF` 等 SQL*Plus 指令實際生效。執行後讀回註解與輸入逐字比對，再重新匯出 snapshot 並產生一次，確認新增段與差異段都為空。
+
+只執行這組測試：
+
+```powershell
+dotnet test .\tests\SchemaExporter.Core.IntegrationTests\SchemaExporter.Core.IntegrationTests.csproj --filter "FullyQualifiedName~CommentSqlIntegrationTests" -v minimal
+```
+
 ## 生命週期
 
 Testcontainers 會為每次測試建立暫時性 container，測試結束後自動移除。SQL Server fixture 會使用隨機 host port，避免與本機既有 SQL Server 或其他測試執行互相衝突。
