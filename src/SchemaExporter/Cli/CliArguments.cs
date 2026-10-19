@@ -100,6 +100,35 @@ internal sealed class CliArguments {
     public string? CommentSqlOutputPath { get; init; }
 
     /// <summary>
+    /// 判斷應用程式是否應以 CLI 模式執行。只要有任何命令列引數就走 CLI，無法辨識的命令由 <see cref="TryParse"/> 回報錯誤，
+    /// 避免打錯或舊版不認得的命令被當成一般啟動而開出沒人操作的桌面視窗。
+    /// </summary>
+    /// <param name="args">原始命令列引數。</param>
+    /// <returns>有任何引數時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
+    public static bool ShouldRunAsCli(IReadOnlyList<string> args) {
+        ArgumentNullException.ThrowIfNull(args);
+
+        return args.Count > 0;
+    }
+
+    /// <summary>
+    /// 判斷這次啟動是否需要讀取使用者設定檔。桌面視窗與 <c>export</c> 需要設定檔，
+    /// <c>diff</c>、<c>comment-sql</c>、顯示說明與引數錯誤都是離線作業，不應因設定檔缺漏或損毀而失敗。
+    /// </summary>
+    /// <param name="args">原始命令列引數。</param>
+    /// <returns>需要使用者設定檔時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
+    public static bool RequiresUserConfig(IReadOnlyList<string> args) {
+        ArgumentNullException.ThrowIfNull(args);
+
+        if (!ShouldRunAsCli(args)) {
+            return true;
+        }
+
+        return TryParse(args, out CliArguments? parsedArguments, out _, out _)
+            && parsedArguments?.Command == CliCommand.Export;
+    }
+
+    /// <summary>
     /// 解析命令列引數並建立 <see cref="CliArguments"/> 執行個體。
     /// </summary>
     /// <param name="args">原始命令列引數。</param>

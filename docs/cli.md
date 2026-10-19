@@ -70,7 +70,7 @@ Diagnostics: 2 total, 1 warning(s), 0 error(s).
 | 代碼 | 名稱 | 說明 |
 | --- | --- | --- |
 | `0` | `Success` | 成功，或使用者要求顯示 help。 |
-| `1` | `ArgumentError` | 參數解析失敗（顯示 usage 後結束）。 |
+| `1` | `ArgumentError` | 參數解析失敗（顯示 usage 後結束），包含無法辨識的命令（`Unknown command: <name>`）。 |
 | `2` | `WorkflowError` | 匯出流程失敗（如驗證錯誤、連線失敗、輸出失敗）。 |
 | `3` | `UnexpectedError` | 未預期的錯誤。 |
 

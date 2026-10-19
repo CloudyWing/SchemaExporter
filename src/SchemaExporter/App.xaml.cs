@@ -30,18 +30,25 @@ public partial class App : Application {
     protected override async void OnStartup(StartupEventArgs e) {
         base.OnStartup(e);
 
-        bool isCliMode = HasCliArguments(e.Args);
+        bool isCliMode = CliArguments.ShouldRunAsCli(e.Args);
         if (isCliMode) {
             _ = CliConsoleSession.Attach();
         }
 
         try {
             SpreadsheetExporterBootstrapper.Configure();
-            AppPaths.EnsureUserConfigExists();
-            IConfiguration configuration = new ConfigurationBuilder()
-                .AddJsonFile(AppPaths.UserConfigFile, optional: false, reloadOnChange: true)
-                .AddEnvironmentVariables()
-                .Build();
+
+            // diff、comment-sql、說明與引數錯誤不讀設定檔，使用者設定檔缺漏或損毀時仍可執行，也不會因此建立設定檔。
+            IConfiguration configuration;
+            if (CliArguments.RequiresUserConfig(e.Args)) {
+                AppPaths.EnsureUserConfigExists();
+                configuration = new ConfigurationBuilder()
+                    .AddJsonFile(AppPaths.UserConfigFile, optional: false, reloadOnChange: true)
+                    .AddEnvironmentVariables()
+                    .Build();
+            } else {
+                configuration = new ConfigurationBuilder().Build();
+            }
 
             ServiceCollection serviceCollection = new();
             serviceCollection.AddLogging(logging => {
@@ -85,7 +92,7 @@ public partial class App : Application {
             MainWindow = mainWindow;
             mainWindow.Show();
             _ = mainWindow.CheckForUpdatesAsync();
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException) {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or JsonException) {
             if (isCliMode) {
                 Console.Error.WriteLine($"Startup failed: {ex.Message}");
             } else {
@@ -99,19 +106,5 @@ public partial class App : Application {
     protected override void OnExit(ExitEventArgs e) {
         serviceProvider?.Dispose();
         base.OnExit(e);
-    }
-
-    private static bool HasCliArguments(IReadOnlyList<string> args) {
-        if (args.Count == 0) {
-            return false;
-        }
-
-        string firstArgument = args[0];
-        return firstArgument.StartsWith("--", StringComparison.Ordinal)
-            || firstArgument is "-h" or "/?"
-            || string.Equals(firstArgument, "export", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(firstArgument, "diff", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(firstArgument, "comment-sql", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(firstArgument, "--help", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -87,6 +87,65 @@ public sealed class CliArgumentsTests {
         }
     }
 
+    [TestCase("export")]
+    [TestCase("diff")]
+    [TestCase("comment-sql")]
+    [TestCase("--help")]
+    [TestCase("-h")]
+    [TestCase("/?")]
+    [TestCase("--connection")]
+    [TestCase("comment-sq")]
+    [TestCase("unknown-command")]
+    [TestCase("")]
+    public void ShouldRunAsCli_WhenAnyArgumentIsGiven_ReturnsTrue(string firstArgument) {
+        Assert.That(CliArguments.ShouldRunAsCli([firstArgument]), Is.True);
+    }
+
+    [Test]
+    public void ShouldRunAsCli_WhenNoArgumentIsGiven_ReturnsFalse() {
+        Assert.That(CliArguments.ShouldRunAsCli([]), Is.False);
+    }
+
+    [Test]
+    public void RequiresUserConfig_WhenNoArgumentIsGiven_ReturnsTrueForTheDesktopWindow() {
+        Assert.That(CliArguments.RequiresUserConfig([]), Is.True);
+    }
+
+    [TestCase("export", "--connection", "Primary")]
+    [TestCase("--connection", "Primary")]
+    public void RequiresUserConfig_WhenExportIsRequested_ReturnsTrue(params string[] args) {
+        Assert.That(CliArguments.RequiresUserConfig(args), Is.True);
+    }
+
+    [TestCase("diff", "--left", "a.json", "--right", "b.json")]
+    [TestCase("comment-sql", "--snapshot", "s.json", "--comments", "c.json", "--output", "o.sql")]
+    [TestCase("--help")]
+    [TestCase("comment-sql", "--help")]
+    [TestCase("comment-sq")]
+    [TestCase("export")]
+    public void RequiresUserConfig_WhenCommandIsOfflineOrInvalid_ReturnsFalse(params string[] args) {
+        Assert.That(CliArguments.RequiresUserConfig(args), Is.False);
+    }
+
+    [TestCase("comment-sq")]
+    [TestCase("unknown-command")]
+    [TestCase("-x")]
+    public void TryParse_WhenCommandIsUnknown_ReturnsArgumentErrorInsteadOfOpeningTheWindow(string command) {
+        bool result = CliArguments.TryParse(
+            [command, "--snapshot", "a.json"],
+            out CliArguments? parsedArguments,
+            out string? errorMessage,
+            out bool showHelp
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            Assert.That(parsedArguments, Is.Null);
+            Assert.That(errorMessage, Is.EqualTo($"Unknown command: {command}"));
+            Assert.That(showHelp, Is.False);
+        }
+    }
+
     [Test]
     public void TryParse_WhenCommentSqlArgumentsAreValid_ReturnsCommentSqlArguments() {
         string[] args = ["comment-sql", "--snapshot", "db.snapshot.json", "--comments", "comments.json", "--output", "out.sql"];
