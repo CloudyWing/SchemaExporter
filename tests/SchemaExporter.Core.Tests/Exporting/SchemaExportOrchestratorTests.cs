@@ -173,20 +173,28 @@ public sealed class SchemaExportOrchestratorTests {
         using JsonDocument jsonSidecarDocument = JsonDocument.Parse(await File.ReadAllTextAsync(jsonSidecarFilePath));
         using JsonDocument snapshotDocument = JsonDocument.Parse(await File.ReadAllTextAsync(snapshotFilePath));
         using JsonDocument diffDocument = JsonDocument.Parse(diffJson);
+        JsonElement manifestCounts = manifestDocument.RootElement.GetProperty("counts");
+        JsonElement snapshotCounts = snapshotDocument.RootElement.GetProperty("counts");
 
         using (Assert.EnterMultipleScope()) {
             Assert.That(manifestDocument.RootElement.TryGetProperty("resultOptions", out JsonElement manifestResultOptions), Is.True);
             Assert.That(manifestDocument.RootElement.TryGetProperty("ResultOptions", out _), Is.False);
             Assert.That(manifestResultOptions.GetProperty("generateSchemaSummary").GetBoolean(), Is.True);
+            Assert.That(manifestCounts.GetProperty("relationships").GetInt32(), Is.EqualTo(1));
             Assert.That(jsonSidecarDocument.RootElement.TryGetProperty("snapshot", out _), Is.True);
             Assert.That(jsonSidecarDocument.RootElement.TryGetProperty("diff", out _), Is.True);
-            Assert.That(snapshotDocument.RootElement.TryGetProperty("schemaVersion", out _), Is.True);
+            Assert.That(snapshotDocument.RootElement.GetProperty("schemaVersion").GetInt32(), Is.EqualTo(3));
+            Assert.That(snapshotCounts.GetProperty("relationships").GetInt32(), Is.EqualTo(1));
+            Assert.That(snapshotDocument.RootElement.GetProperty("relationships").GetArrayLength(), Is.EqualTo(1));
             Assert.That(diffDocument.RootElement.GetProperty("summary").GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
             Assert.That(diffDocument.RootElement.GetProperty("summary").GetProperty("modifiedObjects").GetInt32(), Is.EqualTo(1));
+            Assert.That(diffDocument.RootElement.GetProperty("summary").GetProperty("addedRelationships").GetInt32(), Is.EqualTo(0));
             Assert.That(diffDocument.RootElement.GetProperty("columnChanges")[0].GetProperty("changeType").GetString(), Is.EqualTo("Added"));
             Assert.That(markdownSidecar, Does.Contain("## Snapshot Diff"));
             Assert.That(markdownSidecar, Does.Contain("dbo.Users (TABLE)"));
             Assert.That(schemaSummary, Does.Contain("# Schema Summary"));
+            Assert.That(schemaSummary, Does.Contain("## Relationships"));
+            Assert.That(schemaSummary, Does.Contain("FK_Users_Customers"));
             Assert.That(schemaSummary, Does.Contain("routine signatures"));
         }
 
@@ -195,6 +203,46 @@ public sealed class SchemaExportOrchestratorTests {
             connection.ConnectionString,
             Arg.Any<CancellationToken>()
         );
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenProviderReportsForeignKeyCatalogPermissionDenied_WritesExportAndDiagnostic() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory);
+        SchemaConnection connection = CreateConnection();
+        DatabaseSchemaExport schemaExport = SchemaTestData.CreateSchemaExport();
+        ExportDiagnostic permissionDiagnostic = new() {
+            Severity = DiagnosticSeverity.Warning,
+            Category = ExportDiagnosticCategory.Execution,
+            Message = "FK catalog permission denied; relationships were not retrieved."
+        };
+        SetupProviderFactory(
+            providerFactory,
+            connection,
+            schemaExport,
+            [permissionDiagnostic],
+            detailRelationships: []
+        );
+
+        ExportResult result = await sut.ExportAsync(
+            connection,
+            directory.Path,
+            CreateProfile(),
+            new ExportResultOptions {
+                GenerateSchemaSummary = true
+            }
+        );
+
+        string summaryPath = result.SchemaSummaryFilePath
+            ?? throw new AssertionException("Expected a schema summary file path.");
+        string summary = await File.ReadAllTextAsync(summaryPath);
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(File.Exists(result.OutputFilePath), Is.True);
+            Assert.That(result.Diagnostics.Any(x => x.Message == permissionDiagnostic.Message), Is.True);
+            Assert.That(summary, Does.Contain("Relationships unavailable: FK catalog permission denied."));
+            Assert.That(summary, Does.Not.Contain("|  |  |  |  |"));
+        }
     }
 
     [Test]
@@ -272,7 +320,9 @@ public sealed class SchemaExportOrchestratorTests {
     private static void SetupProviderFactory(
         IDatabaseSchemaProviderFactory providerFactory,
         SchemaConnection connection,
-        DatabaseSchemaExport schemaExport
+        DatabaseSchemaExport schemaExport,
+        IReadOnlyList<ExportDiagnostic>? detailDiagnostics = null,
+        IReadOnlyList<DatabaseForeignKeySchema>? detailRelationships = null
     ) {
         providerFactory.LoadObjectsAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(schemaExport.Objects));
@@ -285,7 +335,9 @@ public sealed class SchemaExportOrchestratorTests {
         ).Returns(Task.FromResult(new DatabaseSchemaDetails {
             Columns = schemaExport.Columns,
             Indexes = schemaExport.Indexes,
-            Routines = schemaExport.Routines
+            Routines = schemaExport.Routines,
+            Relationships = detailRelationships ?? schemaExport.Relationships,
+            Diagnostics = detailDiagnostics ?? []
         }));
     }
 

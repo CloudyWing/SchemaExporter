@@ -85,6 +85,50 @@ internal sealed class CliArguments {
     public string? DiffOutputFormat { get; init; }
 
     /// <summary>
+    /// 取得或設定 comment-sql 命令的 schema snapshot 路徑。
+    /// </summary>
+    public string? CommentSnapshotPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 comment-sql 命令的註解清單路徑。
+    /// </summary>
+    public string? CommentListPath { get; init; }
+
+    /// <summary>
+    /// 取得或設定 comment-sql 命令的輸出 SQL 檔案路徑。
+    /// </summary>
+    public string? CommentSqlOutputPath { get; init; }
+
+    /// <summary>
+    /// 判斷應用程式是否應以 CLI 模式執行。只要有任何命令列引數就走 CLI，無法辨識的命令由 <see cref="TryParse"/> 回報錯誤，
+    /// 避免打錯或舊版不認得的命令被當成一般啟動而開出沒人操作的桌面視窗。
+    /// </summary>
+    /// <param name="args">原始命令列引數。</param>
+    /// <returns>有任何引數時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
+    public static bool ShouldRunAsCli(IReadOnlyList<string> args) {
+        ArgumentNullException.ThrowIfNull(args);
+
+        return args.Count > 0;
+    }
+
+    /// <summary>
+    /// 判斷這次啟動是否需要讀取使用者設定檔。桌面視窗與 <c>export</c> 需要設定檔，
+    /// <c>diff</c>、<c>comment-sql</c>、顯示說明與引數錯誤都是離線作業，不應因設定檔缺漏或損毀而失敗。
+    /// </summary>
+    /// <param name="args">原始命令列引數。</param>
+    /// <returns>需要使用者設定檔時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
+    public static bool RequiresUserConfig(IReadOnlyList<string> args) {
+        ArgumentNullException.ThrowIfNull(args);
+
+        if (!ShouldRunAsCli(args)) {
+            return true;
+        }
+
+        return TryParse(args, out CliArguments? parsedArguments, out _, out _)
+            && parsedArguments?.Command == CliCommand.Export;
+    }
+
+    /// <summary>
     /// 解析命令列引數並建立 <see cref="CliArguments"/> 執行個體。
     /// </summary>
     /// <param name="args">原始命令列引數。</param>
@@ -115,6 +159,9 @@ internal sealed class CliArguments {
             } else if (string.Equals(normalizedArgs[0], "diff", StringComparison.OrdinalIgnoreCase)) {
                 command = CliCommand.Diff;
                 normalizedArgs.RemoveAt(0);
+            } else if (string.Equals(normalizedArgs[0], "comment-sql", StringComparison.OrdinalIgnoreCase)) {
+                command = CliCommand.CommentSql;
+                normalizedArgs.RemoveAt(0);
             } else if (!IsHelpArgument(normalizedArgs[0])) {
                 errorMessage = $"Unknown command: {normalizedArgs[0]}";
                 return false;
@@ -128,6 +175,7 @@ internal sealed class CliArguments {
 
         return command switch {
             CliCommand.Diff => TryParseDiff(normalizedArgs, out parsedArguments, out errorMessage, out showHelp),
+            CliCommand.CommentSql => TryParseCommentSql(normalizedArgs, out parsedArguments, out errorMessage, out showHelp),
             _ => TryParseExport(normalizedArgs, out parsedArguments, out errorMessage, out showHelp)
         };
     }
@@ -312,6 +360,76 @@ internal sealed class CliArguments {
             RightSnapshotPath = rightSnapshotPath,
             DiffOutputPath = outputPath,
             DiffOutputFormat = outputFormat
+        };
+        return true;
+    }
+
+    private static bool TryParseCommentSql(
+        IReadOnlyList<string> args,
+        out CliArguments? parsedArguments,
+        out string? errorMessage,
+        out bool showHelp
+    ) {
+        parsedArguments = null;
+        errorMessage = null;
+        showHelp = false;
+
+        string? snapshotPath = null;
+        string? commentListPath = null;
+        string? outputPath = null;
+
+        for (int index = 0; index < args.Count; index++) {
+            string argument = args[index];
+            switch (argument) {
+                case "--help":
+                case "-h":
+                case "/?":
+                    showHelp = true;
+                    return false;
+                case "--snapshot":
+                    if (!TryReadValue(args, ref index, out snapshotPath)) {
+                        errorMessage = "Missing value for --snapshot.";
+                        return false;
+                    }
+                    break;
+                case "--comments":
+                    if (!TryReadValue(args, ref index, out commentListPath)) {
+                        errorMessage = "Missing value for --comments.";
+                        return false;
+                    }
+                    break;
+                case "--output":
+                    if (!TryReadValue(args, ref index, out outputPath)) {
+                        errorMessage = "Missing value for --output.";
+                        return false;
+                    }
+                    break;
+                default:
+                    errorMessage = $"Unknown argument: {argument}";
+                    return false;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshotPath)) {
+            errorMessage = "--snapshot is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(commentListPath)) {
+            errorMessage = "--comments is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath)) {
+            errorMessage = "--output is required.";
+            return false;
+        }
+
+        parsedArguments = new CliArguments {
+            Command = CliCommand.CommentSql,
+            CommentSnapshotPath = snapshotPath,
+            CommentListPath = commentListPath,
+            CommentSqlOutputPath = outputPath
         };
         return true;
     }

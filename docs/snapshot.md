@@ -2,7 +2,7 @@
 
 ## 說明
 
-Schema Snapshot 是一份完整記錄資料庫結構的 JSON 檔案，用途是保存某個時間點的 schema 狀態，供後續差異比對使用。
+Schema Snapshot 是一份完整記錄資料庫結構的 JSON 檔案，用途是保存某個時間點的 schema 狀態，供後續差異比對使用。Snapshot v3 在根層級保存每個外鍵欄位配對。
 
 Snapshot 本身不依賴資料庫連線即可使用，是 diff 命令的輸入來源。
 
@@ -31,16 +31,17 @@ TableSchema_prod_20241201_120000.snapshot.json
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "exportedAt": "2024-12-01T12:00:00+08:00",
   "connectionName": "prod",
   "databaseType": "SqlServer",
   "profileName": "Default",
   "outputFilePath": "...",
-  "counts": { ... },
+  "counts": { "objects": 1, "columns": 1, "indexes": 0, "routines": 0, "relationships": 0 },
   "diagnostics": [ ... ],
   "objects": [ ... ],
-  "routines": [ ... ]
+  "routines": [ ... ],
+  "relationships": [ ... ]
 }
 ```
 
@@ -65,6 +66,7 @@ TableSchema_prod_20241201_120000.snapshot.json
 | `columns` | 欄位總數。 |
 | `indexes` | 索引總數。 |
 | `routines` | 預存程序與函數總數。 |
+| `relationships` | 外鍵欄位配對總數。 |
 
 ### diagnostics
 
@@ -104,9 +106,27 @@ TableSchema_prod_20241201_120000.snapshot.json
 | `isPrimaryKey` | 是否為主鍵索引。 |
 | `isClustered` | 是否為叢集索引。 |
 | `isUnique` | 是否為唯一索引。 |
-| `isForeignKey` | 是否為外鍵索引。 |
 | `columns` | 此索引包含的索引鍵欄位名稱陣列。 |
-| `otherColumns` | 包含欄位（INCLUDE 欄位）名稱陣列（SQL Server 非叢集索引適用）。 |
+| `includedColumns` | 包含欄位（INCLUDE 欄位）名稱陣列（SQL Server 非叢集索引適用）。 |
+
+### relationships
+
+根層級的外鍵欄位配對陣列，每筆包含：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `foreignKeyName` | 外鍵約束名稱。 |
+| `sourceSchemaName` | 來源結構描述名稱。 |
+| `sourceTableName` | 來源資料表名稱。 |
+| `sourceColumnName` | 來源資料行名稱。 |
+| `referencedSchemaName` | 參考結構描述名稱。 |
+| `referencedTableName` | 參考資料表名稱。 |
+| `referencedColumnName` | 參考資料行名稱。 |
+| `columnOrder` | 複合外鍵中的欄位順序。 |
+
+### v2 相容性
+
+讀取 Snapshot v2 時，缺少的 `relationships` 會視為空集合。v2 索引中的 `otherColumns` 會映射至 v3 的 `includedColumns`，歷史 `isForeignKey` 欄位不會轉換為關聯資料。v2 與 v3 比對時保留物件、欄位、索引與 routine 差異，關聯差異集合保持空白。
 
 ### routines
 

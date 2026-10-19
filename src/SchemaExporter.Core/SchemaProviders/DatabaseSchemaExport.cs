@@ -23,5 +23,10 @@ public sealed class DatabaseSchemaExport {
     /// 取得已匯出的程序。
     /// </summary>
     public required IReadOnlyList<DatabaseRoutineSchema> Routines { get; init; }
+
+    /// <summary>
+    /// 取得已匯出的外鍵欄位配對。
+    /// </summary>
+    public IReadOnlyList<DatabaseForeignKeySchema> Relationships { get; init; } = [];
 }
 

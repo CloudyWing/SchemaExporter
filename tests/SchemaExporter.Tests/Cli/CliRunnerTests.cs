@@ -2,6 +2,7 @@ using System.Text.Json;
 using CloudyWing.SchemaExporter.Cli;
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.CommentSql;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using CloudyWing.SchemaExporter.Services;
@@ -226,6 +227,90 @@ public sealed class CliRunnerTests {
     }
 
     [Test]
+    public async Task RunAsync_WhenCommentSqlInputsAreValid_WritesSqlFileAndReportsCounts() {
+        string temporaryDirectory = CreateTemporaryDirectory();
+        CliRunner sut = CreateRunner();
+        string snapshotPath = Path.Combine(temporaryDirectory, "db.snapshot.json");
+        string commentsPath = Path.Combine(temporaryDirectory, "comments.json");
+        string outputPath = Path.Combine(temporaryDirectory, "sql", "comments.sql");
+
+        try {
+            await WriteSnapshotAsync(snapshotPath, includeNameColumn: true);
+            await File.WriteAllTextAsync(
+                commentsPath,
+                """[ { "schema": "dbo", "object": "Users", "column": "Id", "comment": "識別碼" } ]"""
+            );
+
+            (int result, string output, string error) = await RunAndCaptureAsync(sut, [
+                "comment-sql",
+                "--snapshot",
+                snapshotPath,
+                "--comments",
+                commentsPath,
+                "--output",
+                outputPath
+            ]);
+
+            using (Assert.EnterMultipleScope()) {
+                Assert.That(result, Is.EqualTo((int)CliExitCode.Success));
+                Assert.That(error, Is.Empty);
+                Assert.That(output, Does.Contain($"Comment SQL written: {outputPath}"));
+                Assert.That(output, Does.Contain("Database type: SqlServer"));
+                Assert.That(output, Does.Contain("Add: 1, Update: 0, Unchanged (skipped): 0, Empty comment (skipped): 0"));
+                Assert.That(await File.ReadAllTextAsync(outputPath), Does.Contain("N'識別碼'"));
+            }
+        } finally {
+            DeleteDirectory(temporaryDirectory);
+        }
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCommentSqlListHasUnknownObject_ReturnsWorkflowErrorAndWritesNoFile() {
+        string temporaryDirectory = CreateTemporaryDirectory();
+        CliRunner sut = CreateRunner();
+        string snapshotPath = Path.Combine(temporaryDirectory, "db.snapshot.json");
+        string commentsPath = Path.Combine(temporaryDirectory, "comments.json");
+        string outputPath = Path.Combine(temporaryDirectory, "comments.sql");
+
+        try {
+            await WriteSnapshotAsync(snapshotPath, includeNameColumn: true);
+            await File.WriteAllTextAsync(
+                commentsPath,
+                """[ { "schema": "dbo", "object": "Missing", "column": "", "comment": "x" } ]"""
+            );
+
+            (int result, string output, string error) = await RunAndCaptureAsync(sut, [
+                "comment-sql",
+                "--snapshot",
+                snapshotPath,
+                "--comments",
+                commentsPath,
+                "--output",
+                outputPath
+            ]);
+
+            using (Assert.EnterMultipleScope()) {
+                Assert.That(result, Is.EqualTo((int)CliExitCode.WorkflowError));
+                Assert.That(output, Is.Empty);
+                Assert.That(error, Does.Contain("Comment SQL failed:"));
+                Assert.That(error, Does.Contain("找不到物件"));
+                Assert.That(File.Exists(outputPath), Is.False);
+            }
+        } finally {
+            DeleteDirectory(temporaryDirectory);
+        }
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCommentSqlOutputIsMissing_ReturnsArgumentErrorCode() {
+        CliRunner sut = CreateRunner();
+
+        int result = await RunWithConsoleCaptureAsync(sut, ["comment-sql", "--snapshot", "a.json", "--comments", "b.json"]);
+
+        Assert.That(result, Is.EqualTo((int)CliExitCode.ArgumentError));
+    }
+
+    [Test]
     public async Task RunAsync_WhenUnexpectedExceptionOccurs_ReturnsUnexpectedErrorCode() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.LoadAsync().Returns<Task<SchemaOptions>>(_ => throw new InvalidOperationException("boom"));
@@ -250,6 +335,7 @@ public sealed class CliRunnerTests {
         return new CliRunner(
             exportOrchestrator,
             new SchemaSnapshotDiffService(),
+            new CommentSqlService(),
             settingsService ?? Substitute.For<ISettingsService>(),
             new SchemaExportRequestResolver()
         );
@@ -265,6 +351,23 @@ public sealed class CliRunnerTests {
 
         try {
             return await runner.RunAsync(args);
+        } finally {
+            Console.SetOut(originalOutput);
+            Console.SetError(originalError);
+        }
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> RunAndCaptureAsync(CliRunner runner, string[] args) {
+        TextWriter originalOutput = Console.Out;
+        TextWriter originalError = Console.Error;
+        using StringWriter outputWriter = new();
+        using StringWriter errorWriter = new();
+        Console.SetOut(outputWriter);
+        Console.SetError(errorWriter);
+
+        try {
+            int exitCode = await runner.RunAsync(args);
+            return (exitCode, outputWriter.ToString(), errorWriter.ToString());
         } finally {
             Console.SetOut(originalOutput);
             Console.SetError(originalError);
@@ -307,7 +410,8 @@ public sealed class CliRunnerTests {
         ).Returns(Task.FromResult(new DatabaseSchemaDetails {
             Columns = schemaExport.Columns,
             Indexes = schemaExport.Indexes,
-            Routines = schemaExport.Routines
+            Routines = schemaExport.Routines,
+            Relationships = schemaExport.Relationships
         }));
     }
 
@@ -372,7 +476,6 @@ public sealed class CliRunnerTests {
                     IsPrimaryKey = "YES",
                     IsClustered = "YES",
                     IsUnique = "YES",
-                    IsForeignKey = "NO",
                     Columns = "Id"
                 }
             ],
@@ -449,9 +552,8 @@ public sealed class CliRunnerTests {
                             IsPrimaryKey = "YES",
                             IsClustered = "YES",
                             IsUnique = "YES",
-                            IsForeignKey = "NO",
                             Columns = "Id",
-                            OtherColumns = ""
+                            IncludedColumns = ""
                         }
                     ]
                 }

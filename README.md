@@ -59,6 +59,7 @@
 - [Manifest 格式](docs/manifest.md)
 - [Snapshot 格式](docs/snapshot.md)
 - [Diff 格式](docs/diff.md)
+- [註解 SQL 產生](docs/comment-sql.md)
 - [Schema Summary 格式](docs/schema-summary.md)
 
 ### 進階主題

@@ -56,9 +56,11 @@ public sealed class SchemaRedactorTests {
 
         DatabaseObjectSchema databaseObject = result.Objects.Single();
         DatabaseRoutineSchema routine = result.Routines.Single();
+        DatabaseForeignKeySchema relationship = result.Relationships.Single();
         using (Assert.EnterMultipleScope()) {
             Assert.That(databaseObject.ObjectDescription, Is.EqualTo("Uses [MASKED] for external integration."));
             Assert.That(routine.RoutineDefinition, Is.EqualTo("SELECT '[MASKED]';"));
+            Assert.That(relationship.ReferencedTableName, Is.EqualTo("Customers"));
             Assert.That(diagnostics.Single().Message, Does.Contain("2"));
         }
     }
@@ -141,6 +143,18 @@ public sealed class SchemaRedactorTests {
                     ParameterSignature = "@Id int",
                     RoutineDescription = "Returns secret value",
                     RoutineDefinition = "SELECT 'AKIA1234567890ABCDEF';"
+                }
+            ],
+            Relationships = [
+                new DatabaseForeignKeySchema {
+                    ForeignKeyName = "FK_Users_Customers",
+                    SourceSchemaName = "dbo",
+                    SourceTableName = "Users",
+                    SourceColumnName = "CustomerId",
+                    ReferencedSchemaName = "dbo",
+                    ReferencedTableName = "Customers",
+                    ReferencedColumnName = "Id",
+                    ColumnOrder = 1
                 }
             ]
         };

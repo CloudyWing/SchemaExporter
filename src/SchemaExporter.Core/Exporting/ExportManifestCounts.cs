@@ -20,6 +20,11 @@ internal sealed class ExportManifestCounts {
     public int Indexes { get; init; }
 
     /// <summary>
+    /// 取得或設定外鍵關聯數量。
+    /// </summary>
+    public int Relationships { get; init; }
+
+    /// <summary>
     /// 取得或設定程序與函數數量。
     /// </summary>
     public int Routines { get; init; }

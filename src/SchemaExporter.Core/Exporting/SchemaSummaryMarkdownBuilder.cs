@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
+using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
 namespace CloudyWing.SchemaExporter.Core.Exporting;
 
@@ -16,6 +17,21 @@ internal static class SchemaSummaryMarkdownBuilder {
     /// <param name="diff">與基準 snapshot 的差異；未執行差異比對時為 <see langword="null"/>。</param>
     /// <returns>Markdown 格式的 Schema Summary。</returns>
     internal static string BuildMarkdown(SchemaSnapshotDocument snapshot, SchemaDiffDocument? diff) {
+        return BuildMarkdown(snapshot, diff, null);
+    }
+
+    /// <summary>
+    /// 建立可選擇連結至物件明細檔的 Schema Summary Markdown。
+    /// </summary>
+    /// <param name="snapshot">目前匯出的 schema snapshot。</param>
+    /// <param name="diff">與基準 snapshot 的差異；未執行差異比對時為 <see langword="null"/>。</param>
+    /// <param name="detailLinks">物件或 routine 識別字到相對明細檔連結的對應；為 null 時內嵌物件明細。</param>
+    /// <returns>Markdown 格式的 Schema Summary。</returns>
+    internal static string BuildMarkdown(
+        SchemaSnapshotDocument snapshot,
+        SchemaDiffDocument? diff,
+        IReadOnlyDictionary<string, string>? detailLinks
+    ) {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         StringBuilder markdown = new();
@@ -37,14 +53,18 @@ internal static class SchemaSummaryMarkdownBuilder {
         AppendTableRow(markdown, "Objects", snapshot.Counts.Objects.ToString(CultureInfo.InvariantCulture));
         AppendTableRow(markdown, "Columns", snapshot.Counts.Columns.ToString(CultureInfo.InvariantCulture));
         AppendTableRow(markdown, "Indexes", snapshot.Counts.Indexes.ToString(CultureInfo.InvariantCulture));
+        AppendTableRow(markdown, "Relationships", snapshot.Counts.Relationships.ToString(CultureInfo.InvariantCulture));
         AppendTableRow(markdown, "Routines", snapshot.Counts.Routines.ToString(CultureInfo.InvariantCulture));
 
         AppendDiagnostics(markdown, snapshot.Diagnostics);
         AppendProviderCapabilities(markdown, snapshot.DatabaseType);
         AppendDiffSummary(markdown, diff);
-        AppendObjectInventory(markdown, snapshot.Objects);
-        AppendObjects(markdown, snapshot.Objects);
-        AppendRoutines(markdown, snapshot.Routines);
+        AppendObjectInventory(markdown, snapshot, detailLinks);
+        AppendRelationships(markdown, snapshot.Relationships, snapshot.Diagnostics);
+        if (detailLinks is null) {
+            AppendObjects(markdown, snapshot.Objects);
+            AppendRoutines(markdown, snapshot.Routines);
+        }
 
         return markdown.ToString();
     }
@@ -130,6 +150,13 @@ internal static class SchemaSummaryMarkdownBuilder {
         );
         AppendDiffSummaryRow(
             markdown,
+            "Relationships",
+            diff.Summary.AddedRelationships,
+            diff.Summary.RemovedRelationships,
+            diff.Summary.ModifiedRelationships
+        );
+        AppendDiffSummaryRow(
+            markdown,
             "Routines",
             diff.Summary.AddedRoutines,
             diff.Summary.RemovedRoutines,
@@ -139,27 +166,128 @@ internal static class SchemaSummaryMarkdownBuilder {
 
     private static void AppendObjectInventory(
         StringBuilder markdown,
-        IReadOnlyCollection<SchemaSnapshotObjectDocument> databaseObjects
+        SchemaSnapshotDocument snapshot,
+        IReadOnlyDictionary<string, string>? detailLinks
     ) {
-        if (databaseObjects.Count == 0) {
+        if (snapshot.Objects.Count == 0 && snapshot.Routines.Count == 0) {
             return;
         }
 
         markdown.AppendLine();
-        markdown.AppendLine("## Object Inventory");
+        markdown.AppendLine(detailLinks is null ? "## Object Inventory" : "## Inventory");
         markdown.AppendLine();
-        markdown.AppendLine("| Object | Type | Columns | Indexes | Description |");
-        markdown.AppendLine("| --- | --- | --- | --- | --- |");
-        foreach (SchemaSnapshotObjectDocument databaseObject in OrderObjects(databaseObjects)) {
-            AppendTableRow(
+        if (detailLinks is null) {
+            markdown.AppendLine("| Object | Type | Columns | Indexes | Description |");
+            markdown.AppendLine("| --- | --- | --- | --- | --- |");
+        } else {
+            markdown.AppendLine("| Object | Type | Columns | Indexes | Description | Details |");
+            markdown.AppendLine("| --- | --- | --- | --- | --- | --- |");
+        }
+
+        foreach (SchemaSnapshotObjectDocument databaseObject in OrderObjects(snapshot.Objects)) {
+            AppendInventoryRow(
                 markdown,
                 BuildObjectIdentifier(databaseObject),
                 databaseObject.ObjectType,
-                databaseObject.Columns.Count.ToString(CultureInfo.InvariantCulture),
-                databaseObject.Indexes.Count.ToString(CultureInfo.InvariantCulture),
-                databaseObject.ObjectDescription
+                databaseObject.Columns.Count,
+                databaseObject.Indexes.Count,
+                databaseObject.ObjectDescription,
+                detailLinks,
+                BuildObjectDetailKey(databaseObject)
             );
         }
+
+        foreach (SchemaSnapshotRoutineDocument routine in OrderRoutines(snapshot.Routines)) {
+            AppendInventoryRow(
+                markdown,
+                BuildRoutineIdentifier(routine),
+                routine.RoutineType,
+                null,
+                null,
+                routine.RoutineDescription,
+                detailLinks,
+                BuildRoutineDetailKey(routine)
+            );
+        }
+    }
+
+    private static void AppendInventoryRow(
+        StringBuilder markdown,
+        string identifier,
+        string type,
+        int? columnCount,
+        int? indexCount,
+        string description,
+        IReadOnlyDictionary<string, string>? detailLinks,
+        string detailKey
+    ) {
+        string columnCountText = columnCount?.ToString(CultureInfo.InvariantCulture) ?? "-";
+        string indexCountText = indexCount?.ToString(CultureInfo.InvariantCulture) ?? "-";
+        if (detailLinks is null) {
+            AppendTableRow(markdown, identifier, type, columnCountText, indexCountText, description);
+            return;
+        }
+
+        string detailLink = detailLinks.TryGetValue(detailKey, out string? link)
+            ? $"[details]({link})"
+            : "";
+        AppendTableRow(markdown, identifier, type, columnCountText, indexCountText, description, detailLink);
+    }
+
+    private static void AppendRelationships(
+        StringBuilder markdown,
+        IReadOnlyCollection<SchemaSnapshotRelationshipDocument> relationships,
+        IReadOnlyCollection<SchemaSnapshotDiagnostic> diagnostics
+    ) {
+        markdown.AppendLine();
+        markdown.AppendLine("## Relationships");
+        markdown.AppendLine();
+
+        List<SchemaSnapshotRelationshipDocument> completeRelationships = relationships
+            .Where(HasCompleteRelationship)
+            .OrderBy(x => x.SourceSchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.SourceTableName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ColumnOrder)
+            .ToList();
+        if (completeRelationships.Count == 0) {
+            bool permissionDenied = diagnostics.Any(x => string.Equals(
+                x.Message,
+                "FK catalog permission denied; relationships were not retrieved.",
+                StringComparison.Ordinal
+            ));
+            markdown.AppendLine(permissionDenied
+                ? "Relationships unavailable: FK catalog permission denied."
+                : "No relationships found.");
+            return;
+        }
+
+        markdown.AppendLine("| Constraint | Source Table | Source Column | Referenced Table | Referenced Column |");
+        markdown.AppendLine("| --- | --- | --- | --- | --- |");
+        foreach (SchemaSnapshotRelationshipDocument relationship in completeRelationships) {
+            AppendTableRow(
+                markdown,
+                relationship.ForeignKeyName,
+                BuildQualifiedTableName(relationship.SourceSchemaName, relationship.SourceTableName),
+                relationship.SourceColumnName,
+                BuildQualifiedTableName(relationship.ReferencedSchemaName, relationship.ReferencedTableName),
+                relationship.ReferencedColumnName
+            );
+        }
+    }
+
+    private static bool HasCompleteRelationship(SchemaSnapshotRelationshipDocument relationship) {
+        return !string.IsNullOrWhiteSpace(relationship.ForeignKeyName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceSchemaName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceTableName)
+            && !string.IsNullOrWhiteSpace(relationship.SourceColumnName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedSchemaName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedTableName)
+            && !string.IsNullOrWhiteSpace(relationship.ReferencedColumnName);
+    }
+
+    private static string BuildQualifiedTableName(string schemaName, string tableName) {
+        return $"{schemaName}.{tableName}";
     }
 
     private static void AppendObjects(
@@ -186,6 +314,56 @@ internal static class SchemaSummaryMarkdownBuilder {
             AppendColumns(markdown, databaseObject.Columns);
             AppendIndexes(markdown, databaseObject.Indexes);
         }
+    }
+
+    internal static string BuildObjectMarkdown(
+        SchemaSnapshotObjectDocument databaseObject,
+        IReadOnlyCollection<SchemaSnapshotRelationshipDocument> relationships,
+        IReadOnlyCollection<SchemaSnapshotDiagnostic> diagnostics
+    ) {
+        ArgumentNullException.ThrowIfNull(databaseObject);
+        ArgumentNullException.ThrowIfNull(relationships);
+        ArgumentNullException.ThrowIfNull(diagnostics);
+
+        StringBuilder markdown = new();
+        markdown.AppendLine("# Object Detail");
+        markdown.AppendLine();
+        markdown.AppendLine(
+            $"## {EscapeMarkdown(BuildObjectIdentifier(databaseObject))} ({EscapeMarkdown(databaseObject.ObjectType)})"
+        );
+        if (!string.IsNullOrWhiteSpace(databaseObject.ObjectDescription)) {
+            markdown.AppendLine();
+            markdown.AppendLine(EscapeMarkdown(databaseObject.ObjectDescription));
+        }
+
+        AppendColumns(markdown, databaseObject.Columns);
+        AppendIndexes(markdown, databaseObject.Indexes);
+        AppendRelationships(markdown, relationships, diagnostics);
+        return markdown.ToString();
+    }
+
+    internal static string BuildRoutineMarkdown(SchemaSnapshotRoutineDocument routine) {
+        ArgumentNullException.ThrowIfNull(routine);
+
+        StringBuilder markdown = new();
+        markdown.AppendLine("# Routine Detail");
+        markdown.AppendLine();
+        markdown.AppendLine($"## {EscapeMarkdown(BuildRoutineIdentifier(routine))}");
+        markdown.AppendLine();
+        markdown.AppendLine($"- Type: {EscapeMarkdown(routine.RoutineType)}");
+        if (!string.IsNullOrWhiteSpace(routine.ParameterSignature)) {
+            markdown.AppendLine($"- Parameters: {EscapeMarkdown(routine.ParameterSignature)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(routine.ReturnType)) {
+            markdown.AppendLine($"- Return Type: {EscapeMarkdown(routine.ReturnType)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(routine.RoutineDescription)) {
+            markdown.AppendLine($"- Description: {EscapeMarkdown(routine.RoutineDescription)}");
+        }
+
+        return markdown.ToString();
     }
 
     private static void AppendColumns(
@@ -227,12 +405,12 @@ internal static class SchemaSummaryMarkdownBuilder {
         markdown.AppendLine();
         markdown.AppendLine("#### Indexes");
         markdown.AppendLine();
-        markdown.AppendLine("| Name | Flags | Columns | Other Columns |");
+        markdown.AppendLine("| Name | Flags | Columns | Included Columns |");
         markdown.AppendLine("| --- | --- | --- | --- |");
         foreach (SchemaSnapshotIndexDocument index in indexes
             .OrderBy(x => x.IndexName, StringComparer.OrdinalIgnoreCase)
         ) {
-            AppendTableRow(markdown, index.IndexName, BuildIndexFlags(index), index.Columns, index.OtherColumns);
+            AppendTableRow(markdown, index.IndexName, BuildIndexFlags(index), index.Columns, index.IncludedColumns);
         }
     }
 
@@ -249,12 +427,7 @@ internal static class SchemaSummaryMarkdownBuilder {
         markdown.AppendLine();
         markdown.AppendLine("| Routine | Type | Parameters | Return Type | Description |");
         markdown.AppendLine("| --- | --- | --- | --- | --- |");
-        foreach (SchemaSnapshotRoutineDocument routine in routines
-            .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.ContainerName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.RoutineName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.OverloadIdentifier, StringComparer.OrdinalIgnoreCase)
-        ) {
+        foreach (SchemaSnapshotRoutineDocument routine in OrderRoutines(routines)) {
             AppendTableRow(
                 markdown,
                 BuildRoutineIdentifier(routine),
@@ -291,8 +464,24 @@ internal static class SchemaSummaryMarkdownBuilder {
             .ThenBy(x => x.ObjectType, StringComparer.OrdinalIgnoreCase);
     }
 
+    private static IEnumerable<SchemaSnapshotRoutineDocument> OrderRoutines(
+        IEnumerable<SchemaSnapshotRoutineDocument> routines
+    ) {
+        return routines
+            .OrderBy(x => x.SchemaName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ContainerName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.RoutineName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.RoutineType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.OverloadIdentifier, StringComparer.OrdinalIgnoreCase);
+    }
+
     private static string BuildObjectIdentifier(SchemaSnapshotObjectDocument databaseObject) {
         return $"{databaseObject.SchemaName}.{databaseObject.ObjectName}";
+    }
+
+    internal static string BuildObjectDetailKey(SchemaSnapshotObjectDocument databaseObject) {
+        ArgumentNullException.ThrowIfNull(databaseObject);
+        return $"object\0{databaseObject.SchemaName}\0{databaseObject.ObjectName}\0{databaseObject.ObjectType}";
     }
 
     private static string BuildRoutineIdentifier(SchemaSnapshotRoutineDocument routine) {
@@ -303,6 +492,11 @@ internal static class SchemaSummaryMarkdownBuilder {
         return string.IsNullOrWhiteSpace(routine.OverloadIdentifier)
             ? qualifiedName
             : $"{qualifiedName}#{routine.OverloadIdentifier}";
+    }
+
+    internal static string BuildRoutineDetailKey(SchemaSnapshotRoutineDocument routine) {
+        ArgumentNullException.ThrowIfNull(routine);
+        return $"routine\0{routine.SchemaName}\0{routine.ContainerName}\0{routine.RoutineName}\0{routine.RoutineType}\0{routine.OverloadIdentifier}";
     }
 
     private static string BuildColumnFlags(SchemaSnapshotColumnDocument column) {
@@ -330,10 +524,6 @@ internal static class SchemaSummaryMarkdownBuilder {
 
         if (IsEnabled(index.IsUnique)) {
             flags.Add("unique");
-        }
-
-        if (IsEnabled(index.IsForeignKey)) {
-            flags.Add("foreign key");
         }
 
         return string.Join(", ", flags);

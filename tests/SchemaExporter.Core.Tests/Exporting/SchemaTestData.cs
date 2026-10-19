@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 
@@ -58,7 +59,6 @@ internal static class SchemaTestData {
                     IsPrimaryKey = "YES",
                     IsClustered = "YES",
                     IsUnique = "YES",
-                    IsForeignKey = "NO",
                     Columns = "Id"
                 }
             ],
@@ -71,6 +71,18 @@ internal static class SchemaTestData {
                     RoutineDescription = "Returns users",
                     RoutineDefinition = "SELECT [Id], [Name] FROM [dbo].[Users];"
                 }
+            ],
+            Relationships = [
+                new DatabaseForeignKeySchema {
+                    ForeignKeyName = "FK_Users_Customers",
+                    SourceSchemaName = "dbo",
+                    SourceTableName = "Users",
+                    SourceColumnName = "Id",
+                    ReferencedSchemaName = "dbo",
+                    ReferencedTableName = "Customers",
+                    ReferencedColumnName = "Id",
+                    ColumnOrder = 1
+                }
             ]
         };
     }
@@ -78,8 +90,23 @@ internal static class SchemaTestData {
     public static SchemaSnapshotDocument CreateSnapshotDocument(
         string outputFilePath,
         string objectDescription = "Current user table",
-        bool includeNameColumn = true
+        bool includeNameColumn = true,
+        IReadOnlyList<SchemaSnapshotRelationshipDocument>? relationshipOverride = null,
+        IReadOnlyList<SchemaSnapshotDiagnostic>? diagnosticOverride = null
     ) {
+        IReadOnlyList<SchemaSnapshotRelationshipDocument> relationships = relationshipOverride ?? [
+            new SchemaSnapshotRelationshipDocument {
+                ForeignKeyName = "FK_Users_Customers",
+                SourceSchemaName = "dbo",
+                SourceTableName = "Users",
+                SourceColumnName = "Id",
+                ReferencedSchemaName = "dbo",
+                ReferencedTableName = "Customers",
+                ReferencedColumnName = "Id",
+                ColumnOrder = 1
+            }
+        ];
+        IReadOnlyList<SchemaSnapshotDiagnostic> diagnostics = diagnosticOverride ?? [];
         List<SchemaSnapshotColumnDocument> columns = [
             new SchemaSnapshotColumnDocument {
                 ColumnName = "Id",
@@ -107,7 +134,7 @@ internal static class SchemaTestData {
         }
 
         return new SchemaSnapshotDocument {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             ExportedAt = DateTimeOffset.Parse("2024-01-01T00:00:00+00:00", System.Globalization.CultureInfo.InvariantCulture),
             ConnectionName = "Primary",
             DatabaseType = DatabaseType.SqlServer.ToString(),
@@ -117,9 +144,10 @@ internal static class SchemaTestData {
                 Objects = 1,
                 Columns = columns.Count,
                 Indexes = 1,
-                Routines = 1
+                Routines = 1,
+                Relationships = relationships.Count
             },
-            Diagnostics = [],
+            Diagnostics = diagnostics,
             Objects = [
                 new SchemaSnapshotObjectDocument {
                     SchemaName = "dbo",
@@ -133,9 +161,8 @@ internal static class SchemaTestData {
                             IsPrimaryKey = "YES",
                             IsClustered = "YES",
                             IsUnique = "YES",
-                            IsForeignKey = "NO",
                             Columns = "Id",
-                            OtherColumns = ""
+                            IncludedColumns = ""
                         }
                     ]
                 }
@@ -152,19 +179,26 @@ internal static class SchemaTestData {
                     RoutineDescription = "Returns users",
                     RoutineDefinition = "SELECT [Id], [Name] FROM [dbo].[Users];"
                 }
-            ]
+            ],
+            Relationships = relationships
         };
     }
 
     public static async Task WriteSnapshotAsync(
         string path,
         string objectDescription = "Current user table",
-        bool includeNameColumn = true
+        bool includeNameColumn = true,
+        IReadOnlyList<SchemaSnapshotRelationshipDocument>? relationshipOverride = null,
+        IReadOnlyList<SchemaSnapshotDiagnostic>? diagnosticOverride = null
     ) {
-        SchemaSnapshotDocument snapshot = CreateSnapshotDocument(path, objectDescription, includeNameColumn);
-        string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions {
-            WriteIndented = true
-        });
+        SchemaSnapshotDocument snapshot = CreateSnapshotDocument(
+            path,
+            objectDescription,
+            includeNameColumn,
+            relationshipOverride,
+            diagnosticOverride
+        );
+        string json = JsonSerializer.Serialize(snapshot, SchemaArtifactJsonSerializerOptions.Default);
         await File.WriteAllTextAsync(path, json);
     }
 }

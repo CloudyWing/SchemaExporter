@@ -48,5 +48,10 @@ public sealed class SchemaDiffDocument {
     /// 取得或設定程序與函數層級的差異集合。
     /// </summary>
     public required IReadOnlyList<SchemaDiffEntry> RoutineChanges { get; init; }
+
+    /// <summary>
+    /// 取得或設定外鍵關聯層級的差異集合。
+    /// </summary>
+    public required IReadOnlyList<SchemaDiffEntry> RelationshipChanges { get; init; }
 }
 

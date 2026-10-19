@@ -1,4 +1,5 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Core.Exporting.CommentSql;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using Microsoft.Extensions.Configuration;
@@ -29,6 +30,8 @@ public static class ServiceCollectionExtensions {
         services.AddSingleton<SchemaExportRequestResolver>();
         services.AddSingleton<SchemaSnapshotBuilder>();
         services.AddSingleton<SchemaSnapshotDiffService>();
+        services.AddSingleton<CommentSqlGenerator>();
+        services.AddSingleton<CommentSqlService>();
         services.AddSingleton<SchemaExportOrchestrator>();
 
         return services;

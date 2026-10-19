@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Core.Exporting.Diffs;
 using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
@@ -103,6 +104,101 @@ public sealed class SchemaSnapshotDiffServiceTests {
             Assert.That(document.RootElement.GetProperty("summary").GetProperty("addedColumns").GetInt32(), Is.EqualTo(1));
             Assert.That(document.RootElement.GetProperty("columnChanges")[0].GetProperty("changeType").GetString(), Is.EqualTo("Added"));
         }
+    }
+
+    [Test]
+    public async Task CompareAsync_WhenRelationshipsChange_ReturnsAddedRemovedModifiedEntries() {
+        using TempDirectoryScope directory = new();
+        SchemaSnapshotDiffService sut = new();
+        string leftSnapshotPath = Path.Combine(directory.Path, "left.snapshot.json");
+        string rightSnapshotPath = Path.Combine(directory.Path, "right.snapshot.json");
+
+        await SchemaTestData.WriteSnapshotAsync(
+            leftSnapshotPath,
+            relationshipOverride: [
+                CreateRelationship("FK_Keep", "Customers", "Id"),
+                CreateRelationship("FK_Remove", "Departments", "Id")
+            ]
+        );
+        await SchemaTestData.WriteSnapshotAsync(
+            rightSnapshotPath,
+            relationshipOverride: [
+                CreateRelationship("FK_Keep", "Accounts", "Id"),
+                CreateRelationship("FK_Add", "Orders", "UserId")
+            ]
+        );
+
+        SchemaDiffDocument diff = await sut.CompareAsync(leftSnapshotPath, rightSnapshotPath);
+        string markdown = sut.BuildMarkdownReport(diff);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(diff.Summary.AddedRelationships, Is.EqualTo(1));
+            Assert.That(diff.Summary.RemovedRelationships, Is.EqualTo(1));
+            Assert.That(diff.Summary.ModifiedRelationships, Is.EqualTo(1));
+            Assert.That(diff.RelationshipChanges, Has.Count.EqualTo(3));
+            Assert.That(diff.RelationshipChanges.Single(x => x.ChangeType == SchemaChangeType.Modified).Identifier, Is.EqualTo("FK_Keep: dbo.Users.Id"));
+            Assert.That(
+                diff.RelationshipChanges.Single(x => x.ChangeType == SchemaChangeType.Modified).PropertyChanges[nameof(SchemaSnapshotRelationshipDocument.ReferencedTableName)].Current,
+                Is.EqualTo("Accounts")
+            );
+            Assert.That(markdown, Does.Contain("- Added Relationships: 1"));
+            Assert.That(markdown, Does.Contain("## Relationship Changes"));
+        }
+    }
+
+    [Test]
+    public async Task LoadSnapshotAsync_WhenV2UsesLegacyIndexFields_MapsIncludedColumnsAndLeavesRelationshipsEmpty() {
+        using TempDirectoryScope directory = new();
+        SchemaSnapshotDiffService sut = new();
+        string snapshotPath = Path.Combine(directory.Path, "legacy.snapshot.json");
+        string currentSnapshotPath = Path.Combine(directory.Path, "current.snapshot.json");
+
+        await SchemaTestData.WriteSnapshotAsync(snapshotPath);
+        JsonObject root = JsonNode.Parse(await File.ReadAllTextAsync(snapshotPath))?.AsObject()
+            ?? throw new AssertionException("Expected a JSON object.");
+        JsonObject firstObject = root["objects"]?.AsArray()[0]?.AsObject()
+            ?? throw new AssertionException("Expected a snapshot object.");
+        JsonObject firstIndex = firstObject["indexes"]?.AsArray()[0]?.AsObject()
+            ?? throw new AssertionException("Expected a snapshot index.");
+        string includedColumns = firstIndex["includedColumns"]?.GetValue<string>() ?? "";
+        firstIndex.Remove("includedColumns");
+        firstIndex["otherColumns"] = includedColumns;
+        firstIndex["isForeignKey"] = "No";
+        root["schemaVersion"] = 2;
+        root.Remove("relationships");
+        await File.WriteAllTextAsync(snapshotPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        await SchemaTestData.WriteSnapshotAsync(currentSnapshotPath, includeNameColumn: false);
+
+        SchemaSnapshotDocument snapshot = await sut.LoadSnapshotAsync(snapshotPath);
+        SchemaDiffDocument diff = await sut.CompareAsync(snapshotPath, currentSnapshotPath);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(snapshot.SchemaVersion, Is.EqualTo(2));
+            Assert.That(snapshot.Relationships, Is.Empty);
+            Assert.That(snapshot.Objects.Single().Indexes.Single().IncludedColumns, Is.EqualTo(includedColumns));
+            Assert.That(diff.RelationshipChanges, Is.Empty);
+            Assert.That(diff.Summary.AddedRelationships, Is.EqualTo(0));
+            Assert.That(diff.Summary.RemovedRelationships, Is.EqualTo(0));
+            Assert.That(diff.Summary.ModifiedRelationships, Is.EqualTo(0));
+            Assert.That(diff.Summary.RemovedColumns, Is.EqualTo(1));
+        }
+    }
+
+    private static SchemaSnapshotRelationshipDocument CreateRelationship(
+        string foreignKeyName,
+        string referencedTableName,
+        string referencedColumnName
+    ) {
+        return new SchemaSnapshotRelationshipDocument {
+            ForeignKeyName = foreignKeyName,
+            SourceSchemaName = "dbo",
+            SourceTableName = "Users",
+            SourceColumnName = "Id",
+            ReferencedSchemaName = "dbo",
+            ReferencedTableName = referencedTableName,
+            ReferencedColumnName = referencedColumnName,
+            ColumnOrder = 1
+        };
     }
 }
 

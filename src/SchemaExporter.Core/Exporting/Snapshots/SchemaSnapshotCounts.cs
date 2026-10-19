@@ -23,5 +23,10 @@ public sealed class SchemaSnapshotCounts {
     /// 取得或設定程序與函數數量。
     /// </summary>
     public int Routines { get; init; }
+
+    /// <summary>
+    /// 取得或設定外鍵欄位配對數量。
+    /// </summary>
+    public int Relationships { get; init; }
 }
 

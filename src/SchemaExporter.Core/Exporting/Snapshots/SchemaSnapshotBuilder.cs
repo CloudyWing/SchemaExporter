@@ -32,7 +32,7 @@ public sealed class SchemaSnapshotBuilder {
         ILookup<DatabaseObjectKey, DatabaseIndexSchema> indexesByObject = filteredExport.Indexes.ToLookup(x => x.ObjectKey);
 
         return new SchemaSnapshotDocument {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             ExportedAt = DateTimeOffset.Now,
             ConnectionName = connection.Name,
             DatabaseType = connection.DatabaseType.ToString(),
@@ -42,7 +42,8 @@ public sealed class SchemaSnapshotBuilder {
                 Objects = filteredExport.Objects.Count,
                 Columns = filteredExport.Columns.Count,
                 Indexes = filteredExport.Indexes.Count,
-                Routines = filteredExport.Routines.Count
+                Routines = filteredExport.Routines.Count,
+                Relationships = filteredExport.Relationships.Count
             },
             Diagnostics = diagnostics.Select(x => new SchemaSnapshotDiagnostic {
                 Severity = x.SeverityText,
@@ -77,9 +78,8 @@ public sealed class SchemaSnapshotBuilder {
                         IsPrimaryKey = x.IsPrimaryKey,
                         IsClustered = x.IsClustered,
                         IsUnique = x.IsUnique,
-                        IsForeignKey = x.IsForeignKey,
                         Columns = x.Columns,
-                        OtherColumns = x.OtherColumns ?? ""
+                        IncludedColumns = x.IncludedColumns ?? ""
                     })
                     .ToList()
             }).ToList(),
@@ -93,7 +93,23 @@ public sealed class SchemaSnapshotBuilder {
                 ReturnType = x.ReturnType ?? "",
                 RoutineDescription = x.RoutineDescription ?? "",
                 RoutineDefinition = x.RoutineDefinition ?? ""
-            }).ToList()
+            }).ToList(),
+            Relationships = filteredExport.Relationships
+                .OrderBy(x => x.SourceSchemaName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.SourceTableName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.ColumnOrder)
+                .Select(x => new SchemaSnapshotRelationshipDocument {
+                    ForeignKeyName = x.ForeignKeyName,
+                    SourceSchemaName = x.SourceSchemaName,
+                    SourceTableName = x.SourceTableName,
+                    SourceColumnName = x.SourceColumnName,
+                    ReferencedSchemaName = x.ReferencedSchemaName,
+                    ReferencedTableName = x.ReferencedTableName,
+                    ReferencedColumnName = x.ReferencedColumnName,
+                    ColumnOrder = x.ColumnOrder
+                })
+                .ToList()
         };
     }
 }

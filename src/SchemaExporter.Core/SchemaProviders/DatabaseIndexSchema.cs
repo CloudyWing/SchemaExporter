@@ -40,19 +40,14 @@ public sealed class DatabaseIndexSchema {
     public required string IsUnique { get; set; }
 
     /// <summary>
-    /// 取得或設定索引是否代表外鍵。
-    /// </summary>
-    public required string IsForeignKey { get; set; }
-
-    /// <summary>
     /// 取得或設定索引資料行。
     /// </summary>
     public required string Columns { get; set; }
 
     /// <summary>
-    /// 取得或設定非索引鍵或參考資料行。
+    /// 取得或設定索引包含資料行。
     /// </summary>
-    public string? OtherColumns { get; set; }
+    public string? IncludedColumns { get; set; }
 
     /// <summary>
     /// 取得所屬物件索引鍵。
