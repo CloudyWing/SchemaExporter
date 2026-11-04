@@ -10,6 +10,7 @@ using CloudyWing.SchemaExporter.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MudBlazor.Services;
 using Velopack;
 
 namespace CloudyWing.SchemaExporter.Desktop;
@@ -65,6 +66,7 @@ public partial class App : Application {
             logging.SetMinimumLevel(LogLevel.Information);
         });
         services.AddWpfBlazorWebView();
+        services.AddMudServices();
 #if DEBUG
         services.AddBlazorWebViewDeveloperTools();
 #endif

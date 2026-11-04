@@ -1,0 +1,16 @@
+<MudNavMenu Class="navigation-menu">
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.FileDownload">
+        匯出
+    </MudNavLink>
+    <MudNavLink Href="settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings" Disabled="@IsExporting">
+        設定
+    </MudNavLink>
+</MudNavMenu>
+
+@code {
+    /// <summary>
+    /// 取得或設定一個值，用以指出是否正在匯出；匯出期間停用設定頁。
+    /// </summary>
+    [Parameter]
+    public bool IsExporting { get; set; }
+}

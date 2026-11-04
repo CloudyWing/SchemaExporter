@@ -1,0 +1,78 @@
+<MudThemeProvider @ref="themeProvider" Theme="@Theme" IsDarkMode="@isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<div class="@(isDarkMode ? "app-theme-dark" : "app-theme-light")">
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">找不到這個頁面，請回到<a href="">匯出</a>頁。</MudAlert>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</div>
+
+@code {
+    // 配色沿用 CloudyWing 桌面工具（AiAccountManager）的主題，讓同系列工具外觀一致；另補上 AppBar 文字色。
+    private static readonly MudTheme Theme = new() {
+        PaletteLight = new PaletteLight {
+            Background = "#ffffff",
+            Surface = "#f6f6f7",
+            DrawerBackground = "#f8f8f8",
+            AppbarBackground = "#ffffff",
+            // MudBlazor 預設 AppBar 文字為白色，白底 AppBar 需改為主要文字色才看得到標題。
+            AppbarText = "#1f2937",
+            TextPrimary = "#1f2937",
+            TextSecondary = "#4b5563",
+            Divider = "rgba(176, 33, 33, .15)",
+            LinesDefault = "#c2c2c4",
+            LinesInputs = "#c2c2c4",
+            Primary = "#dc2626",
+            PrimaryContrastText = "#ffffff",
+            Secondary = "#b02121",
+            Tertiary = "#d97706"
+        },
+        PaletteDark = new PaletteDark {
+            Background = "#1c1b1f",
+            Surface = "#161618",
+            DrawerBackground = "#26242a",
+            AppbarBackground = "#202127",
+            AppbarText = "#f8fafc",
+            TextPrimary = "#f8fafc",
+            TextSecondary = "#a8a29e",
+            Divider = "rgba(248, 250, 252, .12)",
+            LinesDefault = "#3c3f44",
+            LinesInputs = "#3c3f44",
+            Primary = "#fb923c",
+            PrimaryContrastText = "#111827",
+            Secondary = "#f97316",
+            Tertiary = "#d97706"
+        }
+    };
+
+    private MudThemeProvider? themeProvider;
+    private bool isDarkMode;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender) {
+        if (!firstRender || themeProvider is null) {
+            return;
+        }
+
+        // 跟隨 Windows 的淺色／深色設定，系統切換時即時更新。
+        isDarkMode = await themeProvider.GetSystemDarkModeAsync();
+        await themeProvider.WatchSystemDarkModeAsync(OnSystemDarkModeChangedAsync);
+        StateHasChanged();
+    }
+
+    private Task OnSystemDarkModeChangedAsync(bool isDark) {
+        if (isDark == isDarkMode) {
+            return Task.CompletedTask;
+        }
+
+        isDarkMode = isDark;
+        return InvokeAsync(StateHasChanged);
+    }
+}

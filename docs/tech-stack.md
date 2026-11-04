@@ -187,6 +187,7 @@ Desktop 專案使用 `Microsoft.NET.Sdk.Razor` SDK，並同時啟用 WPF：
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.120" />
+    <PackageReference Include="MudBlazor" Version="9.11.0" />
   </ItemGroup>
 </Project>
 ```
@@ -195,14 +196,14 @@ Desktop 專案使用 `Microsoft.NET.Sdk.Razor` SDK，並同時啟用 WPF：
 
 ### WPF 主視窗承載 BlazorWebView
 
-`MainWindow.xaml` 只放一個 `BlazorWebView`，以 `wwwroot\index.html` 為 host page，並把 `Routes` 元件掛到 `#app`：
+`MainWindow.xaml` 只放一個 `BlazorWebView`，以 `wwwroot\index.html` 為 host page，並把根元件 `App` 掛到 `#app`：
 
 ```xml
 <blazor:BlazorWebView x:Name="BlazorWebView"
                       HostPage="wwwroot\index.html">
     <blazor:BlazorWebView.RootComponents>
         <blazor:RootComponent Selector="#app"
-                              ComponentType="{x:Type components:Routes}" />
+                              ComponentType="{x:Type components:App}" />
     </blazor:BlazorWebView.RootComponents>
 </blazor:BlazorWebView>
 ```
@@ -220,10 +221,21 @@ services.AddBlazorWebViewDeveloperTools();
 
 | 檔案 | 說明 |
 | --- | --- |
-| `Components/Routes.razor` | Router，預設版面為 `MainLayout`。 |
-| `Components/Layout/MainLayout.razor` | 共用版面；首次繪製後在背景觸發更新檢查。 |
+| `Components/App.razor` | 根元件：MudBlazor 主題與 Provider、跟隨 Windows 淺色／深色模式，以及 Router（預設版面為 `MainLayout`）。 |
+| `Components/Layout/MainLayout.razor` | 共用版面（`MudLayout`、AppBar 與可收合的 Drawer）；首次繪製後在背景觸發更新檢查。 |
+| `Components/Layout/NavMenu.razor` | 導覽選單；匯出期間停用設定頁。 |
 | `Components/Pages/Export.razor` | 匯出頁（`/`），包含連線、Export Profile、進階選項與診斷資訊。 |
 | `Components/Pages/Settings.razor` | 設定頁，分為 Connections、Export Profiles 與 Redaction 三個分頁。 |
+
+### UI 元件庫與主題
+
+介面使用 MudBlazor 元件（`MudSelect`、`MudTextField`、`MudExpansionPanel`、`MudTabs`、`MudTable` 等），與 CloudyWing 的另一個桌面工具 AiAccountManager 採用相同的套件與配色，讓同系列工具外觀一致：
+
+- `App.razor` 以 `MudThemeProvider` 套用自訂 `MudTheme`。淺色主色為紅色 `#dc2626`，深色主色為橘色 `#fb923c`，背景、表面與文字色也沿用 AiAccountManager。
+- 另外補上 `AppbarText`。MudBlazor 預設 AppBar 文字為白色，白底 AppBar 上看不到標題。
+- 啟動後以 `GetSystemDarkModeAsync` 取得 Windows 目前的模式，並以 `WatchSystemDarkModeAsync` 在系統切換時即時更新。
+- `App.xaml.cs` 註冊 `AddMudServices()`；`wwwroot/index.html` 載入 `_content/MudBlazor/MudBlazor.min.css` 與 `MudBlazor.min.js`，都是隨套件打包的本機資源，不連外部 CDN。
+- `wwwroot/css/app.css` 只放版面輔助樣式（`content-card`、`page-stack` 等），命名沿用 AiAccountManager。
 
 ### State 類別與 Changed 事件
 

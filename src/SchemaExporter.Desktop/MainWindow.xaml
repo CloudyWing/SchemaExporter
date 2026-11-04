@@ -14,7 +14,7 @@
                           HostPage="wwwroot\index.html">
         <blazor:BlazorWebView.RootComponents>
             <blazor:RootComponent Selector="#app"
-                                  ComponentType="{x:Type components:Routes}" />
+                                  ComponentType="{x:Type components:App}" />
         </blazor:BlazorWebView.RootComponents>
     </blazor:BlazorWebView>
 </Window>
