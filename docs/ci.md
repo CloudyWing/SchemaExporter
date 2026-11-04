@@ -9,7 +9,7 @@ CI 可使用 SchemaExporter CLI 產生 schema snapshot、Schema Summary 與 diff
 1. 從受控測試資料庫匯出目前 schema snapshot。
 2. 與版控中的 baseline snapshot 產生 diff JSON。
 3. 將 workbook、snapshot、Schema Summary 與 diff 報告上傳為 CI artifact。
-4. 若 diff summary 內有任何變更，讓 workflow 失敗，要求審查者確認是否要更新 baseline。
+4. 以 `diff --fail-on-changes` 比對，有任何變更時 CLI 以結束代碼 `5` 結束，讓 workflow 失敗，要求審查者確認是否要更新 baseline。
 
 ## 前置條件
 
@@ -135,13 +135,7 @@ jobs:
       - name: Compare schema baseline
         shell: pwsh
         run: |
-          dotnet run --project .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -c Release -- `
-            diff `
-            --left .\schema-baseline\baseline.snapshot.json `
-            --right .\artifacts\schema\TableSchema_ci.snapshot.json `
-            --output .\artifacts\schema\schema.diff.json `
-            --format json
-
+          # 先輸出供審查的 Markdown 報告，再以 --fail-on-changes 產生 JSON 並在有差異時讓步驟失敗（結束代碼 5）。
           dotnet run --project .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -c Release -- `
             diff `
             --left .\schema-baseline\baseline.snapshot.json `
@@ -149,27 +143,20 @@ jobs:
             --output .\artifacts\schema\schema.diff.md `
             --format markdown
 
-          $diff = Get-Content .\artifacts\schema\schema.diff.json -Raw | ConvertFrom-Json
-          $summary = $diff.summary
-          $changeCount =
-            $summary.addedObjects +
-            $summary.removedObjects +
-            $summary.modifiedObjects +
-            $summary.addedColumns +
-            $summary.removedColumns +
-            $summary.modifiedColumns +
-            $summary.addedIndexes +
-            $summary.removedIndexes +
-            $summary.modifiedIndexes +
-            $summary.addedRelationships +
-            $summary.removedRelationships +
-            $summary.modifiedRelationships +
-            $summary.addedRoutines +
-            $summary.removedRoutines +
-            $summary.modifiedRoutines
+          dotnet run --project .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -c Release -- `
+            diff `
+            --left .\schema-baseline\baseline.snapshot.json `
+            --right .\artifacts\schema\TableSchema_ci.snapshot.json `
+            --output .\artifacts\schema\schema.diff.json `
+            --format json `
+            --fail-on-changes
 
-          if ($changeCount -gt 0) {
+          if ($LASTEXITCODE -eq 5) {
             throw "Schema drift detected. Review artifacts/schema/schema.diff.md and update baseline if the change is expected."
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Schema diff failed with exit code $LASTEXITCODE."
           }
 
       - name: Upload schema artifacts

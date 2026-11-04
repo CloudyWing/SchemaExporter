@@ -53,5 +53,16 @@ public sealed class SchemaDiffDocument {
     /// 取得或設定外鍵關聯層級的差異集合。
     /// </summary>
     public required IReadOnlyList<SchemaDiffEntry> RelationshipChanges { get; init; }
-}
 
+    /// <summary>
+    /// 判斷兩份 snapshot 之間是否有任何差異。
+    /// </summary>
+    /// <returns>物件、欄位、索引、程序或關聯任一項有變更時回傳 <see langword="true"/>；否則回傳 <see langword="false"/>。</returns>
+    public bool HasChanges() {
+        return ObjectChanges.Count > 0
+            || ColumnChanges.Count > 0
+            || IndexChanges.Count > 0
+            || RoutineChanges.Count > 0
+            || RelationshipChanges.Count > 0;
+    }
+}

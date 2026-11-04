@@ -27,5 +27,10 @@ internal enum CliExitCode {
     /// <summary>
     /// 使用者以 Ctrl+C 取消命令；已寫出的檔案可能不完整，不應視為成功結果。
     /// </summary>
-    Canceled = 4
+    Canceled = 4,
+
+    /// <summary>
+    /// diff 命令指定 <c>--fail-on-changes</c> 且兩份 snapshot 有差異；差異報告仍會正常輸出。
+    /// </summary>
+    ChangesDetected = 5
 }

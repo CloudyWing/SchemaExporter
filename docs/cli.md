@@ -144,6 +144,7 @@ CloudyWing.SchemaExporter.Cli diff --left <path> --right <path> [options]
 | --- | --- |
 | `--output <path>` | 將差異報告寫入指定路徑。省略時直接輸出 Markdown 至 stdout。 |
 | `--format <json 或 markdown>` | 指定輸出格式。省略時依副檔名自動判斷（`.md` 為 Markdown，其餘為 JSON）。 |
+| `--fail-on-changes` | 兩份 snapshot 有任何差異時以結束代碼 `5` 結束，並在 stderr 輸出 `Schema changes detected.`。差異報告仍會照常輸出，適合在 CI 中擋下未審查的 schema 變更。 |
 | `--help` / `-h` / `/?` | 顯示說明文字。 |
 
 ### 結束代碼
@@ -155,6 +156,7 @@ CloudyWing.SchemaExporter.Cli diff --left <path> --right <path> [options]
 | `2` | `WorkflowError` | 比對流程失敗（如找不到檔案、格式錯誤）。 |
 | `3` | `UnexpectedError` | 未預期的錯誤。 |
 | `4` | `Canceled` | 使用者以 Ctrl+C 取消。 |
+| `5` | `ChangesDetected` | 指定 `--fail-on-changes` 且兩份 snapshot 有差異。 |
 
 ### 範例
 
@@ -167,6 +169,9 @@ CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current
 
 # 寫入 JSON 檔案
 CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json
+
+# 有差異時以結束代碼 5 結束（CI 用）
+CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json --fail-on-changes
 
 # 明確指定格式
 CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output report.txt --format markdown
