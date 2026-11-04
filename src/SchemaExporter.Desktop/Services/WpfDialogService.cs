@@ -27,9 +27,15 @@ internal sealed class WpfDialogService : IDialogService {
     }
 
     private static MessageBoxResult Show(string title, string message, MessageBoxButton button, MessageBoxImage image) {
-        // Blazor 事件可能在非 UI 執行緒延續，MessageBox 必須在 WPF Dispatcher 上開啟並以主視窗為擁有者。
-        return Application.Current.Dispatcher.Invoke(() => {
-            Window? owner = Application.Current.MainWindow;
+        // 視窗關閉後背景作業仍可能回報錯誤，此時應用程式已結束，不再顯示對話框。
+        Application? application = Application.Current;
+        if (application is null) {
+            return MessageBoxResult.None;
+        }
+
+        // MessageBox 必須在 WPF Dispatcher 上開啟並以主視窗為擁有者。
+        return application.Dispatcher.Invoke(() => {
+            Window? owner = application.MainWindow;
             return owner is null
                 ? MessageBox.Show(message, title, button, image)
                 : MessageBox.Show(owner, message, title, button, image);

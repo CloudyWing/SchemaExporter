@@ -26,7 +26,7 @@ internal sealed class UpdateWorkspace {
     }
 
     /// <summary>
-    /// 在狀態變更、需要重新繪製畫面時觸發；可能由非 UI 執行緒觸發。
+    /// 在狀態變更、需要重新繪製畫面時觸發。
     /// </summary>
     public event Action? Changed;
 
@@ -45,7 +45,7 @@ internal sealed class UpdateWorkspace {
         }
 
         try {
-            UpdateInfo? update = await updateService.CheckForUpdatesAsync().ConfigureAwait(false);
+            UpdateInfo? update = await updateService.CheckForUpdatesAsync();
             if (update is null) {
                 return;
             }
@@ -63,8 +63,8 @@ internal sealed class UpdateWorkspace {
 
             await updateService.DownloadUpdateAsync(
                 update,
-                new InlineProgress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
-            ).ConfigureAwait(false);
+                new Progress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
+            );
 
             dialogService.ShowInformation("準備更新", "更新已下載完成，應用程式將重新啟動以套用新版本。");
             updateService.ApplyUpdateAndRestart(update);

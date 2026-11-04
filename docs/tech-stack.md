@@ -70,11 +70,11 @@ if (update is null) return; // null 表示目前已是最新版，或不是安�
 ```csharp
 await updateService.DownloadUpdateAsync(
     update,
-    new InlineProgress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
+    new Progress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
 );
 ```
 
-下載在背景非同步進行，`IProgress<int>` 傳入下載百分比讓 UI 能即時顯示進度。`InlineProgress<T>` 直接在回報的執行緒呼叫處理常式，不擷取同步內容；`SetStatus` 更新狀態後觸發 `Changed` 事件，由 Razor Component 以 `InvokeAsync(StateHasChanged)` 重新繪製。
+下載在背景非同步進行，`IProgress<int>` 傳入下載百分比讓 UI 能即時顯示進度。`Progress<T>` 在建立時擷取 Blazor Renderer 的同步內容，回報會投遞回 Renderer 執行緒；`SetStatus` 更新狀態後觸發 `Changed` 事件，由 Razor Component 以 `InvokeAsync(StateHasChanged)` 重新繪製。
 
 #### 3. 套用並重啟
 
@@ -95,7 +95,7 @@ public async Task CheckForUpdatesAsync() {
     }
 
     try {
-        UpdateInfo? update = await updateService.CheckForUpdatesAsync().ConfigureAwait(false);
+        UpdateInfo? update = await updateService.CheckForUpdatesAsync();
         if (update is null) {
             return;
         }
@@ -113,8 +113,8 @@ public async Task CheckForUpdatesAsync() {
 
         await updateService.DownloadUpdateAsync(
             update,
-            new InlineProgress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
-        ).ConfigureAwait(false);
+            new Progress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
+        );
 
         dialogService.ShowInformation("準備更新", "更新已下載完成，應用程式將重新啟動以套用新版本。");
         updateService.ApplyUpdateAndRestart(update);
@@ -229,7 +229,11 @@ services.AddBlazorWebViewDeveloperTools();
 
 畫面狀態與流程協調放在 `State/` 下的 `ExportWorkspace`、`SettingsWorkspace` 與 `UpdateWorkspace`。這些類別不依賴 WPF 型別，也不依賴 Razor，以 Singleton 註冊，可以直接在 `SchemaExporter.Desktop.Tests` 中測試。
 
-狀態變更時，State 類別觸發 `Changed` 事件；元件訂閱事件後以 `InvokeAsync(StateHasChanged)` 重新繪製。`Changed` 可能由非 UI 執行緒觸發，`InvokeAsync` 會把繪製工作切回元件的同步內容：
+State 類別的公開方法由 Razor 事件在 Renderer 執行緒呼叫，內部 `await` 不加 `ConfigureAwait(false)`，讓後續的狀態變更都回到 Renderer 執行緒，避免繪製途中讀到另一個執行緒寫到一半的狀態。這與 Core、Infrastructure 等 Library 層一律加 `ConfigureAwait(false)` 的規則不同。
+
+匯出進度使用 `Progress<T>`，回報會投遞回 Renderer 執行緒。投遞可能晚於匯出完成才執行，因此 `ExportWorkspace` 在匯出結束後忽略遲到的進度，避免蓋掉完成或取消訊息。
+
+狀態變更時，State 類別觸發 `Changed` 事件；元件訂閱事件後以 `InvokeAsync(StateHasChanged)` 重新繪製。`InvokeAsync` 確保繪製在元件的同步內容執行：
 
 ```razor
 @implements IDisposable

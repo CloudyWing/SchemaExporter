@@ -22,7 +22,7 @@ public static class SchemaExporterConfiguration {
 
         AppPaths.EnsureUserConfigExists();
         return new ConfigurationBuilder()
-            .AddJsonFile(AppPaths.UserConfigFile, optional: false, reloadOnChange: true)
+            .AddJsonFile(AppPaths.UserConfigFile, optional: false, reloadOnChange: false)
             .AddEnvironmentVariables()
             .Build();
     }
