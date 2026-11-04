@@ -37,4 +37,4 @@ Schema Summary 以物件與 routine 總筆數判斷是否分檔。50 筆以內�
 
 ## 產生方式
 
-匯出命令會依 `ExportResultOptions` 或 CLI 參數產生 artifacts。`schemaexporter diff` 命令也可以不連線資料庫，直接用兩份 snapshot 單獨產生 JSON 或 Markdown diff 報告。
+匯出命令會依 `ExportResultOptions` 或 CLI 參數產生 artifacts。`CloudyWing.SchemaExporter.Cli diff` 命令也可以不連線資料庫，直接用兩份 snapshot 單獨產生 JSON 或 Markdown diff 報告。

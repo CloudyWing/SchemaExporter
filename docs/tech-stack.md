@@ -7,14 +7,13 @@
 ## 目錄
 
 - [Velopack — 自動更新框架](#velopack)
-- [CommunityToolkit.Mvvm — MVVM Source Generator](#communitytoolkitmvvm)
+- [Blazor Hybrid — Desktop 介面](#blazor-hybrid)
 - [CloudyWing.SpreadsheetExporter — Excel 匯出](#cloudywingspreadsheetexporter)
 - [MinVer — 語意版號控制](#minver)
-- [LibraryImport — 現代 P/Invoke](#libraryimport)
 - [LoggerMessage — 高效能日誌](#loggermessage)
 - [Dapper — 輕量 ORM](#dapper)
 - [Testcontainers — 整合測試容器](#testcontainers)
-- [CLI 模式進入點](#cli-模式進入點)
+- [CLI Console 主程式](#cli-console-主程式)
 
 ---
 
@@ -30,7 +29,7 @@ Velopack 是一個 Windows 應用程式打包與自動更新框架，用來取�
 
 ### 初始化（必要步驟）
 
-`App.xaml.cs` 建構式的**第一行**必須呼叫 `VelopackApp.Build().Run()`。這行程式碼處理安裝器、解除安裝器與更新鉤子事件，若未放在進入點最前端，更新流程會無法正確執行。
+Desktop 主程式 `src/SchemaExporter.Desktop/App.xaml.cs` 建構式的**第一行**必須呼叫 `VelopackApp.Build().Run()`。這行程式碼處理安裝器、解除安裝器與更新鉤子事件，若未放在進入點最前端，更新流程會無法正確執行。CLI 主程式不參照 Velopack，也不呼叫此方法。
 
 ```csharp
 // App.xaml.cs
@@ -69,14 +68,13 @@ if (update is null) return; // null 表示目前已是最新版，或不是安�
 #### 2. 下載更新包
 
 ```csharp
-Progress<int> progress = new(percent => {
-    viewModel.StatusMessage = $"正在下載更新... {percent}%";
-});
-
-await updateService.DownloadUpdateAsync(update, progress);
+await updateService.DownloadUpdateAsync(
+    update,
+    new InlineProgress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
+);
 ```
 
-下載在背景非同步進行，`IProgress<int>` 傳入下載百分比讓 UI 能即時顯示進度。
+下載在背景非同步進行，`IProgress<int>` 傳入下載百分比讓 UI 能即時顯示進度。`InlineProgress<T>` 直接在回報的執行緒呼叫處理常式，不擷取同步內容；`SetStatus` 更新狀態後觸發 `Changed` 事件，由 Razor Component 以 `InvokeAsync(StateHasChanged)` 重新繪製。
 
 #### 3. 套用並重啟
 
@@ -86,40 +84,72 @@ updateService.ApplyUpdateAndRestart(update);
 
 這個呼叫不會 `return`，應用程式會直接關閉並由新版重啟，因此後續程式碼不會被執行。
 
-### 完整更新流程（MainWindow.xaml.cs）
+### 完整更新流程（UpdateWorkspace.cs）
+
+`MainLayout.razor` 首次繪製後在背景呼叫 `UpdateWorkspace.CheckForUpdatesAsync()`，不阻擋畫面顯示。每次執行只檢查一次，確認對話框透過 `IDialogService` 顯示：
 
 ```csharp
 public async Task CheckForUpdatesAsync() {
-    UpdateInfo? update = await updateService.CheckForUpdatesAsync();
-    if (update is null) return;
+    if (Interlocked.Exchange(ref hasChecked, 1) == 1) {
+        return;
+    }
 
-    MessageBoxResult result = MessageBox.Show(
-        $"偵測到新版本 {update.TargetFullRelease.Version}，是否立即下載？",
-        "有可用更新", MessageBoxButton.YesNo, MessageBoxImage.Information
-    );
-    if (result != MessageBoxResult.Yes) return;
+    try {
+        UpdateInfo? update = await updateService.CheckForUpdatesAsync().ConfigureAwait(false);
+        if (update is null) {
+            return;
+        }
 
-    Progress<int> progress = new(percent => {
-        viewModel.StatusMessage = $"正在下載更新... {percent}%";
-    });
-    await updateService.DownloadUpdateAsync(update, progress);
-    updateService.ApplyUpdateAndRestart(update);
+        if (!dialogService.Confirm(
+            "有可用更新",
+            $"偵測到新版本 {update.TargetFullRelease.Version}，是否立即下載並重新啟動套用更新？"
+        )) {
+            SetStatus($"有可用更新：{update.TargetFullRelease.Version}，下次啟動時會再次提示。");
+            return;
+        }
+
+        // 確保尚未啟動過新版的使用者，在更新前先將安裝目錄設定遷移至使用者目錄。
+        AppPaths.EnsureUserConfigExistsIfInstallConfigExists();
+
+        await updateService.DownloadUpdateAsync(
+            update,
+            new InlineProgress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
+        ).ConfigureAwait(false);
+
+        dialogService.ShowInformation("準備更新", "更新已下載完成，應用程式將重新啟動以套用新版本。");
+        updateService.ApplyUpdateAndRestart(update);
+    } catch (Exception ex) {
+        // 更新檢查是背景輔助功能，網路或安裝狀態異常都不應影響匯出操作。
+        SetStatus($"更新檢查未完成：{ex.Message}");
+    }
 }
 ```
 
 ### 打包與發布
 
-使用 Velopack CLI 打包：
+Velopack 套件同時包含 Desktop 與 CLI。Desktop 與 CLI 先分別 Publish 到不同資料夾，避免相依檔與 `appsettings.json` 互相覆寫，再組成以下 staging 目錄：
+
+```text
+artifacts/stage/
+├── CloudyWing.SchemaExporter.exe      # Desktop（Velopack main exe）
+├── appsettings.json
+├── ...
+└── tools/
+    ├── CloudyWing.SchemaExporter.Cli.exe
+    └── appsettings.json
+```
+
+`--packDir` 指向這個 staging 目錄，安裝後 CLI 位於安裝目錄的 `tools\` 子目錄。使用 Velopack CLI 打包：
 
 ```bash
 # 安裝 Velopack CLI
 dotnet tool install -g vpk
 
-# 打包（從 publish 輸出目錄建立安裝檔）
+# 打包（從 staging 目錄建立安裝檔，tools/ 內的 CLI 一併打包）
 vpk pack \
   --packId CloudyWing.SchemaExporter \
   --packVersion 1.0.0 \
-  --packDir publish/ \
+  --packDir artifacts/stage/ \
   --mainExe CloudyWing.SchemaExporter.exe
 
 # 上傳至 GitHub Releases（搭配 MinVer 版號）
@@ -128,90 +158,131 @@ vpk upload github \
   --token $GITHUB_TOKEN
 ```
 
+實際的 Release workflow（`.github/workflows/release.yml`）以 `velopack-pack` action 完成相同步驟，另外將 CLI 發布結果壓縮為 `CloudyWing.SchemaExporter.Cli-<tag>-win-x64.zip` 一併上傳至 GitHub Release。
+
 ---
 
-## CommunityToolkit.Mvvm
+## Blazor Hybrid
 
 ### 概念
 
-CommunityToolkit.Mvvm 提供 WPF/MAUI MVVM 開發的 Source Generator，在編譯期自動產生 `INotifyPropertyChanged` 屬性、`ICommand` 實作等，消除樣板程式碼。
+Blazor Hybrid 讓 Razor Component 在原生桌面應用程式內執行，畫面由內嵌的 WebView 呈現。元件直接在 .NET 處理序中執行，不經過 WebAssembly，也不需要本機 HTTP 伺服器，元件可以直接注入並呼叫一般的 .NET 服務。
 
-本專案使用 8.x 版本，搭配 .NET 10 的 `partial` 屬性語法。
+本專案的 Desktop 主程式（`src/SchemaExporter.Desktop/`）以 WPF 視窗承載 `BlazorWebView`，套件為 `Microsoft.AspNetCore.Components.WebView.Wpf`，底層使用 WebView2 呈現畫面。
 
-### ObservableProperty
+### 專案設定
 
-在 `partial class` 裡以 `[ObservableProperty]` 標記 `partial` 屬性，Source Generator 自動產生有 `SetProperty` 呼叫的完整屬性。
+Desktop 專案使用 `Microsoft.NET.Sdk.Razor` SDK，並同時啟用 WPF：
+
+```xml
+<!-- SchemaExporter.Desktop.csproj -->
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- 沿用舊版主程式名稱，維持 Velopack 的 main-exe 與既有安裝的升級路徑。 -->
+    <AssemblyName>CloudyWing.SchemaExporter</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.120" />
+  </ItemGroup>
+</Project>
+```
+
+`AssemblyName` 維持 `CloudyWing.SchemaExporter`，Velopack 的 main exe 與 PackId 都不變，既有安裝可以直接升級。
+
+### WPF 主視窗承載 BlazorWebView
+
+`MainWindow.xaml` 只放一個 `BlazorWebView`，以 `wwwroot\index.html` 為 host page，並把 `Routes` 元件掛到 `#app`：
+
+```xml
+<blazor:BlazorWebView x:Name="BlazorWebView"
+                      HostPage="wwwroot\index.html">
+    <blazor:BlazorWebView.RootComponents>
+        <blazor:RootComponent Selector="#app"
+                              ComponentType="{x:Type components:Routes}" />
+    </blazor:BlazorWebView.RootComponents>
+</blazor:BlazorWebView>
+```
+
+`App.xaml.cs` 建立 DI 容器時註冊 `AddWpfBlazorWebView()`，`MainWindow` 再把同一個 `IServiceProvider` 指定給 `BlazorWebView.Services`，Razor Component 才能以 `@inject` 取得服務。開發者工具只在 DEBUG 組態註冊：
 
 ```csharp
-// ViewModel.cs（輸入）
-public partial class ViewModel : ObservableObject {
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SubmitCommand))]
-    public partial SchemaConnection? Connection { get; set; }
+services.AddWpfBlazorWebView();
+#if DEBUG
+services.AddBlazorWebViewDeveloperTools();
+#endif
+```
 
-    [ObservableProperty]
-    public partial bool IsExporting { get; set; }
+### Razor Component 結構
+
+| 檔案 | 說明 |
+| --- | --- |
+| `Components/Routes.razor` | Router，預設版面為 `MainLayout`。 |
+| `Components/Layout/MainLayout.razor` | 共用版面；首次繪製後在背景觸發更新檢查。 |
+| `Components/Pages/Export.razor` | 匯出頁（`/`），包含連線、Export Profile、進階選項與診斷資訊。 |
+| `Components/Pages/Settings.razor` | 設定頁，分為 Connections、Export Profiles 與 Redaction 三個分頁。 |
+
+### State 類別與 Changed 事件
+
+畫面狀態與流程協調放在 `State/` 下的 `ExportWorkspace`、`SettingsWorkspace` 與 `UpdateWorkspace`。這些類別不依賴 WPF 型別，也不依賴 Razor，以 Singleton 註冊，可以直接在 `SchemaExporter.Desktop.Tests` 中測試。
+
+狀態變更時，State 類別觸發 `Changed` 事件；元件訂閱事件後以 `InvokeAsync(StateHasChanged)` 重新繪製。`Changed` 可能由非 UI 執行緒觸發，`InvokeAsync` 會把繪製工作切回元件的同步內容：
+
+```razor
+@implements IDisposable
+@inject ExportWorkspace Workspace
+
+@code {
+    protected override async Task OnInitializedAsync() {
+        Workspace.Changed += HandleChanged;
+        await Workspace.InitializeAsync();
+    }
+
+    public void Dispose() {
+        Workspace.Changed -= HandleChanged;
+    }
+
+    private void HandleChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
 }
-
-// 相當於 Source Generator 產生：
-// public SchemaConnection? Connection {
-//     get => _connection;
-//     set => SetProperty(ref _connection, value);
-// }
 ```
 
-`[NotifyCanExecuteChangedFor]` 讓屬性變更時自動觸發指定命令的 `CanExecuteChanged`，這樣按鈕啟用狀態會即時更新。
+元件在 `Dispose` 時務必取消訂閱，否則 Singleton 的 State 類別會一直持有已卸載的元件。
 
-### RelayCommand
+### 原生對話框
 
-```csharp
-[RelayCommand(CanExecute = nameof(CanSubmit))]
-private async Task SubmitAsync() {
-    IsExporting = true;
-    // ...
-}
+WebView 內的頁面不直接呼叫 WPF API。訊息框與檔案選擇透過介面注入，由 WPF 實作：
 
-private bool CanSubmit() =>
-    !IsExporting && Connection is not null && SelectedProfile is not null;
-```
+| 介面 | 實作 | 用途 |
+| --- | --- | --- |
+| `IDialogService` | `WpfDialogService` | 以 `MessageBox` 顯示資訊、警告、錯誤與確認對話框。 |
+| `IFileDialogService` | `WpfFileDialogService` | 以 WPF `OpenFolderDialog` / `OpenFileDialog` 選擇資料夾與檔案。 |
 
-Source Generator 產生 `SubmitCommand` 屬性，繫結至 XAML 的 `Command="{Binding SubmitCommand}"`。
+Blazor 事件的延續可能不在 UI 執行緒，`WpfDialogService` 透過 `Application.Current.Dispatcher.Invoke` 在 WPF Dispatcher 上開啟對話框。
 
-### OnPropertyChanged 鉤子
+### 外部網址封鎖
 
-屬性變更後可用 `partial` 方法接收通知：
+介面只顯示本機打包的資源。`MainWindow` 處理 `BlazorWebView.UrlLoading`，凡是不在 WebView 內開啟的網址都改為 `CancelLoad`，不在 WebView 內開啟，也不交給外部瀏覽器：
 
 ```csharp
-// ViewModel.cs
-partial void OnConnectionChanged(SchemaConnection? value) {
-    SelectedProfile = ResolveProfile(SelectedProfile?.Name, value);
+private static void HandleUrlLoading(object? sender, UrlLoadingEventArgs e) {
+    if (e.UrlLoadingStrategy != UrlLoadingStrategy.OpenInWebView) {
+        e.UrlLoadingStrategy = UrlLoadingStrategy.CancelLoad;
+    }
 }
 ```
 
-此方法由 Source Generator 自動呼叫，不需手動觸發。
+### 為何不使用本機 Web 伺服器
 
-### SetProperty（SettingsViewModel 模式）
+Blazor Server 或 ASP.NET Core 自架的方式需要在本機開啟 HTTP 連接埠，會帶來連接埠衝突、防火牆提示，以及同機其他處理序可以連入的風險。Blazor Hybrid 的元件與 .NET 服務在同一個處理序執行，WebView2 只負責呈現，不需要監聽任何連接埠，也能直接使用 WPF 的原生對話框與 Velopack 更新流程。
 
-`SettingsViewModel` 使用 `field` 關鍵字（C# 13 / .NET 9+）搭配 `SetProperty`：
+### 啟動引數
 
-```csharp
-public EditableConnection? SelectedConnection {
-    get;
-    set => SetProperty(ref field, value);
-}
-```
-
-`field` 關鍵字讓屬性內部直接存取編譯器隱含產生的支援欄位，不需要手動宣告 `_selectedConnection`。
-
-### ObservableCollection
-
-所有 UI 需要繫結的集合使用 `ObservableCollection<T>`，元素增刪時 UI 自動更新：
-
-```csharp
-public ObservableCollection<SchemaConnection> Connections { get; } = [];
-public ObservableCollection<ExportProfile> ExportProfiles { get; } = [];
-public ObservableCollection<ExportDiagnostic> Diagnostics { get; } = [];
-```
+Desktop EXE 只提供 GUI。若帶任何命令列引數啟動，`App.OnStartup` 會直接以結束代碼 `1` 結束，不開啟視窗，避免舊版以 Desktop EXE 執行 CLI 的排程或 Agent Skill 開出無人操作的視窗。CLI 請改用 `tools\CloudyWing.SchemaExporter.Cli.exe`，詳見 [CLI Console 主程式](#cli-console-主程式)。
 
 ---
 
@@ -230,7 +301,7 @@ CloudyWing.SpreadsheetExporter 是一個建構式 Excel 匯出函式庫，以宣
 
 ### 初始化（SpreadsheetExporterBootstrapper）
 
-`SpreadsheetExporterBootstrapper.Configure()` 在 `App.xaml.cs` 啟動時呼叫一次，使用 `lock` 確保執行緒安全的一次性初始化：
+`SpreadsheetExporterBootstrapper.Configure()` 在 Desktop 的 `App.OnStartup` 與 CLI 的 `Program.cs` 啟動時各呼叫一次，使用 `lock` 確保執行緒安全的一次性初始化：
 
 ```csharp
 SpreadsheetManager.SetRenderer(static () => new ExcelRenderer());
@@ -342,7 +413,7 @@ MinVer 是一個 .NET Source Generator 工具，從 Git 標籤自動推算組件
 本專案的 `TagPrefix` 設定為 `v`，表示 MinVer 辨識 `v1.2.3` 格式的標籤：
 
 ```xml
-<!-- SchemaExporter.Core.csproj / SchemaExporter.csproj -->
+<!-- SchemaExporter.Core / Infrastructure / Cli / Desktop 各 csproj -->
 <PropertyGroup>
   <MinVerTagPrefix>v</MinVerTagPrefix>
 </PropertyGroup>
@@ -376,56 +447,6 @@ string version = typeof(App).Assembly
     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
     ?.InformationalVersion ?? "unknown";
 ```
-
----
-
-## LibraryImport
-
-### 概念
-
-`[LibraryImport]` 是 .NET 7 引入的現代 P/Invoke 方式，用來在 .NET 呼叫 Windows 原生 API（或其他原生函式庫）。與舊的 `[DllImport]` 相比，它透過 **Source Generator** 在編譯期產生 marshaling 程式碼，而不是執行期反射，效能更好且完全支援 AOT 發布與 Trimming。
-
-| 特性 | `[DllImport]`（舊） | `[LibraryImport]`（新） |
-| --- | --- | --- |
-| .NET 版本 | .NET Framework+ | .NET 7+ |
-| 方法宣告 | `extern` | `partial` |
-| 程式碼生成 | 執行期 IL | 編譯期 Source Generator |
-| AOT / Trimming | 不支援 | 完整支援 |
-| AllowUnsafeBlocks | 不需要 | **必須設定** |
-
-### 本專案用法（CliConsoleSession.cs）
-
-CLI 模式需要將主控台附加至父處理序（即呼叫 `SchemaExporter.exe` 的 PowerShell / cmd），使用兩個 Windows API：
-
-```csharp
-internal sealed partial class CliConsoleSession : IDisposable {
-    // 為父處理序的主控台配置新主控台視窗
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AllocConsole();
-
-    // 附加至指定處理序（-1 = 父處理序）的主控台
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool AttachConsole(int processId);
-}
-```
-
-- `partial` 關鍵字：讓 Source Generator 在同一個 `partial class` 產生實作程式碼。
-- `SetLastError = true`：呼叫失敗時可用 `Marshal.GetLastWin32Error()` 取得錯誤碼。
-- `[return: MarshalAs(UnmanagedType.Bool)]`：指定將 C 的 `BOOL`（32-bit int）正確轉換為 C# `bool`。
-
-### 為何需要 AllowUnsafeBlocks
-
-LibraryImport Source Generator 產生的程式碼包含 `unsafe` 區塊（用於高效 marshaling）。若專案未啟用 `AllowUnsafeBlocks`，`LibraryImportGenerator` 會在建置時產生 `SYSLIB1062` 錯誤。
-
-```xml
-<!-- SchemaExporter.csproj -->
-<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-```
-
-> [!NOTE]
-> `AllowUnsafeBlocks` 允許**整個專案**撰寫 `unsafe` 程式碼，但本專案只有 Source Generator 產生的部分使用，不應在業務邏輯中直接撰寫 `unsafe` 程式碼。
 
 ---
 
@@ -493,7 +514,7 @@ private static partial void LogUpdateCheckSkipped(ILogger logger);
 - 方法必須是 `static partial void`（或回傳 `bool`）。
 - 類別必須是 `partial class`。
 - `Exception` 參數（若有）必須放在 `ILogger` 之後的第一個位置。
-- `EventId` 建議按模組分段管理（本專案：2000-2999 為 Core，3000-3999 為 App）。
+- `EventId` 建議按模組分段管理（本專案：2000-2999 為 Core，3000-3999 為 Desktop）。
 
 ---
 
@@ -604,35 +625,71 @@ public sealed class ProviderIntegrationTests {
 
 ---
 
-## CLI 模式進入點
+## CLI Console 主程式
 
 ### 架構設計
 
-本專案是一個**WPF 主程式**，透過啟動引數偵測決定進入 GUI 模式或 CLI 模式，**不是兩個獨立可執行檔**。CLI 程式碼位於 `src/SchemaExporter/Cli/`。
+CLI 與 Desktop 是**兩個獨立可執行檔**：
 
-### 進入點判斷（App.xaml.cs）
+| 專案 | 輸出 | 說明 |
+| --- | --- | --- |
+| `src/SchemaExporter.Desktop/` | `CloudyWing.SchemaExporter.exe` | Blazor Hybrid GUI，帶引數啟動時直接以代碼 `1` 結束。 |
+| `src/SchemaExporter.Cli/` | `CloudyWing.SchemaExporter.Cli.exe` | net10.0 Console 應用程式，不參照 WPF、WebView2 與 Velopack。 |
+
+兩者共用 `SchemaExporter.Core`（匯出引擎）與 `SchemaExporter.Infrastructure`（設定檔路徑、`ISettingsService`、`SchemaExporterConfiguration` 與 `ShellOutputFolderLauncher`）。出廠設定範本 `appsettings.json` 放在 Infrastructure 專案，建置時會複製到 Desktop 與 CLI 各自的輸出目錄。
+
+CLI 是一般 Console 應用程式，主控台由作業系統直接配置，不需要舊版 WPF 單一 EXE 的 `AttachConsole` / `AllocConsole` P/Invoke。
+
+### 進入點（Program.cs）
+
+`Program.cs` 使用 top-level statements，依序設定 UTF-8 輸出、註冊 Ctrl+C 處理、建立 DI 容器，再交給 `CliRunner`：
 
 ```csharp
-protected override async void OnStartup(StartupEventArgs e) {
-    bool isCliMode = HasCliArguments(e.Args);
+Console.OutputEncoding = new UTF8Encoding(false);
 
-    if (isCliMode) {
-        _ = CliConsoleSession.Attach(); // 附加主控台，初始化 UTF-8 編碼
-    }
+using CancellationTokenSource cancellation = new();
+Console.CancelKeyPress += (_, eventArgs) => { /* 見下方 */ };
 
-    // ... 初始化 DI ...
+ServiceProvider serviceProvider;
+try {
+    SpreadsheetExporterBootstrapper.Configure();
+    IConfiguration configuration = SchemaExporterConfiguration.Build(CliArguments.RequiresUserConfig(args));
 
-    if (isCliMode) {
-        int exitCode = await serviceProvider
-            .GetRequiredService<CliRunner>()
-            .RunAsync(e.Args);
-        Shutdown(exitCode);
+    ServiceCollection services = new();
+    // ... AddLogging（SimpleConsole）...
+    services.AddSchemaExporterCore(configuration);
+    services.AddSchemaExporterInfrastructure();
+    services.AddSingleton<CliRunner>();
+    serviceProvider = services.BuildServiceProvider();
+} catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or JsonException) {
+    // 沿用舊版單一 EXE 的啟動失敗代碼 1，避免既有 Agent Skill 與排程的判斷失準。
+    Console.Error.WriteLine($"Startup failed: {ex.Message}");
+    return 1;
+}
+
+await using (serviceProvider) {
+    return await serviceProvider.GetRequiredService<CliRunner>().RunAsync(args, cancellation.Token);
+}
+```
+
+`CliArguments.RequiresUserConfig(args)` 只有在引數解析成功且命令為 `export` 時回傳 `true`。`diff`、`comment-sql`、`--help` 與引數錯誤都不會讀取或建立使用者設定檔，設定檔缺漏或損毀時仍可執行。
+
+### Ctrl+C 處理
+
+第一次按 Ctrl+C 時，處理常式設定 `eventArgs.Cancel = true` 阻止系統直接終止，並取消 `CancellationTokenSource`，讓命令自行收尾。再按一次才交給系統直接終止：
+
+```csharp
+Console.CancelKeyPress += (_, eventArgs) => {
+    if (cancellation.IsCancellationRequested) {
         return;
     }
 
-    // GUI 模式：顯示主視窗
-}
+    eventArgs.Cancel = true;
+    cancellation.Cancel();
+};
 ```
+
+`CliRunner.RunAsync` 只在 `cancellationToken.IsCancellationRequested` 為 `true` 時把 `OperationCanceledException` 轉為結束代碼 `4`（`Canceled`）；內部逾時造成的取消仍視為未預期錯誤。
 
 ### CLI 命令
 
@@ -640,56 +697,66 @@ protected override async void OnStartup(StartupEventArgs e) {
 | --- | --- |
 | `export` | 連接資料庫並匯出 Schema 至 Excel 與附加產物 |
 | `diff` | 比較兩個 Snapshot JSON，輸出差異報告 |
+| `comment-sql` | 依 snapshot 與註解 JSON 離線產生 comment SQL，不連線資料庫 |
 
 常用範例：
 
 ```powershell
 # 匯出（使用 appsettings.json 中名為 "MyDb" 的連線）
-schemaexporter export --connection MyDb
+CloudyWing.SchemaExporter.Cli export --connection MyDb
 
 # 匯出並指定輸出目錄
-schemaexporter export --connection MyDb --output C:\Output
+CloudyWing.SchemaExporter.Cli export --connection MyDb --output C:\Output
 
 # 匯出並同時產生 Snapshot、JSON sidecar 與 Schema Summary
-schemaexporter export --connection MyDb --snapshot --json-sidecar --schema-summary
+CloudyWing.SchemaExporter.Cli export --connection MyDb --snapshot --json-sidecar --schema-summary
 
 # 比較兩個 Snapshot
-schemaexporter diff `
+CloudyWing.SchemaExporter.Cli diff `
   --left C:\Snapshots\2024-01.json `
   --right C:\Snapshots\2024-02.json
 
 # 輸出 diff 至 Markdown 檔案
-schemaexporter diff `
+CloudyWing.SchemaExporter.Cli diff `
   --left C:\Snapshots\2024-01.json `
   --right C:\Snapshots\2024-02.json `
   --output C:\Reports\diff.md --format markdown
 ```
 
-### CliConsoleSession — 主控台附加
+CLI 只有在明確指定 `--open-output-folder` 時才開啟輸出資料夾，不沿用設定檔的 `OpenOutputFolder`，避免無人值守的排程跳出檔案總管視窗。
 
-WPF 應用程式預設沒有主控台視窗。CLI 模式啟動時需要呼叫 Windows API 附加至父處理序的主控台（`AttachConsole(-1)`），讓 `Console.Write` 輸出能顯示在呼叫者的終端機。若附加失敗（例如父處理序沒有主控台），則呼叫 `AllocConsole()` 配置新的主控台視窗。
+### 開啟輸出資料夾
 
-```csharp
-public static CliConsoleSession Attach() {
-    bool attached = AttachConsole(-1) || AllocConsole();
-    if (attached) {
-        // 重設輸入/輸出串流為 UTF-8，確保中文不亂碼
-        Console.InputEncoding = Encoding.UTF8;
-        Console.OutputEncoding = Encoding.UTF8;
-        Console.SetOut(new StreamWriter(
-            Console.OpenStandardOutput(),
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
-        ) { AutoFlush = true });
-    }
-    return new CliConsoleSession(attached);
-}
-```
+`SchemaExportOrchestrator` 只決定匯出完成後是否開啟資料夾，實際的 Shell 呼叫由 Host 注入的 `IOutputFolderLauncher` 負責。`AddSchemaExporterInfrastructure()` 註冊 `ShellOutputFolderLauncher`，以 `Process.Start`（`UseShellExecute = true`）開啟資料夾。若 Host 沒有提供 launcher，Orchestrator 只加入一筆 Warning 診斷「匯出完成，但目前執行環境未提供開啟資料夾功能。」，不中斷匯出。
 
 ### 結束代碼
 
 | 結束代碼 | 意義 |
 | --- | --- |
-| `0` | 成功 |
-| `1` | 引數解析失敗（已印出使用說明） |
-| `2` | 匯出流程錯誤（`ExportWorkflowException`） |
+| `0` | 成功，或已顯示使用說明 |
+| `1` | 引數解析失敗（已印出使用說明）；啟動失敗（例如設定檔損毀）也沿用此代碼 |
+| `2` | 匯出或 diff 流程錯誤（`ExportWorkflowException`） |
 | `3` | 未預期例外 |
+| `4` | 使用者以 Ctrl+C 取消；已寫出的檔案可能不完整 |
+
+### 單一檔案發布
+
+Release workflow 將 CLI 發布為 win-x64 self-contained single-file：
+
+```powershell
+dotnet publish .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj `
+  -c Release --self-contained -r win-x64 `
+  -p:PublishSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true `
+  -o .\artifacts\publish\cli
+```
+
+輸出目錄包含 `CloudyWing.SchemaExporter.Cli.exe` 與出廠範本 `appsettings.json`。發布結果有兩種取得方式：
+
+- 安裝版的 `tools\` 子目錄，例如 `%LocalAppData%\CloudyWing.SchemaExporter\current\tools\CloudyWing.SchemaExporter.Cli.exe`（推測：依 Velopack 預設安裝位置）。
+- GitHub Release 的 `CloudyWing.SchemaExporter.Cli-<tag>-win-x64.zip`，解壓縮即可執行，不需要安裝 Desktop。
+
+### 測試
+
+`tests/SchemaExporter.Cli.Tests` 涵蓋 `CliArguments` 與 `CliRunner`。`CliProcessTests` 會以子處理序啟動實際的 CLI 組件，驗證結束代碼與主控台輸出。

@@ -1,15 +1,37 @@
 # CLI 版操作說明
 
-CLI 版執行檔為 `schemaexporter`，支援三個命令：`export`、`diff` 與 `comment-sql`。
+CLI 是獨立的 Console 執行檔 `CloudyWing.SchemaExporter.Cli.exe`，不依賴 WPF、WebView2 或 Desktop 程式，支援三個命令：`export`、`diff` 與 `comment-sql`。
 
 ```text
-schemaexporter export --connection <name> [options]
-schemaexporter diff --left <path> --right <path> [options]
-schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>
-schemaexporter --help
+CloudyWing.SchemaExporter.Cli export --connection <name> [options]
+CloudyWing.SchemaExporter.Cli diff --left <path> --right <path> [options]
+CloudyWing.SchemaExporter.Cli comment-sql --snapshot <path> --comments <path> --output <path>
+CloudyWing.SchemaExporter.Cli --help
 ```
 
-CLI 版從 `%LocalAppData%\SchemaExporter\appsettings.json` 讀取使用者設定。若使用者設定檔尚不存在，啟動時會先從執行檔目錄的 `appsettings.json` 範本複製一份。除非以參數覆蓋，否則所有預設值均來自使用者設定檔。
+## 取得執行檔
+
+| 來源 | 位置 |
+| --- | --- |
+| Desktop 安裝版 | 安裝目錄的 `tools\CloudyWing.SchemaExporter.Cli.exe`。Velopack 預設安裝在 `%LocalAppData%\CloudyWing.SchemaExporter\current\`（推測，以實際安裝路徑為準）。 |
+| Release 的 CLI ZIP | `CloudyWing.SchemaExporter.Cli-<版本>-win-x64.zip`，解壓縮即可執行，內含 `appsettings.json` 範本。 |
+| 原始碼 | `dotnet run --project .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -- <命令>` |
+
+Agent Skill、排程或 CI 請以絕對路徑呼叫，不要依賴目前工作目錄。
+
+> v1.0.0 起，舊版 `CloudyWing.SchemaExporter.exe export ...` 的 CLI 模式已移除。Desktop 執行檔帶任何引數啟動時會直接以結束代碼 `1` 結束，不會開啟視窗；請改用上述 CLI 執行檔，命令與參數意義不變。
+
+## 設定檔
+
+`export` 從 `%LocalAppData%\SchemaExporter\appsettings.json` 讀取使用者設定，與 Desktop 共用。若使用者設定檔尚不存在，會先從 CLI 執行檔同目錄的 `appsettings.json` 範本複製一份。除非以參數覆蓋，否則所有預設值均來自使用者設定檔。
+
+`diff`、`comment-sql`、`--help` 與參數錯誤都是離線作業，不讀取也不建立使用者設定檔，設定檔缺漏或損毀時仍可執行。
+
+## 輸出串流與取消
+
+- 進度與正常結果寫入 stdout，錯誤訊息寫入 stderr。
+- 錯誤訊息與記錄會遮罩連線字串中的密碼。
+- 執行中按 Ctrl+C 會取消作業並以結束代碼 `4` 結束；已寫出的檔案可能不完整，不應視為成功結果。再按一次 Ctrl+C 則由系統直接終止。
 
 ---
 
@@ -18,7 +40,7 @@ CLI 版從 `%LocalAppData%\SchemaExporter\appsettings.json` 讀取使用者設�
 連線至資料庫並匯出 schema 為 Excel 檔案。
 
 ```bash
-schemaexporter export --connection <name> [options]
+CloudyWing.SchemaExporter.Cli export --connection <name> [options]
 ```
 
 ### 必要參數
@@ -40,8 +62,8 @@ schemaexporter export --connection <name> [options]
 | `--schema-summary` | 強制啟用精簡 Schema Summary，也就是 AI context Markdown 產生。 |
 | `--snapshot` | 強制啟用 schema snapshot 產生。 |
 | `--diff-from <path>` | 指定基準 snapshot 的絕對路徑，執行完成後自動產生差異比對結果。 |
-| `--open-output-folder` | 匯出完成後開啟輸出資料夾（僅在 Windows 桌面環境有效）。 |
-| `--no-open-output-folder` | 強制不開啟輸出資料夾。 |
+| `--open-output-folder` | 匯出完成後開啟輸出資料夾。CLI 只依此旗標決定，不沿用設定檔的 `OpenOutputFolder`，避免無人值守流程彈出視窗。 |
+| `--no-open-output-folder` | 不開啟輸出資料夾（預設）。 |
 | `--no-timestamp` | 停用檔名時間戳記後綴。 |
 | `--help` / `-h` / `/?` | 顯示說明文字。 |
 
@@ -70,30 +92,31 @@ Diagnostics: 2 total, 1 warning(s), 0 error(s).
 | 代碼 | 名稱 | 說明 |
 | --- | --- | --- |
 | `0` | `Success` | 成功，或使用者要求顯示 help。 |
-| `1` | `ArgumentError` | 參數解析失敗（顯示 usage 後結束），包含無法辨識的命令（`Unknown command: <name>`）。 |
+| `1` | `ArgumentError` | 參數解析失敗（顯示 usage 後結束），包含無法辨識的命令（`Unknown command: <name>`）；使用者設定檔無法讀取時也回傳 `1`（`Startup failed: ...`），與舊版一致。 |
 | `2` | `WorkflowError` | 匯出流程失敗（如驗證錯誤、連線失敗、輸出失敗）。 |
 | `3` | `UnexpectedError` | 未預期的錯誤。 |
+| `4` | `Canceled` | 使用者以 Ctrl+C 取消。 |
 
 ### 範例
 
 ```bash
 # 基本匯出
-schemaexporter export --connection prod
+CloudyWing.SchemaExporter.Cli export --connection prod
 
 # 覆蓋設定檔與輸出路徑
-schemaexporter export --connection prod --profile TablesOnly --output C:\Reports
+CloudyWing.SchemaExporter.Cli export --connection prod --profile TablesOnly --output C:\Reports
 
 # 匯出並產生 snapshot 與 manifest
-schemaexporter export --connection prod --snapshot --manifest
+CloudyWing.SchemaExporter.Cli export --connection prod --snapshot --manifest
 
 # 匯出並與基準 snapshot 產生差異比對
-schemaexporter export --connection prod --snapshot --diff-from C:\Snapshots\baseline.snapshot.json
+CloudyWing.SchemaExporter.Cli export --connection prod --snapshot --diff-from C:\Snapshots\baseline.snapshot.json
 
 # 匯出精簡 Schema Summary
-schemaexporter export --connection prod --schema-summary
+CloudyWing.SchemaExporter.Cli export --connection prod --schema-summary
 
 # 停用時間戳記
-schemaexporter export --connection prod --no-timestamp
+CloudyWing.SchemaExporter.Cli export --connection prod --no-timestamp
 ```
 
 ---
@@ -105,7 +128,7 @@ schemaexporter export --connection prod --no-timestamp
 Snapshot 路徑可使用絕對路徑或相對路徑；相對路徑會依目前工作目錄解析。
 
 ```bash
-schemaexporter diff --left <path> --right <path> [options]
+CloudyWing.SchemaExporter.Cli diff --left <path> --right <path> [options]
 ```
 
 ### 必要參數
@@ -131,21 +154,22 @@ schemaexporter diff --left <path> --right <path> [options]
 | `1` | `ArgumentError` | 參數解析失敗。 |
 | `2` | `WorkflowError` | 比對流程失敗（如找不到檔案、格式錯誤）。 |
 | `3` | `UnexpectedError` | 未預期的錯誤。 |
+| `4` | `Canceled` | 使用者以 Ctrl+C 取消。 |
 
 ### 範例
 
 ```bash
 # 輸出 Markdown 至 console
-schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json
+CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json
 
 # 寫入 Markdown 檔案
-schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output diff.md
+CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output diff.md
 
 # 寫入 JSON 檔案
-schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json
+CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output diff.json
 
 # 明確指定格式
-schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json --output report.txt --format markdown
+CloudyWing.SchemaExporter.Cli diff --left baseline.snapshot.json --right current.snapshot.json --output report.txt --format markdown
 ```
 
 ---
@@ -155,7 +179,7 @@ schemaexporter diff --left baseline.snapshot.json --right current.snapshot.json 
 依 schema snapshot 與註解清單產生資料表與欄位註解的 SQL 檔，不連線資料庫，也不執行 SQL。
 
 ```bash
-schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>
+CloudyWing.SchemaExporter.Cli comment-sql --snapshot <path> --comments <path> --output <path>
 ```
 
 ### 必要參數
@@ -174,11 +198,12 @@ schemaexporter comment-sql --snapshot <path> --comments <path> --output <path>
 | `1` | `ArgumentError` | 參數解析失敗。 |
 | `2` | `WorkflowError` | 輸入檔無法讀取或格式錯誤，或清單有無法產生 SQL 的項目，不會寫出輸出檔。 |
 | `3` | `UnexpectedError` | 未預期的錯誤。 |
+| `4` | `Canceled` | 使用者以 Ctrl+C 取消。 |
 
 ### 範例
 
 ```bash
-schemaexporter comment-sql --snapshot db.snapshot.json --comments comments.json --output comments.sql
+CloudyWing.SchemaExporter.Cli comment-sql --snapshot db.snapshot.json --comments comments.json --output comments.sql
 ```
 
 清單格式、輸出規則、各資料庫的跳脫與長度上限參閱 [comment-sql.md](comment-sql.md)。
