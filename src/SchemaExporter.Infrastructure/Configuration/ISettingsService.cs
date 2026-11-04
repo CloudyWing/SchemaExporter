@@ -13,6 +13,15 @@ public interface ISettingsService {
     Task<SchemaOptions> LoadAsync();
 
     /// <summary>
+    /// 非同步從設定來源讀取 Schema 選項，但不驗證內容。
+    /// </summary>
+    /// <returns>讀取後的 <see cref="SchemaOptions"/> 執行個體，內容可能不符合驗證規則。</returns>
+    /// <remarks>
+    /// 供儲存前合併其他區段，以及讓設定頁載入目前內容後修正錯誤；正式使用設定前仍應呼叫 <see cref="LoadAsync"/>。
+    /// </remarks>
+    Task<SchemaOptions> ReadAsync();
+
+    /// <summary>
     /// 非同步將 Schema 選項儲存至設定來源。
     /// </summary>
     /// <param name="options">要儲存的 <see cref="SchemaOptions"/> 執行個體。</param>

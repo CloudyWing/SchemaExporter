@@ -13,7 +13,7 @@ public sealed class SettingsWorkspaceTests {
     public async Task SaveAsync_WhenEdited_KeepsExportDefaultsLastSelectionsAndRedaction() {
         SchemaOptions loadedOptions = CreateOptions();
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(loadedOptions));
+        settingsService.ReadAsync().Returns(Task.FromResult(loadedOptions));
         SchemaOptions? savedOptions = null;
         settingsService.SaveAsync(Arg.Do<SchemaOptions>(options => savedOptions = options)).Returns(Task.CompletedTask);
         SettingsWorkspace sut = new(settingsService);
@@ -44,7 +44,7 @@ public sealed class SettingsWorkspaceTests {
     [Test]
     public async Task RenameProfile_WhenConnectionsReferenceOldName_UpdatesReferences() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(CreateOptions()));
+        settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
         SettingsWorkspace sut = new(settingsService);
         await sut.LoadAsync();
         EditableExportProfile profile = sut.Profiles.Single(x => x.Name == "Full");
@@ -60,7 +60,7 @@ public sealed class SettingsWorkspaceTests {
     [Test]
     public async Task RemoveSelectedProfile_WhenConnectionsReferenceIt_ClearsReferencesAndSelectsNeighbor() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(CreateOptions()));
+        settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
         SettingsWorkspace sut = new(settingsService);
         await sut.LoadAsync();
         sut.SelectedProfile = sut.Profiles.Single(x => x.Name == "Full");
@@ -76,7 +76,7 @@ public sealed class SettingsWorkspaceTests {
     [Test]
     public async Task AddConnection_WhenDefaultNameExists_CreatesUniqueName() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(CreateOptions()));
+        settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
         SettingsWorkspace sut = new(settingsService);
         await sut.LoadAsync();
 
@@ -89,7 +89,7 @@ public sealed class SettingsWorkspaceTests {
     [Test]
     public async Task SaveAsync_WhenValidationFails_ReturnsFalseWithMessage() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(CreateOptions()));
+        settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
         settingsService.SaveAsync(Arg.Any<SchemaOptions>()).Returns(Task.FromException(new ExportValidationException("連線名稱不可重複。")));
         SettingsWorkspace sut = new(settingsService);
         await sut.LoadAsync();
@@ -105,7 +105,7 @@ public sealed class SettingsWorkspaceTests {
     [Test]
     public async Task LoadAsync_WhenSettingsAreCorrupt_ReportsErrorAndBlocksSave() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromException<SchemaOptions>(new InvalidOperationException("格式無效")));
+        settingsService.ReadAsync().Returns(Task.FromException<SchemaOptions>(new InvalidOperationException("格式無效")));
         SettingsWorkspace sut = new(settingsService);
 
         await sut.LoadAsync();
@@ -116,6 +116,24 @@ public sealed class SettingsWorkspaceTests {
             Assert.That(sut.ErrorMessage, Does.Contain("格式無效"));
             Assert.That(saved, Is.False);
             await settingsService.DidNotReceive().SaveAsync(Arg.Any<SchemaOptions>());
+        }
+    }
+
+    [Test]
+    public async Task LoadAsync_WhenSettingsFailValidation_StillLoadsForRepair() {
+        SchemaOptions invalidOptions = CreateOptions();
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.ReadAsync().Returns(Task.FromResult(invalidOptions));
+        settingsService.LoadAsync().Returns(Task.FromException<SchemaOptions>(new ExportValidationException("連線名稱不可重複。")));
+        SettingsWorkspace sut = new(settingsService);
+
+        await sut.LoadAsync();
+        bool saved = await sut.SaveAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(sut.IsLoaded, Is.True);
+            Assert.That(saved, Is.True);
+            await settingsService.DidNotReceive().LoadAsync();
         }
     }
 

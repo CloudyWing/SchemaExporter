@@ -26,6 +26,31 @@ public sealed class JsonSettingsServiceCompatibilityTests {
     }
 
     [Test]
+    public async Task ReadAsync_WhenSettingsFailValidation_ReturnsOptionsWhileLoadAsyncThrows() {
+        using AppSettingsTestScope scope = new();
+        Directory.CreateDirectory(scope.UserConfigDirectory);
+        await File.WriteAllTextAsync(scope.UserConfigPath, """
+            {
+              "Schema": {
+                "ExportPath": "C:\\Exports",
+                "Connections": [
+                  { "Name": "Dup", "DatabaseType": "SqlServer", "ConnectionString": "Server=a;" },
+                  { "Name": "dup", "DatabaseType": "SqlServer", "ConnectionString": "Server=b;" }
+                ]
+              }
+            }
+            """);
+        JsonSettingsService sut = new();
+
+        SchemaOptions result = await sut.ReadAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.Connections, Has.Count.EqualTo(2));
+            Assert.ThrowsAsync<ExportValidationException>(async () => await sut.LoadAsync());
+        }
+    }
+
+    [Test]
     public async Task SaveAsync_WhenUserConfigExists_WritesToLocalAppDataWithoutChangingInstallTemplate() {
         using AppSettingsTestScope scope = new();
         string installTemplateJson = CreateLegacyAppSettingsJson();

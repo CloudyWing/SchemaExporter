@@ -10,7 +10,12 @@ namespace CloudyWing.SchemaExporter.Desktop.Services;
 internal sealed class WpfFileDialogService : IFileDialogService {
     /// <inheritdoc/>
     public string? PickFolder(string title, string? initialDirectory) {
-        return Application.Current.Dispatcher.Invoke(() => {
+        Application? application = Application.Current;
+        if (application is null) {
+            return null;
+        }
+
+        return application.Dispatcher.Invoke(() => {
             OpenFolderDialog dialog = new() {
                 Title = title,
                 Multiselect = false
@@ -19,13 +24,18 @@ internal sealed class WpfFileDialogService : IFileDialogService {
                 dialog.InitialDirectory = initialDirectory;
             }
 
-            return dialog.ShowDialog(Application.Current.MainWindow) == true ? dialog.FolderName : null;
+            return dialog.ShowDialog(application.MainWindow) == true ? dialog.FolderName : null;
         });
     }
 
     /// <inheritdoc/>
     public string? PickFile(string title, string filter, string? initialPath) {
-        return Application.Current.Dispatcher.Invoke(() => {
+        Application? application = Application.Current;
+        if (application is null) {
+            return null;
+        }
+
+        return application.Dispatcher.Invoke(() => {
             OpenFileDialog dialog = new() {
                 Title = title,
                 Filter = filter,
@@ -36,7 +46,7 @@ internal sealed class WpfFileDialogService : IFileDialogService {
                 dialog.InitialDirectory = initialDirectory;
             }
 
-            return dialog.ShowDialog(Application.Current.MainWindow) == true ? dialog.FileName : null;
+            return dialog.ShowDialog(application.MainWindow) == true ? dialog.FileName : null;
         });
     }
 

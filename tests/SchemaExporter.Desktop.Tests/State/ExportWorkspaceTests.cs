@@ -37,6 +37,7 @@ public sealed class ExportWorkspaceTests {
         };
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.LoadAsync().Returns(Task.FromResult(loadedOptions));
+        settingsService.ReadAsync().Returns(Task.FromResult(loadedOptions));
         SchemaOptions? savedOptions = null;
         settingsService.SaveAsync(Arg.Do<SchemaOptions>(options => savedOptions = options)).Returns(Task.CompletedTask);
         ExportWorkspace sut = CreateWorkspace(settingsService);
@@ -91,7 +92,8 @@ public sealed class ExportWorkspaceTests {
             connections: [CreateConnection("Primary", null), CreateConnection("Added Later", null)]
         );
         ISettingsService settingsService = Substitute.For<ISettingsService>();
-        settingsService.LoadAsync().Returns(Task.FromResult(initialOptions), Task.FromResult(latestOptions));
+        settingsService.LoadAsync().Returns(Task.FromResult(initialOptions));
+        settingsService.ReadAsync().Returns(Task.FromResult(latestOptions));
         SchemaOptions? savedOptions = null;
         settingsService.SaveAsync(Arg.Do<SchemaOptions>(options => savedOptions = options)).Returns(Task.CompletedTask);
         ExportWorkspace sut = CreateWorkspace(settingsService);
@@ -281,6 +283,42 @@ public sealed class ExportWorkspaceTests {
             Assert.That(sut.IsExporting, Is.False);
             Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Warning));
             Assert.That(sut.StatusMessage, Does.StartWith("匯出已取消"));
+        }
+    }
+
+    [Test]
+    public async Task SaveDefaultsAsync_WhenFileOnDiskFailsValidation_StillSavesMergedOptions() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions())));
+        settingsService.ReadAsync().Returns(Task.FromResult(CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions())));
+        ExportWorkspace sut = CreateWorkspace(settingsService);
+        await sut.ReloadSettingsAsync();
+
+        bool result = await sut.SaveDefaultsAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.True);
+            await settingsService.Received(1).LoadAsync();
+            await settingsService.Received(1).ReadAsync();
+        }
+    }
+
+    [Test]
+    public async Task CancelExport_AfterExportCompleted_DoesNothing() {
+        using TemporaryDirectory directory = new();
+        SchemaConnection connection = CreateConnection("Primary", null);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(directory.Path, null, null, new ExportResultOptions(), connections: [connection])));
+        ExportWorkspace sut = CreateWorkspace(settingsService, CreateProviderFactory(connection));
+        await sut.ReloadSettingsAsync();
+        await sut.ExportAsync();
+        string statusAfterExport = sut.StatusMessage;
+
+        sut.CancelExport();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(sut.IsCancellationRequested, Is.False);
+            Assert.That(sut.StatusMessage, Is.EqualTo(statusAfterExport));
         }
     }
 

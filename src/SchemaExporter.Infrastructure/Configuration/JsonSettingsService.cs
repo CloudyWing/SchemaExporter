@@ -29,6 +29,13 @@ public sealed class JsonSettingsService : ISettingsService {
 
     /// <inheritdoc/>
     public async Task<SchemaOptions> LoadAsync() {
+        SchemaOptions options = await ReadAsync().ConfigureAwait(false);
+        await ValidateAsync(options).ConfigureAwait(false);
+        return options;
+    }
+
+    /// <inheritdoc/>
+    public async Task<SchemaOptions> ReadAsync() {
         JsonObject root = await ReadRootObjectAsync().ConfigureAwait(false);
         JsonNode? schemaNode = root[SchemaOptions.OptionsName]
             ?? throw new InvalidOperationException("appsettings.json 缺少 Schema 設定區段。");
@@ -36,7 +43,6 @@ public sealed class JsonSettingsService : ISettingsService {
         SchemaOptions options = schemaNode.Deserialize<SchemaOptions>(SerializerOptions)
             ?? throw new InvalidOperationException("無法讀取 Schema 設定區段。");
         ApplyCompatibilityDefaults(options, schemaNode);
-        await ValidateAsync(options).ConfigureAwait(false);
         return options;
     }
 

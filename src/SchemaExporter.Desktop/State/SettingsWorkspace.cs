@@ -77,14 +77,15 @@ internal sealed class SettingsWorkspace {
     public bool IsLoaded { get; private set; }
 
     /// <summary>
-    /// 從設定檔載入設定，捨棄尚未儲存的編輯。
+    /// 從設定檔載入設定，捨棄尚未儲存的編輯。不驗證內容，驗證在儲存時進行。
     /// </summary>
     /// <returns>代表非同步作業的工作。</returns>
     public async Task LoadAsync() {
         SchemaOptions options;
         try {
-            options = await settingsService.LoadAsync().ConfigureAwait(false);
-        } catch (Exception ex) when (IsSettingsException(ex)) {
+            // 不在載入時驗證，設定檔內容不合規則時仍可在此頁修正後儲存。
+            options = await settingsService.ReadAsync();
+        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
             IsLoaded = false;
             ErrorMessage = $"無法載入設定：{ex.Message}";
             return;
@@ -118,7 +119,7 @@ internal sealed class SettingsWorkspace {
 
         try {
             // 重新讀取最新設定再合併，避免覆蓋匯出頁在本頁載入後儲存的預設值。
-            SchemaOptions latestOptions = await settingsService.LoadAsync().ConfigureAwait(false);
+            SchemaOptions latestOptions = await settingsService.ReadAsync();
             SchemaOptions options = new() {
                 ExportPath = latestOptions.ExportPath,
                 Connections = [.. Connections.Select(x => x.ToSchemaConnection())],
@@ -129,10 +130,10 @@ internal sealed class SettingsWorkspace {
                 LastSelectedProfileName = latestOptions.LastSelectedProfileName
             };
 
-            await settingsService.SaveAsync(options).ConfigureAwait(false);
+            await settingsService.SaveAsync(options);
             ErrorMessage = null;
             return true;
-        } catch (Exception ex) when (IsSettingsException(ex)) {
+        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
             ErrorMessage = ex is ExportValidationException ? ex.Message : $"無法儲存設定：{ex.Message}";
             return false;
         }
@@ -233,10 +234,6 @@ internal sealed class SettingsWorkspace {
             SensitiveNamePatterns = namePatterns,
             SensitiveTextPatterns = textPatterns
         };
-    }
-
-    private static bool IsSettingsException(Exception ex) {
-        return ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException or ExportValidationException;
     }
 
     private static string CreateUniqueName(string prefix, IEnumerable<string> existingNames) {

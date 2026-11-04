@@ -11,9 +11,9 @@ namespace CloudyWing.SchemaExporter.Desktop.State;
 /// </summary>
 /// <remarks>
 /// 本類別不依賴 WPF 或 Razor，畫面以 <see cref="Changed"/> 事件重新繪製；原生對話框與 Shell 動作透過注入的服務完成。
+/// 公開方法應由 Blazor Renderer 執行緒呼叫，內部 await 不使用 <c>ConfigureAwait(false)</c>，讓狀態變更都回到 Renderer 執行緒。
 /// </remarks>
 internal sealed class ExportWorkspace {
-    private const string DefaultProfileName = "Default";
     private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private readonly SchemaExportRequestResolver requestResolver;
@@ -22,6 +22,7 @@ internal sealed class ExportWorkspace {
     private readonly IOutputFolderLauncher outputFolderLauncher;
     private SchemaOptions schemaOptions = new() { ExportPath = "" };
     private CancellationTokenSource? currentExportCancellation;
+    private volatile bool isAcceptingProgress;
     private bool isInitialized;
 
     /// <summary>
@@ -57,7 +58,7 @@ internal sealed class ExportWorkspace {
     }
 
     /// <summary>
-    /// 在狀態變更、需要重新繪製畫面時觸發；可能由非 UI 執行緒觸發。
+    /// 在狀態變更、需要重新繪製畫面時觸發。
     /// </summary>
     public event Action? Changed;
 
@@ -190,7 +191,7 @@ internal sealed class ExportWorkspace {
         }
 
         isInitialized = true;
-        await ReloadSettingsAsync().ConfigureAwait(false);
+        await ReloadSettingsAsync();
     }
 
     /// <summary>
@@ -204,9 +205,9 @@ internal sealed class ExportWorkspace {
         }
 
         try {
-            schemaOptions = await settingsService.LoadAsync().ConfigureAwait(false);
+            schemaOptions = await settingsService.LoadAsync();
             LoadError = null;
-        } catch (Exception ex) when (IsSettingsException(ex)) {
+        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
             LoadError = $"無法載入設定：{ex.Message}";
             Connections = [];
             ExportProfiles = [];
@@ -217,9 +218,7 @@ internal sealed class ExportWorkspace {
         }
 
         Connections = [.. schemaOptions.Connections];
-        ExportProfiles = schemaOptions.ExportProfiles.Count > 0
-            ? [.. schemaOptions.ExportProfiles]
-            : [new ExportProfile { Name = DefaultProfileName }];
+        ExportProfiles = SchemaExportRequestResolver.GetAvailableProfiles(schemaOptions);
 
         ExportResultOptions resultOptions = schemaOptions.ExportResultOptions;
         OutputPath = schemaOptions.ExportPath;
@@ -365,11 +364,17 @@ internal sealed class ExportWorkspace {
             );
             connectionStringForRedaction = request.Connection.ConnectionString;
 
-            ExportResult result = await exportOrchestrator.ExportAsync(
-                request,
-                new InlineProgress<ExportProgress>(UpdateProgress),
-                cancellation.Token
-            ).ConfigureAwait(false);
+            ExportResult result;
+            isAcceptingProgress = true;
+            try {
+                result = await exportOrchestrator.ExportAsync(
+                    request,
+                    new Progress<ExportProgress>(UpdateProgress),
+                    cancellation.Token
+                );
+            } finally {
+                isAcceptingProgress = false;
+            }
 
             LastResult = result;
             ProgressPercent = 100;
@@ -419,12 +424,19 @@ internal sealed class ExportWorkspace {
     /// 要求取消目前的匯出作業。
     /// </summary>
     public void CancelExport() {
-        if (!IsExporting || currentExportCancellation is null || IsCancellationRequested) {
+        CancellationTokenSource? cancellation = currentExportCancellation;
+        if (!IsExporting || cancellation is null || IsCancellationRequested) {
             return;
         }
 
         IsCancellationRequested = true;
-        currentExportCancellation.Cancel();
+        try {
+            cancellation.Cancel();
+        } catch (ObjectDisposedException) {
+            // 匯出剛好在按下取消時結束，CancellationTokenSource 已釋放，不需再取消。
+            return;
+        }
+
         SetStatus("正在取消匯出作業...", StatusKind.Info);
     }
 
@@ -477,7 +489,7 @@ internal sealed class ExportWorkspace {
 
         try {
             // 重新讀取最新設定，避免覆蓋設定頁在本頁載入後才儲存的連線與設定檔。
-            SchemaOptions latestOptions = await settingsService.LoadAsync().ConfigureAwait(false);
+            SchemaOptions latestOptions = await settingsService.ReadAsync();
             SchemaOptions optionsToSave = new() {
                 ExportPath = OutputPath.Trim(),
                 Connections = latestOptions.Connections,
@@ -502,21 +514,17 @@ internal sealed class ExportWorkspace {
                 LastSelectedProfileName = SelectedProfile?.Name
             };
 
-            await settingsService.SaveAsync(optionsToSave).ConfigureAwait(false);
+            await settingsService.SaveAsync(optionsToSave);
             schemaOptions = optionsToSave;
             SetStatus("已將目前選項儲存為預設值。", StatusKind.Success);
             return true;
         } catch (ExportValidationException ex) {
             dialogService.ShowWarning("儲存預設值", ex.Message);
-        } catch (Exception ex) when (IsSettingsException(ex)) {
+        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
             dialogService.ShowError("儲存預設值", $"無法儲存設定：{ex.Message}");
         }
 
         return false;
-    }
-
-    private static bool IsSettingsException(Exception ex) {
-        return ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Text.Json.JsonException or ExportValidationException;
     }
 
     private void ShowValidationWarning(string message) {
@@ -525,43 +533,32 @@ internal sealed class ExportWorkspace {
     }
 
     private SchemaConnection? ResolveConnection(string? connectionName) {
-        if (!string.IsNullOrWhiteSpace(connectionName)) {
-            SchemaConnection? matchedConnection = Connections.FirstOrDefault(x =>
-                string.Equals(x.Name, connectionName, StringComparison.OrdinalIgnoreCase)
-            );
-            if (matchedConnection is not null) {
-                return matchedConnection;
-            }
-        }
-
-        return Connections.FirstOrDefault();
+        return SchemaExportRequestResolver.FindConnection(schemaOptions, connectionName) ?? Connections.FirstOrDefault();
     }
 
     private ExportProfile? ResolveProfile(string? requestedProfileName, SchemaConnection? connection, ref string? warningMessage) {
         ExportProfile? fallbackProfile = ExportProfiles.FirstOrDefault();
-        if (fallbackProfile is null) {
-            return null;
-        }
-
-        string? profileName = !string.IsNullOrWhiteSpace(requestedProfileName)
-            ? requestedProfileName
-            : connection?.ExportProfileName;
-        if (string.IsNullOrWhiteSpace(profileName)) {
+        string? profileName = SchemaExportRequestResolver.SelectProfileName(requestedProfileName, connection);
+        if (fallbackProfile is null || string.IsNullOrWhiteSpace(profileName)) {
             return fallbackProfile;
         }
 
-        ExportProfile? matchedProfile = ExportProfiles.FirstOrDefault(x =>
-            string.Equals(x.Name, profileName, StringComparison.OrdinalIgnoreCase)
-        );
+        ExportProfile? matchedProfile = SchemaExportRequestResolver.FindProfile(ExportProfiles, profileName);
         if (matchedProfile is not null) {
             return matchedProfile;
         }
 
+        // CLI 找不到設定檔時直接失敗；畫面改用第一筆並提示，讓使用者仍可操作。
         warningMessage = $"匯出設定檔「{profileName}」不存在，已改用「{fallbackProfile.Name}」。";
         return fallbackProfile;
     }
 
     private void UpdateProgress(ExportProgress progress) {
+        // Progress<T> 以投遞方式回報，匯出結束後才送達的進度不可蓋掉完成或取消訊息。
+        if (!isAcceptingProgress) {
+            return;
+        }
+
         StatusMessage = progress.Message;
         StatusKind = StatusKind.Info;
         ProgressPercent = progress.PercentComplete ?? ProgressPercent;

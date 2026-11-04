@@ -19,7 +19,7 @@
     </section>
 } else {
     <div class="tabs" role="tablist">
-        @foreach ((SettingsTab Tab, string Label) item in tabs) {
+        @foreach ((SettingsTab Tab, string Label) item in Tabs) {
             <button type="button" role="tab" class="tab @(activeTab == item.Tab ? "active" : "")" aria-selected="@(activeTab == item.Tab)" @onclick="() => activeTab = item.Tab">@item.Label</button>
         }
     </div>
@@ -147,7 +147,7 @@
 }
 
 @code {
-    private static readonly (SettingsTab Tab, string Label)[] tabs = [
+    private static readonly (SettingsTab Tab, string Label)[] Tabs = [
         (SettingsTab.Connections, "Connections"),
         (SettingsTab.Profiles, "Export Profiles"),
         (SettingsTab.Redaction, "Redaction")
