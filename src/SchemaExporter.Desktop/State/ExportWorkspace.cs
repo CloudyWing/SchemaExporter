@@ -430,14 +430,14 @@ internal sealed class ExportWorkspace {
         }
 
         IsCancellationRequested = true;
+        // 先顯示「正在取消」再取消：在 Renderer 同步內容下，匯出的收尾可能在 Cancel() 內同步完成，
+        // 若之後才設定狀態，會蓋掉「匯出已取消」。
+        SetStatus("正在取消匯出作業...", StatusKind.Info);
         try {
             cancellation.Cancel();
         } catch (ObjectDisposedException) {
             // 匯出剛好在按下取消時結束，CancellationTokenSource 已釋放，不需再取消。
-            return;
         }
-
-        SetStatus("正在取消匯出作業...", StatusKind.Info);
     }
 
     /// <summary>
