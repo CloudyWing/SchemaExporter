@@ -30,8 +30,40 @@ jobs:
       - name: Test
         run: dotnet test .\SchemaExporter.slnx -c Release --no-build --verbosity minimal
 
-      - name: Publish app
-        run: dotnet publish .\src\SchemaExporter\SchemaExporter.csproj -c Release --self-contained -r win-x64 -o .\artifacts\publish
+      # Desktop 與 CLI 分別 Publish 到不同資料夾，避免相依檔與 appsettings.json 互相覆寫。
+      - name: Publish desktop
+        run: dotnet publish .\src\SchemaExporter.Desktop\SchemaExporter.Desktop.csproj -c Release --self-contained -r win-x64 -o .\artifacts\publish\desktop
+
+      - name: Publish CLI
+        run: dotnet publish .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -c Release --self-contained -r win-x64 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\artifacts\publish\cli
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          $stage = '.\artifacts\stage'
+          New-Item -ItemType Directory -Force -Path "$stage\tools" | Out-Null
+          Copy-Item -Path '.\artifacts\publish\desktop\*' -Destination $stage -Recurse
+          Copy-Item -Path '.\artifacts\publish\cli\*' -Destination "$stage\tools" -Recurse
+          foreach ($required in @("$stage\CloudyWing.SchemaExporter.exe", "$stage\appsettings.json", "$stage\tools\CloudyWing.SchemaExporter.Cli.exe", "$stage\tools\appsettings.json")) {
+            if (-not (Test-Path $required)) {
+              throw "Missing packaged file: $required"
+            }
+          }
+
+      - name: Smoke test CLI
+        shell: pwsh
+        run: |
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'cli-smoke'
+          & .\artifacts\stage\tools\CloudyWing.SchemaExporter.Cli.exe --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "CLI --help returned $LASTEXITCODE"
+          }
+
+      - name: Zip CLI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\artifacts\cli | Out-Null
+          Compress-Archive -Path .\artifacts\publish\cli\* -DestinationPath ".\artifacts\cli\CloudyWing.SchemaExporter.Cli-${{ github.ref_name }}-win-x64.zip"
 
       - name: Pack Velopack
         uses: CloudyWing/devops-templates/.github/actions/velopack-pack@main
@@ -39,7 +71,7 @@ jobs:
           version: ${{ github.ref_name }}
           pack-id: CloudyWing.SchemaExporter
           main-exe: CloudyWing.SchemaExporter.exe
-          pack-dir: .\artifacts\publish
+          pack-dir: .\artifacts\stage
           output-dir: .\artifacts\velopack
 
       - name: Upload artifacts
@@ -47,6 +79,12 @@ jobs:
         with:
           name: velopack
           path: artifacts/velopack/*
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli
+          path: artifacts/cli/*
 
   create-release:
     needs: build
@@ -66,7 +104,13 @@ jobs:
           name: velopack
           path: artifacts/velopack
 
+      - name: Download CLI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cli
+          path: artifacts/cli
+
       - name: Upload release assets
-        run: gh release upload ${{ github.ref_name }} artifacts/velopack/*
+        run: gh release upload ${{ github.ref_name }} artifacts/velopack/* artifacts/cli/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
