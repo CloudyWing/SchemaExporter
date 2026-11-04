@@ -36,7 +36,7 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
 | --- | --- | --- | --- |
 | `Name` | string | 是 | 連線的顯示名稱，用於 Desktop 下拉選單與 CLI `--connection` 參數。 |
 | `DatabaseType` | string | 否 | 資料庫類型，可填 `SqlServer` 或 `Oracle`，預設為 `SqlServer`。 |
-| `ConnectionString` | string | 是 | 標準 ADO.NET 連接字串。 |
+| `ConnectionString` | string | 是 | ADO.NET 連線字串。可用明文、環境變數參照或 DPAPI 加密三種格式保存，詳見下方「連線字串保存格式」。 |
 | `ExportProfileName` | string | 否 | 此連線預設套用的匯出設定檔名稱。若未填或找不到對應設定檔，會套用清單中第一筆設定檔。 |
 
 範例：
@@ -49,6 +49,21 @@ CLI 的 `--output` 參數可於執行時覆蓋此設定。
   "ExportProfileName": "Default"
 }
 ```
+
+### 連線字串保存格式
+
+每筆連線可各自選擇保存方式，沒有前綴的值一律視為明文，既有設定檔不需修改。
+
+| 格式 | 寫法 | 適合情境 |
+| --- | --- | --- |
+| 明文 | `Server=prod-db;Database=MyApp;User Id=app;Password=...` | 本機、測試資料庫 |
+| 環境變數參照 | `${env:SCHEMAEXPORTER_PROD}` | CI、不想讓密碼寫入設定檔的環境 |
+| DPAPI 加密 | `dpapi:AQAAANCMnd8B...` | 本機的正式環境連線 |
+
+- 環境變數參照必須是整個值，例如 `${env:SCHEMAEXPORTER_PROD}`；變數名稱只能使用英文字母、數字與底線，且不可以數字開頭。不支援在連線字串中間內插。
+- DPAPI 加密值由 Desktop 設定頁的「加密儲存」產生，不需手動編寫。加密範圍是目前的 Windows 使用者，只有同一台電腦、同一個使用者能解開；複製設定檔到其他電腦或使用者後，必須重新輸入連線字串。
+- 解析在匯出開始時進行，設定檔中保存的仍是原始值，儲存設定時不會把解析後的連線字串寫回檔案。
+- 環境變數未設定、加密值無法解開，或在非 Windows 平台遇到加密值時，匯出會以驗證錯誤停止（CLI 結束代碼 `2`），錯誤訊息只包含連線名稱與變數名稱，不包含連線字串。
 
 ---
 

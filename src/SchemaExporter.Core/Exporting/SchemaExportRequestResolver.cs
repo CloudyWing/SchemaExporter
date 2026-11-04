@@ -5,6 +5,21 @@ namespace CloudyWing.SchemaExporter.Core.Exporting;
 /// </summary>
 public sealed class SchemaExportRequestResolver {
     private const string DefaultProfileName = "Default";
+    private readonly IConnectionStringResolver? connectionStringResolver;
+
+    /// <summary>
+    /// 初始化 <see cref="SchemaExportRequestResolver"/> 類別的新執行個體，連線字串照設定檔原值使用。
+    /// </summary>
+    public SchemaExportRequestResolver() : this(null) {
+    }
+
+    /// <summary>
+    /// 初始化 <see cref="SchemaExportRequestResolver"/> 類別的新執行個體，並指定連線字串的解析方式。
+    /// </summary>
+    /// <param name="connectionStringResolver">連線字串解析器；<see langword="null"/> 表示照設定檔原值使用。</param>
+    public SchemaExportRequestResolver(IConnectionStringResolver? connectionStringResolver) {
+        this.connectionStringResolver = connectionStringResolver;
+    }
 
     /// <summary>
     /// 解析匯出請求所需的連線、設定檔、輸出路徑與輸出選項。
@@ -30,7 +45,7 @@ public sealed class SchemaExportRequestResolver {
             : overrides.OutputPath.Trim();
 
         return new SchemaExportRequest {
-            Connection = connection,
+            Connection = ResolveConnectionString(connection),
             ExportPath = exportPath,
             Profile = profile,
             ResultOptions = resultOptions,
@@ -97,6 +112,20 @@ public sealed class SchemaExportRequestResolver {
         return profiles.FirstOrDefault(x =>
             string.Equals(x.Name, profileName, StringComparison.OrdinalIgnoreCase)
         );
+    }
+
+    private SchemaConnection ResolveConnectionString(SchemaConnection connection) {
+        if (connectionStringResolver is null) {
+            return connection;
+        }
+
+        // 回傳複本，避免把解析後的實際連線字串寫回設定物件，之後儲存設定時外洩成明文。
+        return new SchemaConnection {
+            Name = connection.Name,
+            DatabaseType = connection.DatabaseType,
+            ConnectionString = connectionStringResolver.Resolve(connection),
+            ExportProfileName = connection.ExportProfileName
+        };
     }
 
     private static SchemaConnection ResolveConnection(SchemaOptions schemaOptions, string? connectionName) {

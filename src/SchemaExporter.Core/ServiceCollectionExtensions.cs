@@ -28,7 +28,8 @@ public static class ServiceCollectionExtensions {
         services.AddSingleton<IDatabaseSchemaProvider, SqlServerDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProvider, OracleDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProviderFactory, DatabaseSchemaProviderFactory>();
-        services.AddSingleton<SchemaExportRequestResolver>();
+        // 連線字串的環境變數參照與解密由 Host 註冊 IConnectionStringResolver；未註冊時照設定檔原值使用。
+        services.AddSingleton(sp => new SchemaExportRequestResolver(sp.GetService<IConnectionStringResolver>()));
         services.AddSingleton<SchemaSnapshotBuilder>();
         services.AddSingleton<SchemaSnapshotDiffService>();
         services.AddSingleton<CommentSqlGenerator>();

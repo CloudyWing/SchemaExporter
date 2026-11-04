@@ -3,6 +3,7 @@ using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Desktop.Models;
 using CloudyWing.SchemaExporter.Infrastructure.Configuration;
+using CloudyWing.SchemaExporter.Infrastructure.Security;
 
 namespace CloudyWing.SchemaExporter.Desktop.State;
 
@@ -11,14 +12,19 @@ namespace CloudyWing.SchemaExporter.Desktop.State;
 /// </summary>
 internal sealed class SettingsWorkspace {
     private readonly ISettingsService settingsService;
+    private readonly IConnectionStringProtector protector;
 
     /// <summary>
     /// 初始化 <see cref="SettingsWorkspace"/> 類別的新執行個體。
     /// </summary>
     /// <param name="settingsService">設定檔存取服務。</param>
-    public SettingsWorkspace(ISettingsService settingsService) {
+    /// <param name="protector">加密與解密連線字串的加密器。</param>
+    public SettingsWorkspace(ISettingsService settingsService, IConnectionStringProtector protector) {
         ArgumentNullException.ThrowIfNull(settingsService);
+        ArgumentNullException.ThrowIfNull(protector);
+
         this.settingsService = settingsService;
+        this.protector = protector;
     }
 
     /// <summary>
@@ -92,7 +98,7 @@ internal sealed class SettingsWorkspace {
         }
 
         Connections.Clear();
-        Connections.AddRange(options.Connections.Select(EditableConnection.FromSchemaConnection));
+        Connections.AddRange(options.Connections.Select(x => EditableConnection.FromSchemaConnection(x, protector)));
         Profiles.Clear();
         Profiles.AddRange(options.ExportProfiles.Select(EditableExportProfile.FromExportProfile));
         SelectedConnection = Connections.FirstOrDefault();
@@ -122,7 +128,7 @@ internal sealed class SettingsWorkspace {
             SchemaOptions latestOptions = await settingsService.ReadAsync();
             SchemaOptions options = new() {
                 ExportPath = latestOptions.ExportPath,
-                Connections = [.. Connections.Select(x => x.ToSchemaConnection())],
+                Connections = [.. Connections.Select(x => x.ToSchemaConnection(protector))],
                 ExportProfiles = [.. Profiles.Select(x => x.ToExportProfile())],
                 ExportResultOptions = latestOptions.ExportResultOptions,
                 Redaction = BuildRedactionOptions(),
@@ -133,7 +139,10 @@ internal sealed class SettingsWorkspace {
             await settingsService.SaveAsync(options);
             ErrorMessage = null;
             return true;
-        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
+        } catch (PlatformNotSupportedException ex) {
+            ErrorMessage = $"無法加密連線字串：{ex.Message}";
+            return false;
+        } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex) || ex is System.Security.Cryptography.CryptographicException) {
             ErrorMessage = ex is ExportValidationException ? ex.Message : $"無法儲存設定：{ex.Message}";
             return false;
         }
