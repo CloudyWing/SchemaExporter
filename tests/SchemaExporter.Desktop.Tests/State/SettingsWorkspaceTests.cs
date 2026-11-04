@@ -3,7 +3,9 @@ using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Desktop.Models;
 using CloudyWing.SchemaExporter.Desktop.State;
 using CloudyWing.SchemaExporter.Infrastructure.Configuration;
+using CloudyWing.SchemaExporter.Infrastructure.Security;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace CloudyWing.SchemaExporter.Desktop.Tests.State;
 
@@ -16,7 +18,7 @@ public sealed class SettingsWorkspaceTests {
         settingsService.ReadAsync().Returns(Task.FromResult(loadedOptions));
         SchemaOptions? savedOptions = null;
         settingsService.SaveAsync(Arg.Do<SchemaOptions>(options => savedOptions = options)).Returns(Task.CompletedTask);
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
         await sut.LoadAsync();
 
         sut.AddConnection();
@@ -45,7 +47,7 @@ public sealed class SettingsWorkspaceTests {
     public async Task RenameProfile_WhenConnectionsReferenceOldName_UpdatesReferences() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
         await sut.LoadAsync();
         EditableExportProfile profile = sut.Profiles.Single(x => x.Name == "Full");
 
@@ -61,7 +63,7 @@ public sealed class SettingsWorkspaceTests {
     public async Task RemoveSelectedProfile_WhenConnectionsReferenceIt_ClearsReferencesAndSelectsNeighbor() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
         await sut.LoadAsync();
         sut.SelectedProfile = sut.Profiles.Single(x => x.Name == "Full");
 
@@ -77,7 +79,7 @@ public sealed class SettingsWorkspaceTests {
     public async Task AddConnection_WhenDefaultNameExists_CreatesUniqueName() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
         await sut.LoadAsync();
 
         sut.AddConnection();
@@ -91,7 +93,7 @@ public sealed class SettingsWorkspaceTests {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromResult(CreateOptions()));
         settingsService.SaveAsync(Arg.Any<SchemaOptions>()).Returns(Task.FromException(new ExportValidationException("連線名稱不可重複。")));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
         await sut.LoadAsync();
 
         bool result = await sut.SaveAsync();
@@ -106,7 +108,7 @@ public sealed class SettingsWorkspaceTests {
     public async Task LoadAsync_WhenSettingsAreCorrupt_ReportsErrorAndBlocksSave() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromException<SchemaOptions>(new InvalidOperationException("格式無效")));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
 
         await sut.LoadAsync();
         bool saved = await sut.SaveAsync();
@@ -125,7 +127,7 @@ public sealed class SettingsWorkspaceTests {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.ReadAsync().Returns(Task.FromResult(invalidOptions));
         settingsService.LoadAsync().Returns(Task.FromException<SchemaOptions>(new ExportValidationException("連線名稱不可重複。")));
-        SettingsWorkspace sut = new(settingsService);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
 
         await sut.LoadAsync();
         bool saved = await sut.SaveAsync();
@@ -138,12 +140,113 @@ public sealed class SettingsWorkspaceTests {
     }
 
     [Test]
+    public async Task LoadAsync_WhenConnectionIsEncrypted_DecryptsForEditingAndReencryptsOnSave() {
+        SchemaOptions options = CreateOptions();
+        options = WithConnectionString(options, "dpapi:OLD");
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.ReadAsync().Returns(Task.FromResult(options));
+        SchemaOptions? savedOptions = null;
+        settingsService.SaveAsync(Arg.Do<SchemaOptions>(saved => savedOptions = saved)).Returns(Task.CompletedTask);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
+        await sut.LoadAsync();
+        EditableConnection connection = sut.Connections.Single();
+
+        bool result = await sut.SaveAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(connection.IsEncrypted, Is.True);
+            Assert.That(connection.ConnectionString, Is.EqualTo("plain:OLD"));
+            Assert.That(result, Is.True);
+            Assert.That(savedOptions?.Connections.Single().ConnectionString, Is.EqualTo("dpapi:plain:OLD"));
+        }
+    }
+
+    [Test]
+    public async Task SaveAsync_WhenEncryptionIsTurnedOff_SavesPlainText() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.ReadAsync().Returns(Task.FromResult(WithConnectionString(CreateOptions(), "dpapi:OLD")));
+        SchemaOptions? savedOptions = null;
+        settingsService.SaveAsync(Arg.Do<SchemaOptions>(saved => savedOptions = saved)).Returns(Task.CompletedTask);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
+        await sut.LoadAsync();
+        sut.Connections.Single().IsEncrypted = false;
+
+        await sut.SaveAsync();
+
+        Assert.That(savedOptions?.Connections.Single().ConnectionString, Is.EqualTo("plain:OLD"));
+    }
+
+    [Test]
+    public async Task SaveAsync_WhenConnectionIsEnvironmentReference_DoesNotEncrypt() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.ReadAsync().Returns(Task.FromResult(WithConnectionString(CreateOptions(), "${env:PROD_DB}")));
+        SchemaOptions? savedOptions = null;
+        settingsService.SaveAsync(Arg.Do<SchemaOptions>(saved => savedOptions = saved)).Returns(Task.CompletedTask);
+        SettingsWorkspace sut = new(settingsService, CreateProtector());
+        await sut.LoadAsync();
+        EditableConnection connection = sut.Connections.Single();
+        connection.IsEncrypted = true;
+
+        await sut.SaveAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(connection.IsEnvironmentReference, Is.True);
+            Assert.That(savedOptions?.Connections.Single().ConnectionString, Is.EqualTo("${env:PROD_DB}"));
+        }
+    }
+
+    [Test]
+    public async Task SaveAsync_WhenEncryptedValueCannotBeDecryptedAndIsNotReentered_KeepsOriginalValue() {
+        IConnectionStringProtector protector = CreateProtector();
+        protector.Unprotect("dpapi:FOREIGN").Throws(new System.Security.Cryptography.CryptographicException("key not valid"));
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.ReadAsync().Returns(Task.FromResult(WithConnectionString(CreateOptions(), "dpapi:FOREIGN")));
+        SchemaOptions? savedOptions = null;
+        settingsService.SaveAsync(Arg.Do<SchemaOptions>(saved => savedOptions = saved)).Returns(Task.CompletedTask);
+        SettingsWorkspace sut = new(settingsService, protector);
+        await sut.LoadAsync();
+        EditableConnection connection = sut.Connections.Single();
+
+        await sut.SaveAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(connection.UnreadableProtectedValue, Is.EqualTo("dpapi:FOREIGN"));
+            Assert.That(connection.ConnectionString, Is.Empty);
+            Assert.That(savedOptions?.Connections.Single().ConnectionString, Is.EqualTo("dpapi:FOREIGN"));
+        }
+    }
+
+    [Test]
     public void EditableExportProfile_WhenTextIsAssigned_NormalizesLines() {
         EditableExportProfile sut = new();
 
         sut.IncludeSchemasText = " dbo \r\n\r\nsales\nDBO";
 
         Assert.That(sut.IncludeSchemas, Is.EqualTo(new[] { "dbo", "sales" }));
+    }
+
+    private static IConnectionStringProtector CreateProtector() {
+        // 以可預測的假加密模擬 DPAPI，讓測試可在非 Windows 平台執行。
+        IConnectionStringProtector protector = Substitute.For<IConnectionStringProtector>();
+        protector.Protect(Arg.Any<string>()).Returns(callInfo => "dpapi:" + callInfo.Arg<string>());
+        protector.Unprotect(Arg.Any<string>()).Returns(callInfo => "plain:" + callInfo.Arg<string>()["dpapi:".Length..]);
+        return protector;
+    }
+
+    private static SchemaOptions WithConnectionString(SchemaOptions options, string connectionString) {
+        return new SchemaOptions {
+            ExportPath = options.ExportPath,
+            Connections = [
+                new SchemaConnection {
+                    Name = "Primary",
+                    ConnectionString = connectionString,
+                    ExportProfileName = "Full"
+                }
+            ],
+            ExportProfiles = options.ExportProfiles,
+            ExportResultOptions = options.ExportResultOptions,
+            Redaction = options.Redaction
+        };
     }
 
     private static SchemaOptions CreateOptions() {

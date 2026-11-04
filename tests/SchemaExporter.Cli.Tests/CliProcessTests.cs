@@ -138,6 +138,30 @@ public sealed class CliProcessTests {
         }
     }
 
+    [Test]
+    public async Task Run_WhenConnectionReferencesMissingEnvironmentVariable_ReturnsWorkflowError() {
+        string userConfigDirectory = Path.Combine(localAppDataDirectory, "SchemaExporter");
+        Directory.CreateDirectory(userConfigDirectory);
+        await File.WriteAllTextAsync(Path.Combine(userConfigDirectory, "appsettings.json"), $$"""
+            {
+              "Schema": {
+                "ExportPath": {{System.Text.Json.JsonSerializer.Serialize(Path.Combine(temporaryDirectory, "exports"))}},
+                "Connections": [
+                  { "Name": "FromEnv", "DatabaseType": "SqlServer", "ConnectionString": "${env:SCHEMAEXPORTER_PROCESS_TEST_MISSING}" }
+                ],
+                "ExportProfiles": [ { "Name": "Default" } ]
+              }
+            }
+            """);
+
+        CliProcessResult result = await RunCliAsync("export", "--connection", "FromEnv");
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ExitCode, Is.EqualTo((int)CliExitCode.WorkflowError));
+            Assert.That(result.Error, Does.Contain("SCHEMAEXPORTER_PROCESS_TEST_MISSING"));
+        }
+    }
+
     private async Task<CliProcessResult> RunCliAsync(params string[] args) {
         string cliAssemblyPath = Path.Combine(AppContext.BaseDirectory, "CloudyWing.SchemaExporter.Cli.dll");
         ProcessStartInfo startInfo = new() {

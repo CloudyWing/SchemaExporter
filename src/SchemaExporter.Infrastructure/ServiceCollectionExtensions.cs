@@ -1,5 +1,6 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
 using CloudyWing.SchemaExporter.Infrastructure.Configuration;
+using CloudyWing.SchemaExporter.Infrastructure.Security;
 using CloudyWing.SchemaExporter.Infrastructure.Shell;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,7 +11,7 @@ namespace CloudyWing.SchemaExporter.Infrastructure;
 /// </summary>
 public static class ServiceCollectionExtensions {
     /// <summary>
-    /// 註冊使用者設定存取與開啟輸出資料夾等跨 Host 共用服務。
+    /// 註冊使用者設定存取、連線字串解析與開啟輸出資料夾等跨 Host 共用服務。
     /// </summary>
     /// <param name="services">要更新的服務集合。</param>
     /// <returns>已更新的服務集合。</returns>
@@ -19,6 +20,8 @@ public static class ServiceCollectionExtensions {
 
         services.AddSingleton<ISettingsService, JsonSettingsService>();
         services.AddSingleton<IOutputFolderLauncher, ShellOutputFolderLauncher>();
+        services.AddSingleton<IConnectionStringProtector, DpapiConnectionStringProtector>();
+        services.AddSingleton<IConnectionStringResolver, ConnectionStringResolver>();
 
         return services;
     }

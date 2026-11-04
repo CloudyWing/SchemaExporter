@@ -15,7 +15,7 @@ CI 可使用 SchemaExporter CLI 產生 schema snapshot、Schema Summary 與 diff
 
 - CI runner 可連線到測試資料庫。
 - Repository 內保留一份 baseline snapshot，例如 `schema-baseline/baseline.snapshot.json`。
-- 連線字串存放於 CI secret，不寫入 repository。
+- 連線字串存放於 CI secret，不寫入 repository。設定檔的 `ConnectionString` 使用 `${env:SCHEMAEXPORTER_CONNECTION_STRING}` 參照，CLI 匯出時才讀取環境變數，連線字串不會寫入 runner 上的設定檔。
 - `Schema.Redaction.Enabled` 依資料庫內容決定是否啟用。
 
 ## GitHub Actions 範例
@@ -75,7 +75,8 @@ jobs:
                 @{
                   Name = "ci"
                   DatabaseType = "SqlServer"
-                  ConnectionString = $env:SCHEMAEXPORTER_CONNECTION_STRING
+                  # 只寫入環境變數參照，實際連線字串在匯出時才從 secret 讀取，不會落地到設定檔。
+                  ConnectionString = '${env:SCHEMAEXPORTER_CONNECTION_STRING}'
                   ExportProfileName = "Default"
                 }
               )
@@ -160,6 +161,9 @@ jobs:
             $summary.addedIndexes +
             $summary.removedIndexes +
             $summary.modifiedIndexes +
+            $summary.addedRelationships +
+            $summary.removedRelationships +
+            $summary.modifiedRelationships +
             $summary.addedRoutines +
             $summary.removedRoutines +
             $summary.modifiedRoutines

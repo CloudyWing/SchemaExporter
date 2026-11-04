@@ -50,7 +50,19 @@
                                                   Adornment="Adornment.End"
                                                   AdornmentIcon="@(showConnectionString ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                                                   AdornmentAriaLabel="@(showConnectionString ? "隱藏連線字串" : "顯示連線字串")"
-                                                  OnAdornmentClick="() => showConnectionString = !showConnectionString" />
+                                                  OnAdornmentClick="() => showConnectionString = !showConnectionString"
+                                                  HelperText="可輸入 ${env:變數名稱} 改從環境變數讀取，設定檔不保存實際連線字串。" />
+                                    @if (selected.UnreadableProtectedValue is not null && string.IsNullOrWhiteSpace(selected.ConnectionString)) {
+                                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                                            這筆連線字串是在其他電腦或 Windows 使用者加密的，無法解開，請重新輸入。未輸入時會保留原本的加密值。
+                                        </MudAlert>
+                                    }
+                                    <MudCheckBox T="bool"
+                                                 @bind-Value="selected.IsEncrypted"
+                                                 Color="Color.Primary"
+                                                 Disabled="@selected.IsEnvironmentReference">
+                                        <span class="option-label">加密儲存<small>@(selected.IsEnvironmentReference ? "環境變數參照不需加密。" : "以 Windows DPAPI 加密，只有這台電腦的目前使用者能解開；複製設定檔到其他電腦需重新輸入。")</small></span>
+                                    </MudCheckBox>
                                     <MudSelect T="string" Label="預設 Export Profile" Value="@(selected.ExportProfileName ?? "")" ValueChanged="value => selected.ExportProfileName = string.IsNullOrWhiteSpace(value) ? null : value">
                                         <MudSelectItem T="string" Value="@("")">（使用第一個設定檔）</MudSelectItem>
                                         @foreach (EditableExportProfile profile in Workspace.Profiles) {

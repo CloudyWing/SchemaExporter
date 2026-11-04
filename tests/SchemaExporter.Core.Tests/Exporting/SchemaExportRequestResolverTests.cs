@@ -1,4 +1,5 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
+using NSubstitute;
 
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;
 
@@ -75,6 +76,23 @@ public sealed class SchemaExportRequestResolverTests {
         using (Assert.EnterMultipleScope()) {
             Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyyMMdd"));
             Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.AppendSuffix));
+        }
+    }
+
+    [Test]
+    public void Resolve_WhenConnectionStringResolverIsProvided_UsesResolvedValueWithoutChangingOptions() {
+        SchemaOptions options = CreateOptions();
+        string storedValue = options.Connections.Single(x => x.Name == "Analytics").ConnectionString;
+        IConnectionStringResolver connectionStringResolver = Substitute.For<IConnectionStringResolver>();
+        connectionStringResolver.Resolve(Arg.Any<SchemaConnection>()).Returns("Server=resolved;");
+        SchemaExportRequestResolver sut = new(connectionStringResolver);
+
+        SchemaExportRequest result = sut.Resolve(options, "Analytics", null);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.Connection.ConnectionString, Is.EqualTo("Server=resolved;"));
+            Assert.That(result.Connection.Name, Is.EqualTo("Analytics"));
+            Assert.That(options.Connections.Single(x => x.Name == "Analytics").ConnectionString, Is.EqualTo(storedValue));
         }
     }
 
