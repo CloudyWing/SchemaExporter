@@ -12,11 +12,15 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/SchemaExporter.Core/SchemaExporter.Core.csproj" />
-    <Project Path="src/SchemaExporter/SchemaExporter.csproj" />
+    <Project Path="src/SchemaExporter.Infrastructure/SchemaExporter.Infrastructure.csproj" />
+    <Project Path="src/SchemaExporter.Cli/SchemaExporter.Cli.csproj" />
+    <Project Path="src/SchemaExporter.Desktop/SchemaExporter.Desktop.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SchemaExporter.Core.IntegrationTests/SchemaExporter.Core.IntegrationTests.csproj" />
     <Project Path="tests/SchemaExporter.Core.Tests/SchemaExporter.Core.Tests.csproj" />
-    <Project Path="tests/SchemaExporter.Tests/SchemaExporter.Tests.csproj" />
+    <Project Path="tests/SchemaExporter.Infrastructure.Tests/SchemaExporter.Infrastructure.Tests.csproj" />
+    <Project Path="tests/SchemaExporter.Cli.Tests/SchemaExporter.Cli.Tests.csproj" />
+    <Project Path="tests/SchemaExporter.Desktop.Tests/SchemaExporter.Desktop.Tests.csproj" />
   </Folder>
 </Solution>

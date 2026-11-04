@@ -1,0 +1,19 @@
+<div class="status status-@Kind.ToString().ToLowerInvariant()" role="status" aria-live="polite">
+    <span class="status-dot" aria-hidden="true"></span>
+    <span class="status-text">@Message</span>
+</div>
+
+@code {
+    /// <summary>
+    /// 取得或設定狀態訊息。
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Message { get; set; } = "";
+
+    /// <summary>
+    /// 取得或設定狀態類型。
+    /// </summary>
+    [Parameter]
+    public StatusKind Kind { get; set; } = StatusKind.Info;
+}

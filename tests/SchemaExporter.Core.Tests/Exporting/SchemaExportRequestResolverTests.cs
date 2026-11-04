@@ -51,6 +51,34 @@ public sealed class SchemaExportRequestResolverTests {
     }
 
     [Test]
+    public void Resolve_WhenTimestampFormatAndOverwriteStrategyAreOverridden_UsesOverrideValues() {
+        SchemaExportRequestResolver sut = new();
+        ExportOptionOverrides overrides = new() {
+            TimestampFormat = "  yyyy-MM-dd  ",
+            OverwriteStrategy = OverwriteStrategy.Fail
+        };
+
+        SchemaExportRequest result = sut.Resolve(CreateOptions(), "Analytics", "Compact", overrides);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyy-MM-dd"));
+            Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.Fail));
+        }
+    }
+
+    [Test]
+    public void Resolve_WhenTimestampFormatOverrideIsBlank_KeepsConfiguredValue() {
+        SchemaExportRequestResolver sut = new();
+
+        SchemaExportRequest result = sut.Resolve(CreateOptions(), "Analytics", "Compact", new ExportOptionOverrides { TimestampFormat = "  " });
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyyMMdd"));
+            Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.AppendSuffix));
+        }
+    }
+
+    [Test]
     public void Resolve_WhenNamesAreOmitted_UsesLastSelectedConnectionAndConnectionProfile() {
         SchemaOptions options = CreateOptions();
         SchemaExportRequestResolver sut = new();

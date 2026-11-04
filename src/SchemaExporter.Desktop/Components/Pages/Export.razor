@@ -1,0 +1,256 @@
+@page "/"
+@implements IDisposable
+@inject ExportWorkspace Workspace
+
+<header class="page-header">
+    <h1>匯出 Schema</h1>
+    <p class="page-subtitle">選擇連線、設定檔與輸出資料夾後開始匯出。Excel 是主要產物，其他格式可在進階選項啟用。</p>
+</header>
+
+@if (Workspace.LoadError is not null) {
+    <section class="card">
+        <StatusBanner Message="@Workspace.LoadError" Kind="StatusKind.Error" />
+        <div class="actions">
+            <button type="button" class="btn" @onclick="Workspace.ReloadSettingsAsync">重新載入設定</button>
+            <a class="btn btn-ghost" href="settings">前往設定</a>
+        </div>
+    </section>
+} else {
+    <section class="card">
+        <fieldset disabled="@Workspace.IsExporting">
+            <div class="form-grid">
+                <label for="connection">資料庫連線</label>
+                <div class="field-row">
+                    <select id="connection" value="@Workspace.SelectedConnection?.Name" @onchange="OnConnectionChanged">
+                        @if (Workspace.Connections.Count == 0) {
+                            <option value="">（尚未建立連線）</option>
+                        }
+                        @foreach (SchemaConnection connection in Workspace.Connections) {
+                            <option value="@connection.Name">@connection.Name（@connection.DatabaseType）</option>
+                        }
+                    </select>
+                    @if (!Workspace.IsExporting) {
+                        <a class="btn btn-ghost" href="settings">管理設定</a>
+                    }
+                </div>
+
+                <label for="profile">Export Profile</label>
+                <div class="field-row">
+                    <select id="profile" value="@Workspace.SelectedProfile?.Name" @onchange="OnProfileChanged">
+                        @foreach (ExportProfile profile in Workspace.ExportProfiles) {
+                            <option value="@profile.Name">@profile.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <label for="output">輸出資料夾</label>
+                <div class="field-row">
+                    <input id="output" type="text" spellcheck="false" @bind="Workspace.OutputPath" @bind:event="oninput" placeholder="例如 D:\SchemaExports" />
+                    <button type="button" class="btn" @onclick="Workspace.BrowseOutputPath">瀏覽</button>
+                    <button type="button" class="btn btn-ghost" @onclick="Workspace.OpenOutputFolder" disabled="@string.IsNullOrWhiteSpace(Workspace.OutputPath)">開啟</button>
+                </div>
+            </div>
+
+            <details class="advanced">
+                <summary>進階選項<span class="summary-hint">@AdvancedSummary</span></summary>
+                <div class="advanced-body">
+                    <h2>額外輸出</h2>
+                    <div class="option-grid">
+                        <label class="check"><input type="checkbox" @bind="Workspace.GenerateSchemaSummary" /><span>Schema Summary<small>.schema-summary.md，供 AI Agent 快速檢索</small></span></label>
+                        <label class="check"><input type="checkbox" @bind="Workspace.GenerateMarkdownSidecar" /><span>Markdown Sidecar<small>.schema.md，完整可讀的 Schema 文件</small></span></label>
+                        <label class="check"><input type="checkbox" @bind="Workspace.GenerateJsonSidecar" /><span>JSON Sidecar<small>.schema.json，供程式處理</small></span></label>
+                        <label class="check"><input type="checkbox" @bind="Workspace.GenerateSchemaSnapshot" /><span>Schema Snapshot<small>.snapshot.json，作為下次比對的基準</small></span></label>
+                        <label class="check"><input type="checkbox" @bind="Workspace.GenerateManifest" /><span>Manifest<small>.manifest.json，記錄設定、數量與診斷</small></span></label>
+                    </div>
+
+                    <h2>差異比對</h2>
+                    <div class="form-grid">
+                        <label for="baseline">基準 Snapshot</label>
+                        <div class="field-row">
+                            <input id="baseline" type="text" spellcheck="false" @bind="Workspace.DiffSourceSnapshotPath" @bind:event="oninput" placeholder="留空表示不比對；指定時輸出 .diff.json" />
+                            <button type="button" class="btn" @onclick="Workspace.BrowseDiffSourceSnapshot">瀏覽</button>
+                        </div>
+                    </div>
+
+                    <h2>檔名與完成後動作</h2>
+                    <div class="form-grid">
+                        <span class="label">時間戳記</span>
+                        <div class="field-row">
+                            <label class="check inline"><input type="checkbox" @bind="Workspace.UseTimestamp" /><span>檔名附加時間戳記</span></label>
+                            <input type="text" class="narrow" aria-label="時間戳記格式" spellcheck="false" @bind="Workspace.TimestampFormat" disabled="@(!Workspace.UseTimestamp)" />
+                        </div>
+
+                        <label for="overwrite">檔案已存在時</label>
+                        <div class="field-row">
+                            <select id="overwrite" @bind="Workspace.OverwriteStrategy">
+                                <option value="@OverwriteStrategy.Overwrite">覆寫</option>
+                                <option value="@OverwriteStrategy.AppendSuffix">附加序號</option>
+                                <option value="@OverwriteStrategy.Fail">停止匯出</option>
+                            </select>
+                        </div>
+
+                        <span class="label">完成後</span>
+                        <label class="check inline"><input type="checkbox" @bind="Workspace.OpenOutputFolderAfterExport" /><span>開啟輸出資料夾</span></label>
+                    </div>
+
+                    <div class="actions">
+                        <button type="button" class="btn btn-ghost" @onclick="Workspace.SaveDefaultsAsync">將目前選項存為預設值</button>
+                    </div>
+                </div>
+            </details>
+        </fieldset>
+
+        <div class="actions primary-actions">
+            @if (Workspace.IsExporting) {
+                <button type="button" class="btn btn-danger" @onclick="Workspace.CancelExport" disabled="@Workspace.IsCancellationRequested">取消匯出</button>
+            } else {
+                <button type="button" class="btn btn-primary" @onclick="Workspace.ExportAsync" disabled="@(!Workspace.CanExport)">開始匯出</button>
+            }
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="card-title">狀態</h2>
+        <StatusBanner Message="@Workspace.StatusMessage" Kind="@Workspace.StatusKind" />
+        @if (Workspace.IsExporting || Workspace.LastResult is not null) {
+            <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@Workspace.ProgressPercent">
+                <div class="progress-bar" style="width: @(Workspace.ProgressPercent)%"></div>
+            </div>
+        }
+    </section>
+
+    @if (Workspace.LastResult is ExportResult result) {
+        <section class="card">
+            <div class="card-head">
+                <h2 class="card-title">匯出結果</h2>
+                <button type="button" class="btn" @onclick="Workspace.OpenLastResultFolder">開啟輸出資料夾</button>
+            </div>
+            <ul class="artifacts">
+                @foreach ((string Label, string Path) artifact in GetArtifacts(result)) {
+                    <li>
+                        <span class="artifact-label">@artifact.Label</span>
+                        <span class="artifact-name" title="@artifact.Path">@System.IO.Path.GetFileName(artifact.Path)</span>
+                    </li>
+                }
+            </ul>
+            <p class="muted path" title="@result.OutputDirectoryPath">@result.OutputDirectoryPath</p>
+        </section>
+
+        <section class="card">
+            <details class="diagnostics" open="@HasProblems(result)">
+                <summary>
+                    診斷資訊
+                    <span class="badge badge-error">@Count(result, DiagnosticSeverity.Error) 錯誤</span>
+                    <span class="badge badge-warning">@Count(result, DiagnosticSeverity.Warning) 警告</span>
+                    <span class="badge">@Count(result, DiagnosticSeverity.Info) 資訊</span>
+                </summary>
+                @if (result.Diagnostics.Count == 0) {
+                    <p class="muted">沒有診斷資訊。</p>
+                } else {
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>嚴重性</th>
+                                    <th>類別</th>
+                                    <th>支援層級</th>
+                                    <th>影響物件</th>
+                                    <th>訊息</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (ExportDiagnostic diagnostic in result.Diagnostics.OrderByDescending(x => x.Severity)) {
+                                    <tr class="sev-@diagnostic.Severity.ToString().ToLowerInvariant()">
+                                        <td>@diagnostic.SeverityText</td>
+                                        <td>@diagnostic.CategoryText</td>
+                                        <td>@diagnostic.SupportLevelText</td>
+                                        <td>@diagnostic.AffectedObjectDisplay</td>
+                                        <td>@diagnostic.Message</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </details>
+        </section>
+    }
+}
+
+@code {
+    private string AdvancedSummary {
+        get {
+            List<string> enabled = [];
+            if (Workspace.GenerateSchemaSummary) {
+                enabled.Add("Summary");
+            }
+
+            if (Workspace.GenerateMarkdownSidecar) {
+                enabled.Add("Markdown");
+            }
+
+            if (Workspace.GenerateJsonSidecar) {
+                enabled.Add("JSON");
+            }
+
+            if (Workspace.GenerateSchemaSnapshot) {
+                enabled.Add("Snapshot");
+            }
+
+            if (Workspace.GenerateManifest) {
+                enabled.Add("Manifest");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Workspace.DiffSourceSnapshotPath)) {
+                enabled.Add("Diff");
+            }
+
+            return enabled.Count == 0 ? "只輸出 Excel" : $"Excel + {string.Join("、", enabled)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() {
+        Workspace.Changed += HandleChanged;
+        await Workspace.InitializeAsync();
+    }
+
+    public void Dispose() {
+        Workspace.Changed -= HandleChanged;
+    }
+
+    private void HandleChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnConnectionChanged(ChangeEventArgs e) {
+        Workspace.SelectConnection(e.Value?.ToString());
+    }
+
+    private void OnProfileChanged(ChangeEventArgs e) {
+        Workspace.SelectProfile(e.Value?.ToString());
+    }
+
+    private static IEnumerable<(string Label, string Path)> GetArtifacts(ExportResult result) {
+        (string Label, string? Path)[] candidates = [
+            ("Excel", result.OutputFilePath),
+            ("Schema Summary", result.SchemaSummaryFilePath),
+            ("Markdown", result.MarkdownSidecarFilePath),
+            ("JSON", result.JsonSidecarFilePath),
+            ("Snapshot", result.SnapshotFilePath),
+            ("Diff", result.DiffFilePath),
+            ("Manifest", result.ManifestFilePath)
+        ];
+
+        return candidates
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+            .Select(x => (x.Label, x.Path!));
+    }
+
+    private static int Count(ExportResult result, DiagnosticSeverity severity) {
+        return result.Diagnostics.Count(x => x.Severity == severity);
+    }
+
+    private static bool HasProblems(ExportResult result) {
+        return result.Diagnostics.Any(x => x.Severity is DiagnosticSeverity.Warning or DiagnosticSeverity.Error);
+    }
+}

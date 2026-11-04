@@ -317,6 +317,69 @@ public sealed class SchemaExportOrchestratorTests {
         }
     }
 
+    [Test]
+    public async Task ExportAsync_WhenOpenOutputFolderIsRequested_OpensOutputDirectoryThroughLauncher() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory, launcher);
+        SchemaConnection connection = CreateConnection();
+        SetupProviderFactory(providerFactory, connection, SchemaTestData.CreateSchemaExport());
+
+        ExportResult result = await sut.ExportAsync(
+            connection,
+            directory.Path,
+            CreateProfile(),
+            new ExportResultOptions { OpenOutputFolder = true }
+        );
+
+        launcher.Received(1).Open(result.OutputDirectoryPath);
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenOpenOutputFolderIsRequestedWithoutLauncher_AddsWarningDiagnostic() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory);
+        SchemaConnection connection = CreateConnection();
+        SetupProviderFactory(providerFactory, connection, SchemaTestData.CreateSchemaExport());
+
+        ExportResult result = await sut.ExportAsync(
+            connection,
+            directory.Path,
+            CreateProfile(),
+            new ExportResultOptions { OpenOutputFolder = true }
+        );
+
+        Assert.That(
+            result.Diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("未提供開啟資料夾功能", StringComparison.Ordinal)),
+            Is.True
+        );
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenLauncherFails_AddsWarningDiagnosticAndKeepsExport() {
+        using TempDirectoryScope directory = new();
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
+        launcher.When(x => x.Open(Arg.Any<string>())).Do(_ => throw new InvalidOperationException("no shell"));
+        SchemaExportOrchestrator sut = CreateSubject(providerFactory, launcher);
+        SchemaConnection connection = CreateConnection();
+        SetupProviderFactory(providerFactory, connection, SchemaTestData.CreateSchemaExport());
+
+        ExportResult result = await sut.ExportAsync(
+            connection,
+            directory.Path,
+            CreateProfile(),
+            new ExportResultOptions { OpenOutputFolder = true }
+        );
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(File.Exists(result.OutputFilePath), Is.True);
+            Assert.That(result.Diagnostics.Any(x => x.Message.Contains("no shell", StringComparison.Ordinal)), Is.True);
+        }
+    }
+
     private static void SetupProviderFactory(
         IDatabaseSchemaProviderFactory providerFactory,
         SchemaConnection connection,
@@ -380,12 +443,16 @@ public sealed class SchemaExportOrchestratorTests {
         };
     }
 
-    private static SchemaExportOrchestrator CreateSubject(IDatabaseSchemaProviderFactory providerFactory) {
+    private static SchemaExportOrchestrator CreateSubject(
+        IDatabaseSchemaProviderFactory providerFactory,
+        IOutputFolderLauncher? outputFolderLauncher = null
+    ) {
         return new SchemaExportOrchestrator(
             providerFactory,
             Substitute.For<ILogger<SchemaExportOrchestrator>>(),
             new SchemaSnapshotBuilder(),
-            new SchemaSnapshotDiffService()
+            new SchemaSnapshotDiffService(),
+            outputFolderLauncher
         );
     }
 

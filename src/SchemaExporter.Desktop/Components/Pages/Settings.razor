@@ -1,0 +1,200 @@
+@page "/settings"
+@inject SettingsWorkspace Workspace
+@inject ExportWorkspace ExportWorkspace
+@inject NavigationManager Navigation
+
+<header class="page-header">
+    <h1>設定</h1>
+    <p class="page-subtitle">設定會儲存在 %LocalAppData%\SchemaExporter\appsettings.json，Desktop 與 CLI 共用。</p>
+</header>
+
+@if (isLoading) {
+    <p class="muted">正在載入設定...</p>
+} else if (!Workspace.IsLoaded) {
+    <section class="card">
+        <StatusBanner Message="@(Workspace.ErrorMessage ?? "無法載入設定。")" Kind="StatusKind.Error" />
+        <div class="actions">
+            <button type="button" class="btn" @onclick="LoadAsync">重新載入</button>
+        </div>
+    </section>
+} else {
+    <div class="tabs" role="tablist">
+        @foreach ((SettingsTab Tab, string Label) item in tabs) {
+            <button type="button" role="tab" class="tab @(activeTab == item.Tab ? "active" : "")" aria-selected="@(activeTab == item.Tab)" @onclick="() => activeTab = item.Tab">@item.Label</button>
+        }
+    </div>
+
+    @if (activeTab == SettingsTab.Connections) {
+        <section class="card split">
+            <div class="list-pane">
+                <ul class="list" role="listbox" aria-label="連線">
+                    @foreach (EditableConnection connection in Workspace.Connections) {
+                        <li @key="connection.Id" role="option" aria-selected="@(connection == Workspace.SelectedConnection)" class="@(connection == Workspace.SelectedConnection ? "selected" : "")" @onclick="() => SelectConnection(connection)">
+                            <span>@(string.IsNullOrWhiteSpace(connection.Name) ? "（未命名）" : connection.Name)</span>
+                            <small>@connection.DatabaseType</small>
+                        </li>
+                    }
+                </ul>
+                <div class="actions">
+                    <button type="button" class="btn" @onclick="Workspace.AddConnection">新增</button>
+                    <button type="button" class="btn btn-ghost" @onclick="Workspace.RemoveSelectedConnection" disabled="@(Workspace.SelectedConnection is null)">刪除</button>
+                </div>
+            </div>
+            <div class="detail-pane">
+                @if (Workspace.SelectedConnection is EditableConnection selected) {
+                    <div class="form-grid" @key="selected.Id">
+                        <label for="conn-name">連線名稱</label>
+                        <input id="conn-name" type="text" @bind="selected.Name" @bind:event="oninput" />
+
+                        <label for="conn-type">資料庫類型</label>
+                        <select id="conn-type" @bind="selected.DatabaseType">
+                            @foreach (DatabaseType databaseType in Workspace.DatabaseTypes) {
+                                <option value="@databaseType">@databaseType</option>
+                            }
+                        </select>
+
+                        <label for="conn-string">ConnectionString</label>
+                        <div class="field-row">
+                            <input id="conn-string" type="@(showConnectionString ? "text" : "password")" spellcheck="false" autocomplete="off" @bind="selected.ConnectionString" />
+                            <button type="button" class="btn btn-ghost" @onclick="() => showConnectionString = !showConnectionString">@(showConnectionString ? "隱藏" : "顯示")</button>
+                        </div>
+
+                        <label for="conn-profile">預設 Export Profile</label>
+                        <select id="conn-profile" value="@(selected.ExportProfileName ?? "")" @onchange="e => selected.ExportProfileName = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value.ToString()">
+                            <option value="">（使用第一個設定檔）</option>
+                            @foreach (EditableExportProfile profile in Workspace.Profiles) {
+                                <option value="@profile.Name">@profile.Name</option>
+                            }
+                            @if (selected.ExportProfileName is not null && !Workspace.Profiles.Any(x => string.Equals(x.Name, selected.ExportProfileName, StringComparison.OrdinalIgnoreCase))) {
+                                <option value="@selected.ExportProfileName">@selected.ExportProfileName（不存在）</option>
+                            }
+                        </select>
+                    </div>
+                } else {
+                    <p class="empty">尚未建立連線，請按「新增」。</p>
+                }
+            </div>
+        </section>
+    } else if (activeTab == SettingsTab.Profiles) {
+        <section class="card split">
+            <div class="list-pane">
+                <ul class="list" role="listbox" aria-label="Export Profile">
+                    @foreach (EditableExportProfile profile in Workspace.Profiles) {
+                        <li @key="profile.Id" role="option" aria-selected="@(profile == Workspace.SelectedProfile)" class="@(profile == Workspace.SelectedProfile ? "selected" : "")" @onclick="() => Workspace.SelectedProfile = profile">
+                            <span>@(string.IsNullOrWhiteSpace(profile.Name) ? "（未命名）" : profile.Name)</span>
+                            <small>@(profile.IncludeViews ? "含 View" : "不含 View")</small>
+                        </li>
+                    }
+                </ul>
+                <div class="actions">
+                    <button type="button" class="btn" @onclick="Workspace.AddProfile">新增</button>
+                    <button type="button" class="btn btn-ghost" @onclick="Workspace.RemoveSelectedProfile" disabled="@(Workspace.SelectedProfile is null)">刪除</button>
+                </div>
+            </div>
+            <div class="detail-pane">
+                @if (Workspace.SelectedProfile is EditableExportProfile selected) {
+                    <div class="form-grid" @key="selected.Id">
+                        <label for="profile-name">設定檔名稱</label>
+                        <input id="profile-name" type="text" @bind:get="selected.Name" @bind:set="value => Workspace.RenameProfile(selected, value)" @bind:event="oninput" />
+
+                        <span class="label">View</span>
+                        <label class="check inline"><input type="checkbox" @bind="selected.IncludeViews" /><span>包含資料庫檢視表（View）</span></label>
+
+                        <label for="include-schemas">Include Schemas</label>
+                        <textarea id="include-schemas" rows="3" spellcheck="false" @bind="selected.IncludeSchemasText" placeholder="每行一筆 pattern；留空表示全部"></textarea>
+
+                        <label for="exclude-schemas">Exclude Schemas</label>
+                        <textarea id="exclude-schemas" rows="3" spellcheck="false" @bind="selected.ExcludeSchemasText" placeholder="每行一筆 pattern"></textarea>
+
+                        <label for="include-objects">Include Objects</label>
+                        <textarea id="include-objects" rows="3" spellcheck="false" @bind="selected.IncludeObjectsText" placeholder="每行一筆 pattern；留空表示全部"></textarea>
+
+                        <label for="exclude-objects">Exclude Objects</label>
+                        <textarea id="exclude-objects" rows="3" spellcheck="false" @bind="selected.ExcludeObjectsText" placeholder="每行一筆 pattern"></textarea>
+                    </div>
+                } else {
+                    <p class="empty">尚未建立設定檔，匯出時會使用不篩選的 Default。</p>
+                }
+            </div>
+        </section>
+    } else {
+        <section class="card">
+            <p class="muted">Redaction 在寫出任何檔案前遮罩敏感 metadata，Excel、Markdown、JSON 與 Snapshot 都會套用。</p>
+            <div class="form-grid">
+                <span class="label">啟用</span>
+                <label class="check inline"><input type="checkbox" @bind="Workspace.RedactionEnabled" /><span>匯出前遮罩敏感資訊</span></label>
+
+                <label for="replacement">替代文字</label>
+                <input id="replacement" type="text" class="narrow" @bind="Workspace.RedactionReplacementText" />
+
+                <label for="name-patterns">敏感名稱 Pattern</label>
+                <textarea id="name-patterns" rows="6" spellcheck="false" @bind="Workspace.SensitiveNamePatternsText" placeholder="每行一筆 Regex，比對欄位與物件名稱"></textarea>
+
+                <label for="text-patterns">敏感內容 Pattern</label>
+                <textarea id="text-patterns" rows="4" spellcheck="false" @bind="Workspace.SensitiveTextPatternsText" placeholder="每行一筆 Regex，比對描述、預設值與程式定義"></textarea>
+            </div>
+        </section>
+    }
+
+    @if (Workspace.ErrorMessage is not null) {
+        <StatusBanner Message="@Workspace.ErrorMessage" Kind="StatusKind.Warning" />
+    }
+
+    <div class="actions page-actions">
+        <button type="button" class="btn btn-ghost" @onclick="CancelAsync" disabled="@isSaving">取消</button>
+        <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@isSaving">儲存</button>
+    </div>
+}
+
+@code {
+    private static readonly (SettingsTab Tab, string Label)[] tabs = [
+        (SettingsTab.Connections, "Connections"),
+        (SettingsTab.Profiles, "Export Profiles"),
+        (SettingsTab.Redaction, "Redaction")
+    ];
+
+    private SettingsTab activeTab = SettingsTab.Connections;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool showConnectionString;
+
+    protected override async Task OnInitializedAsync() {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() {
+        isLoading = true;
+        await Workspace.LoadAsync();
+        isLoading = false;
+    }
+
+    private void SelectConnection(EditableConnection connection) {
+        Workspace.SelectedConnection = connection;
+        showConnectionString = false;
+    }
+
+    private async Task SaveAsync() {
+        isSaving = true;
+        try {
+            if (!await Workspace.SaveAsync()) {
+                return;
+            }
+
+            await ExportWorkspace.ReloadSettingsAsync();
+            Navigation.NavigateTo("");
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    private async Task CancelAsync() {
+        await Workspace.LoadAsync();
+        Navigation.NavigateTo("");
+    }
+
+    private enum SettingsTab {
+        Connections,
+        Profiles,
+        Redaction
+    }
+}

@@ -29,6 +29,7 @@ public sealed partial class SchemaExportOrchestrator {
     private readonly ILogger<SchemaExportOrchestrator> logger;
     private readonly SchemaSnapshotBuilder snapshotBuilder;
     private readonly SchemaSnapshotDiffService diffService;
+    private readonly IOutputFolderLauncher? outputFolderLauncher;
 
     /// <summary>
     /// 初始化 <see cref="SchemaExportOrchestrator"/> 類別的新執行個體。
@@ -53,6 +54,23 @@ public sealed partial class SchemaExportOrchestrator {
         ILogger<SchemaExportOrchestrator> logger,
         SchemaSnapshotBuilder snapshotBuilder,
         SchemaSnapshotDiffService diffService
+    ) : this(providerFactory, logger, snapshotBuilder, diffService, null) {
+    }
+
+    /// <summary>
+    /// 初始化 <see cref="SchemaExportOrchestrator"/> 類別的新執行個體，並指定開啟輸出資料夾的 Host 行為。
+    /// </summary>
+    /// <param name="providerFactory">資料庫 schema provider 工廠。</param>
+    /// <param name="logger">記錄器。</param>
+    /// <param name="snapshotBuilder">Schema snapshot 建立器。</param>
+    /// <param name="diffService">Schema snapshot 差異比對服務。</param>
+    /// <param name="outputFolderLauncher">開啟輸出資料夾的 Host 實作；<see langword="null"/> 表示目前 Host 不支援，要求開啟時只記錄警告。</param>
+    public SchemaExportOrchestrator(
+        IDatabaseSchemaProviderFactory providerFactory,
+        ILogger<SchemaExportOrchestrator> logger,
+        SchemaSnapshotBuilder snapshotBuilder,
+        SchemaSnapshotDiffService diffService,
+        IOutputFolderLauncher? outputFolderLauncher
     ) {
         ArgumentNullException.ThrowIfNull(providerFactory);
         ArgumentNullException.ThrowIfNull(logger);
@@ -63,6 +81,7 @@ public sealed partial class SchemaExportOrchestrator {
         this.logger = logger;
         this.snapshotBuilder = snapshotBuilder;
         this.diffService = diffService;
+        this.outputFolderLauncher = outputFolderLauncher;
     }
 
     /// <summary>
@@ -794,13 +813,22 @@ public sealed partial class SchemaExportOrchestrator {
         }
     }
 
-    private static void TryOpenOutputFolder(string? outputDirectoryPath, List<ExportDiagnostic> diagnostics) {
+    private void TryOpenOutputFolder(string? outputDirectoryPath, List<ExportDiagnostic> diagnostics) {
         if (string.IsNullOrWhiteSpace(outputDirectoryPath)) {
             return;
         }
 
+        if (outputFolderLauncher is null) {
+            diagnostics.Add(new ExportDiagnostic {
+                Severity = DiagnosticSeverity.Warning,
+                Category = ExportDiagnosticCategory.General,
+                Message = "匯出完成，但目前執行環境未提供開啟資料夾功能。"
+            });
+            return;
+        }
+
         try {
-            Process.Start(new ProcessStartInfo { FileName = outputDirectoryPath, UseShellExecute = true });
+            outputFolderLauncher.Open(outputDirectoryPath);
         } catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) {
             diagnostics.Add(new ExportDiagnostic {
                 Severity = DiagnosticSeverity.Warning,

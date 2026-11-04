@@ -92,8 +92,10 @@ public sealed class SchemaExportRequestResolver {
 
         return new ExportResultOptions {
             UseTimestamp = overrides?.UseTimestamp ?? defaults.UseTimestamp,
-            TimestampFormat = defaults.TimestampFormat,
-            OverwriteStrategy = defaults.OverwriteStrategy,
+            TimestampFormat = string.IsNullOrWhiteSpace(overrides?.TimestampFormat)
+                ? defaults.TimestampFormat
+                : overrides.TimestampFormat.Trim(),
+            OverwriteStrategy = overrides?.OverwriteStrategy ?? defaults.OverwriteStrategy,
             OpenOutputFolder = overrides?.OpenOutputFolder ?? defaults.OpenOutputFolder,
             GenerateManifest = overrides?.GenerateManifest ?? defaults.GenerateManifest,
             GenerateJsonSidecar = overrides?.GenerateJsonSidecar ?? defaults.GenerateJsonSidecar,
