@@ -280,7 +280,7 @@ WebView 內的頁面不直接呼叫 WPF API。訊息框與檔案選擇透過介�
 | `IDialogService` | `WpfDialogService` | 以 `MessageBox` 顯示資訊、警告、錯誤與確認對話框。 |
 | `IFileDialogService` | `WpfFileDialogService` | 以 WPF `OpenFolderDialog` / `OpenFileDialog` 選擇資料夾與檔案。 |
 
-Blazor 事件的延續可能不在 UI 執行緒，`WpfDialogService` 透過 `Application.Current.Dispatcher.Invoke` 在 WPF Dispatcher 上開啟對話框。
+State 類別的延續已回到 Renderer 執行緒（在 BlazorWebView 中即 WPF UI 執行緒），`WpfDialogService` 與 `WpfFileDialogService` 仍透過 `Application.Current.Dispatcher.Invoke` 開啟對話框並以主視窗為擁有者，作為從背景執行緒呼叫時的防護；應用程式已結束、`Application.Current` 為 `null` 時則略過對話框。
 
 ### 外部網址封鎖
 
