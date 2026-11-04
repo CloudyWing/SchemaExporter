@@ -14,7 +14,8 @@
 - `tests\SchemaExporter.Core.IntegrationTests`：Provider integration tests，透過 Testcontainers 啟動資料庫 fixture
 - `tests\SchemaExporter.Infrastructure.Tests`：設定讀寫與相容性測試
 - `tests\SchemaExporter.Cli.Tests`：CLI 參數、命令與子處理程序層級的 EXE 測試
-- `tests\SchemaExporter.Desktop.Tests`：Desktop 匯出頁與設定頁狀態的測試
+- `tests\SchemaExporter.Desktop.Tests`：Desktop 狀態類別的測試，以及以 bUnit 驗證 Razor 元件繪製與互動的測試
+- `tests\SchemaExporter.Desktop.UITests`：以 FlaUI 操作實際 Desktop 視窗、WebView2 內容與原生對話框的冒煙測試
 - `tests\SchemaExporter.ProviderFixtures`：Provider integration tests 使用的 schema fixture scripts
 
 ## 主要功能
@@ -99,6 +100,15 @@ dotnet run --project .\src\SchemaExporter.Desktop\SchemaExporter.Desktop.csproj
 ```
 
 安裝版的 CLI 位於安裝目錄的 `tools\CloudyWing.SchemaExporter.Cli.exe`，Release 也另外提供 CLI 專用 ZIP。
+
+Desktop UI 冒煙測試需要 Windows 桌面 session 與 WebView2 Runtime，預設不執行，需指定分類：
+
+```powershell
+dotnet build .\SchemaExporter.slnx -c Release
+dotnet test .\tests\SchemaExporter.Desktop.UITests\SchemaExporter.Desktop.UITests.csproj -c Release --no-build --filter "TestCategory=DesktopUi"
+```
+
+測試會以暫時的 `LOCALAPPDATA` 啟動 `CloudyWing.SchemaExporter.exe`，不影響使用者設定；失敗時會附上螢幕截圖。要測試其他位置的執行檔時，以 `SCHEMAEXPORTER_DESKTOP_EXE` 環境變數指定路徑。
 
 若要驗證 provider 對實體資料庫的查詢行為，請執行 [Provider Fixture 資料庫](docs/provider-fixtures.md) 說明的 integration test 指令。Integration tests 會透過 Testcontainers 啟動資料庫 fixture。
 

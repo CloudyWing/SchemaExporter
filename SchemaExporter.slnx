@@ -22,5 +22,6 @@
     <Project Path="tests/SchemaExporter.Infrastructure.Tests/SchemaExporter.Infrastructure.Tests.csproj" />
     <Project Path="tests/SchemaExporter.Cli.Tests/SchemaExporter.Cli.Tests.csproj" />
     <Project Path="tests/SchemaExporter.Desktop.Tests/SchemaExporter.Desktop.Tests.csproj" />
+    <Project Path="tests/SchemaExporter.Desktop.UITests/SchemaExporter.Desktop.UITests.csproj" />
   </Folder>
 </Solution>
