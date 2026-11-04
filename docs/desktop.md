@@ -2,7 +2,9 @@
 
 Desktop 版執行檔為 `CloudyWing.SchemaExporter.exe`，以 WPF 視窗承載 Blazor Hybrid 介面（底層為 WebView2），不啟動本機 Web Server。介面分為「匯出」與「設定」兩頁，設定與 CLI 共用 `%LocalAppData%\SchemaExporter\appsettings.json`。
 
-介面採用 MudBlazor 元件，跟隨 Windows 的淺色／深色模式。左側導覽可用 AppBar 的選單按鈕收合。
+介面採用 MudBlazor 元件。左側導覽可用 AppBar 的選單按鈕收合。
+
+AppBar 右側的主題按鈕可選擇「跟隨系統」「淺色」「深色」，選擇後立即套用並儲存在 `%LocalAppData%\SchemaExporter\desktop.json`。這個檔案只供 Desktop 使用，不影響 CLI 與 `appsettings.json`；檔案缺漏或損毀時使用「跟隨系統」。
 
 ## 執行需求
 

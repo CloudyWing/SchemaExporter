@@ -78,6 +78,7 @@ public partial class App : Application {
         services.AddSingleton<ExportWorkspace>();
         services.AddSingleton<SettingsWorkspace>();
         services.AddSingleton<UpdateWorkspace>();
+        services.AddSingleton(new ThemePreference(Path.Combine(AppPaths.UserConfigDirectory, "desktop.json")));
 
         return services.BuildServiceProvider();
     }

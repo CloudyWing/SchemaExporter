@@ -14,6 +14,7 @@
         @if (!string.IsNullOrWhiteSpace(UpdateWorkspace.StatusMessage)) {
             <MudText Typo="Typo.caption" Class="mud-text-secondary update-status">@UpdateWorkspace.StatusMessage</MudText>
         }
+        <ThemeMenu />
     </MudAppBar>
     <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
         <NavMenu IsExporting="@ExportWorkspace.IsExporting" />

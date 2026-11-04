@@ -1,3 +1,6 @@
+@implements IDisposable
+@inject ThemePreference ThemePreference
+
 <MudThemeProvider @ref="themeProvider" Theme="@Theme" IsDarkMode="@isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
@@ -55,24 +58,53 @@
 
     private MudThemeProvider? themeProvider;
     private bool isDarkMode;
+    private bool isSystemDarkMode;
+
+    protected override void OnInitialized() {
+        ThemePreference.Changed += OnThemePreferenceChanged;
+        ApplyThemeMode();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender) {
         if (!firstRender || themeProvider is null) {
             return;
         }
 
-        // 跟隨 Windows 的淺色／深色設定，系統切換時即時更新。
-        isDarkMode = await themeProvider.GetSystemDarkModeAsync();
+        // 取得並監看 Windows 的淺色／深色設定，「跟隨系統」時即時切換。
+        isSystemDarkMode = await themeProvider.GetSystemDarkModeAsync();
         await themeProvider.WatchSystemDarkModeAsync(OnSystemDarkModeChangedAsync);
-        StateHasChanged();
+        if (ApplyThemeMode()) {
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose() {
+        ThemePreference.Changed -= OnThemePreferenceChanged;
     }
 
     private Task OnSystemDarkModeChangedAsync(bool isDark) {
-        if (isDark == isDarkMode) {
-            return Task.CompletedTask;
+        isSystemDarkMode = isDark;
+        return ApplyThemeMode() ? InvokeAsync(StateHasChanged) : Task.CompletedTask;
+    }
+
+    private void OnThemePreferenceChanged() {
+        if (ApplyThemeMode()) {
+            _ = InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // 回傳深色模式是否改變，讓呼叫端只在需要時重新繪製。
+    private bool ApplyThemeMode() {
+        bool next = ThemePreference.Mode switch {
+            ThemeMode.Light => false,
+            ThemeMode.Dark => true,
+            _ => isSystemDarkMode
+        };
+        if (next == isDarkMode) {
+            return false;
         }
 
-        isDarkMode = isDark;
-        return InvokeAsync(StateHasChanged);
+        isDarkMode = next;
+        return true;
     }
 }
