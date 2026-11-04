@@ -85,6 +85,11 @@ internal sealed class CliArguments {
     public string? DiffOutputFormat { get; init; }
 
     /// <summary>
+    /// 取得或設定一個值，用以指出 diff 命令在偵測到差異時是否以 <see cref="CliExitCode.ChangesDetected"/> 結束。
+    /// </summary>
+    public bool DiffFailOnChanges { get; init; }
+
+    /// <summary>
     /// 取得或設定 comment-sql 命令的 schema snapshot 路徑。
     /// </summary>
     public string? CommentSnapshotPath { get; init; }
@@ -289,6 +294,7 @@ internal sealed class CliArguments {
         string? rightSnapshotPath = null;
         string? outputPath = null;
         string? outputFormat = null;
+        bool failOnChanges = false;
 
         for (int index = 0; index < args.Count; index++) {
             string argument = args[index];
@@ -322,6 +328,9 @@ internal sealed class CliArguments {
                         return false;
                     }
                     break;
+                case "--fail-on-changes":
+                    failOnChanges = true;
+                    break;
                 default:
                     errorMessage = $"Unknown argument: {argument}";
                     return false;
@@ -343,7 +352,8 @@ internal sealed class CliArguments {
             LeftSnapshotPath = leftSnapshotPath,
             RightSnapshotPath = rightSnapshotPath,
             DiffOutputPath = outputPath,
-            DiffOutputFormat = outputFormat
+            DiffOutputFormat = outputFormat,
+            DiffFailOnChanges = failOnChanges
         };
         return true;
     }

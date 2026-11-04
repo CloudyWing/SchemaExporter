@@ -56,6 +56,21 @@ public sealed class SchemaSnapshotDiffServiceTests {
         Assert.That(assertedException.Message, Does.Contain("格式無效"));
     }
 
+    [TestCase(false, false)]
+    [TestCase(true, true)]
+    public async Task HasChanges_WhenSnapshotsAreCompared_ReflectsWhetherAnythingChanged(bool includeNameColumnOnRight, bool expected) {
+        using TempDirectoryScope directory = new();
+        SchemaSnapshotDiffService sut = new();
+        string leftSnapshotPath = Path.Combine(directory.Path, "left.snapshot.json");
+        string rightSnapshotPath = Path.Combine(directory.Path, "right.snapshot.json");
+        await SchemaTestData.WriteSnapshotAsync(leftSnapshotPath, objectDescription: "Users", includeNameColumn: false);
+        await SchemaTestData.WriteSnapshotAsync(rightSnapshotPath, objectDescription: "Users", includeNameColumn: includeNameColumnOnRight);
+
+        SchemaDiffDocument diff = await sut.CompareAsync(leftSnapshotPath, rightSnapshotPath);
+
+        Assert.That(diff.HasChanges(), Is.EqualTo(expected));
+    }
+
     [Test]
     [NonParallelizable]
     public async Task CompareAsync_WhenSnapshotPathsAreRelative_ResolvesFromCurrentDirectory() {

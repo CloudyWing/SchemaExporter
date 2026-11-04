@@ -756,6 +756,7 @@ CLI 只有在明確指定 `--open-output-folder` 時才開啟輸出資料夾，�
 | `2` | 匯出或 diff 流程錯誤（`ExportWorkflowException`） |
 | `3` | 未預期例外 |
 | `4` | 使用者以 Ctrl+C 取消；已寫出的檔案可能不完整 |
+| `5` | `diff --fail-on-changes` 偵測到 schema 差異；差異報告仍會輸出 |
 
 ### 單一檔案發布
 

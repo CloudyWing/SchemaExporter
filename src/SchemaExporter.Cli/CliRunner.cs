@@ -155,7 +155,7 @@ internal sealed class CliRunner {
 
         if (string.IsNullOrWhiteSpace(arguments.DiffOutputPath)) {
             Console.WriteLine(diffService.BuildMarkdownReport(diff));
-            return (int)CliExitCode.Success;
+            return ResolveDiffExitCode(arguments, diff);
         }
 
         string outputPath = Path.GetFullPath(arguments.DiffOutputPath.Trim());
@@ -175,7 +175,17 @@ internal sealed class CliRunner {
         }
 
         Console.WriteLine($"Diff written: {outputPath}");
-        return (int)CliExitCode.Success;
+        return ResolveDiffExitCode(arguments, diff);
+    }
+
+    private static int ResolveDiffExitCode(CliArguments arguments, SchemaDiffDocument diff) {
+        if (!arguments.DiffFailOnChanges || !diff.HasChanges()) {
+            return (int)CliExitCode.Success;
+        }
+
+        // 報告已完整輸出，差異訊息寫到 stderr，讓 CI 不必解析報告內容就能判斷。
+        Console.Error.WriteLine("Schema changes detected.");
+        return (int)CliExitCode.ChangesDetected;
     }
 
     private async Task<int> ExecuteCommentSqlAsync(CliArguments arguments, CancellationToken cancellationToken) {
@@ -289,6 +299,7 @@ internal sealed class CliRunner {
         Console.WriteLine("  --right <path>               Required. Current snapshot or schema JSON file.");
         Console.WriteLine("  --output <path>              Optional output file. Defaults to console Markdown.");
         Console.WriteLine("  --format <json|markdown>     Optional output format when --output is provided.");
+        Console.WriteLine("  --fail-on-changes            Exit with code 5 when the snapshots differ (report is still written).");
         Console.WriteLine();
         Console.WriteLine("Comment SQL options (offline: never connects to or queries a database):");
         Console.WriteLine("  --snapshot <path>            Required. Schema snapshot JSON file (provides names and existing comments).");
@@ -303,5 +314,6 @@ internal sealed class CliRunner {
         Console.WriteLine("  2  Expected workflow error (validation, connection, input or output).");
         Console.WriteLine("  3  Unexpected error.");
         Console.WriteLine("  4  Canceled by Ctrl+C; written files may be incomplete.");
+        Console.WriteLine("  5  diff --fail-on-changes found schema changes.");
     }
 }

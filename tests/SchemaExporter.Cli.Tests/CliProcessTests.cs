@@ -162,6 +162,33 @@ public sealed class CliProcessTests {
         }
     }
 
+    [TestCase(true, true, 5)]
+    [TestCase(true, false, 0)]
+    [TestCase(false, true, 0)]
+    public async Task Run_WhenDiffFailOnChangesIsGiven_ReturnsChangesDetectedOnlyWhenSnapshotsDiffer(
+        bool failOnChanges,
+        bool snapshotsDiffer,
+        int expectedExitCode
+    ) {
+        string leftPath = Path.Combine(temporaryDirectory, "left.snapshot.json");
+        string rightPath = Path.Combine(temporaryDirectory, "right.snapshot.json");
+        string outputPath = Path.Combine(temporaryDirectory, "diff.json");
+        await CliRunnerTests.WriteSnapshotAsync(leftPath, includeNameColumn: false);
+        await CliRunnerTests.WriteSnapshotAsync(rightPath, includeNameColumn: snapshotsDiffer);
+        List<string> args = ["diff", "--left", leftPath, "--right", rightPath, "--output", outputPath];
+        if (failOnChanges) {
+            args.Add("--fail-on-changes");
+        }
+
+        CliProcessResult result = await RunCliAsync([.. args]);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ExitCode, Is.EqualTo(expectedExitCode), result.Error);
+            Assert.That(File.Exists(outputPath), Is.True);
+            Assert.That(result.Error.Contains("Schema changes detected.", StringComparison.Ordinal), Is.EqualTo(expectedExitCode == (int)CliExitCode.ChangesDetected));
+        }
+    }
+
     private async Task<CliProcessResult> RunCliAsync(params string[] args) {
         string cliAssemblyPath = Path.Combine(AppContext.BaseDirectory, "CloudyWing.SchemaExporter.Cli.dll");
         ProcessStartInfo startInfo = new() {

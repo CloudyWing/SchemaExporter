@@ -85,6 +85,32 @@ public sealed class CliArgumentsTests {
         }
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void TryParse_WhenDiffFailOnChangesIsToggled_SetsFlag(bool includeFlag) {
+        List<string> args = ["diff", "--left", "a.json", "--right", "b.json"];
+        if (includeFlag) {
+            args.Add("--fail-on-changes");
+        }
+
+        bool result = CliArguments.TryParse(args, out CliArguments? parsedArguments, out _, out _);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.True);
+            Assert.That(parsedArguments?.DiffFailOnChanges, Is.EqualTo(includeFlag));
+        }
+    }
+
+    [Test]
+    public void TryParse_WhenExportGetsDiffOnlyFlag_ReturnsArgumentError() {
+        bool result = CliArguments.TryParse(["export", "--connection", "A", "--fail-on-changes"], out _, out string? errorMessage, out _);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            Assert.That(errorMessage, Does.Contain("--fail-on-changes"));
+        }
+    }
+
     [Test]
     public void RequiresUserConfig_WhenNoArgumentIsGiven_ReturnsFalseBecauseHelpIsShown() {
         Assert.That(CliArguments.RequiresUserConfig([]), Is.False);
