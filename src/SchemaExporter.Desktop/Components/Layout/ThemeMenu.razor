@@ -1,0 +1,37 @@
+@implements IDisposable
+@inject ThemePreference ThemePreference
+
+<MudMenu Icon="@CurrentIcon" Color="Color.Inherit" AriaLabel="切換主題" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
+    @foreach ((ThemeMode Mode, string Label, string Icon) option in Options) {
+        <MudMenuItem Icon="@option.Icon" IconColor="@(option.Mode == ThemePreference.Mode ? Color.Primary : Color.Default)" OnClick="() => ThemePreference.SetModeAsync(option.Mode)">
+            @option.Label
+        </MudMenuItem>
+    }
+</MudMenu>
+@if (ThemePreference.ErrorMessage is not null) {
+    <MudTooltip Text="@ThemePreference.ErrorMessage">
+        <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Warning" Size="Size.Small" />
+    </MudTooltip>
+}
+
+@code {
+    private static readonly (ThemeMode Mode, string Label, string Icon)[] Options = [
+        (ThemeMode.System, "跟隨系統", Icons.Material.Filled.BrightnessAuto),
+        (ThemeMode.Light, "淺色", Icons.Material.Filled.LightMode),
+        (ThemeMode.Dark, "深色", Icons.Material.Filled.DarkMode)
+    ];
+
+    private string CurrentIcon => Options.First(x => x.Mode == ThemePreference.Mode).Icon;
+
+    protected override void OnInitialized() {
+        ThemePreference.Changed += HandleChanged;
+    }
+
+    public void Dispose() {
+        ThemePreference.Changed -= HandleChanged;
+    }
+
+    private void HandleChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}
