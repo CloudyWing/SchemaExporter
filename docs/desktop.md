@@ -1,95 +1,94 @@
-# WPF 版操作說明
+# Desktop 版操作說明
 
-## 畫面欄位說明
+Desktop 版執行檔為 `CloudyWing.SchemaExporter.exe`，以 WPF 視窗承載 Blazor Hybrid 介面（底層為 WebView2），不啟動本機 Web Server。介面分為「匯出」與「設定」兩頁，設定與 CLI 共用 `%LocalAppData%\SchemaExporter\appsettings.json`。
 
-### 連線
+## 執行需求
 
-下拉選單，列出 `appsettings.json` 的 `Schema.Connections` 中所有已設定的連線。
+- Windows 10 或以上。
+- Microsoft Edge WebView2 Runtime。Windows 11 與已更新的 Windows 10 通常已內建；若畫面空白或無法啟動，請安裝 Evergreen 版 WebView2 Runtime。
 
-選擇連線後，畫面會自動切換至該連線的 `ExportProfileName` 所對應的設定檔。若該設定檔不存在，會改用清單中第一筆設定檔，並在狀態列顯示提示訊息。
+---
 
-### 匯出設定檔
+## 匯出頁
 
-下拉選單，列出 `appsettings.json` 的 `Schema.ExportProfiles` 中所有設定檔。
+### 資料庫連線
 
-決定哪些結構描述與物件會被納入匯出，以及是否包含檢視表。各設定檔的詳細欄位說明參閱 [configuration.md](configuration.md)。
+下拉選單，列出 `Schema.Connections` 中的連線，顯示名稱與資料庫類型，不顯示連線字串。
+
+切換連線時，Export Profile 會改為該連線 `ExportProfileName` 指定的設定檔；設定檔不存在時改用第一筆，並在狀態區顯示警告。「管理設定」會切換到設定頁。
+
+### Export Profile
+
+下拉選單，列出 `Schema.ExportProfiles`。決定哪些 Schema 與物件會被納入匯出，以及是否包含檢視表。欄位說明參閱 [configuration.md](configuration.md)。
 
 ### 輸出資料夾
 
-文字欄位，指定 Excel 輸出的目標資料夾路徑。預設值來自 `appsettings.json` 的 `Schema.ExportPath`，可在畫面上直接修改。必須使用絕對路徑。
+指定 Excel 輸出的目標資料夾，預設值來自 `Schema.ExportPath`。「瀏覽」開啟 Windows 資料夾選擇對話框，「開啟」以檔案總管開啟資料夾，資料夾不存在時會先建立。
 
-### 輸出選項
+### 進階選項
 
-勾選欄位，控制本次匯出是否產生 manifest、JSON sidecar、Markdown sidecar、Schema Summary、schema snapshot、是否使用時間戳記，以及完成後是否開啟輸出資料夾。各 artifacts 的命名與用途參閱 [artifacts.md](artifacts.md)。
+預設收合，標題右側會顯示目前會產生的產物，例如「Excel + Summary、Snapshot」。所有既有產物都可在此啟用，命名與用途參閱 [artifacts.md](artifacts.md)。
 
-按下「儲存設定」後，輸出資料夾、連線、匯出設定檔與輸出選項會寫入 `%LocalAppData%\SchemaExporter\appsettings.json`。`比對快照` 不會被持久化，每次啟動都會清空。
+| 區塊 | 選項 |
+| --- | --- |
+| 額外輸出 | Schema Summary、Markdown Sidecar、JSON Sidecar、Schema Snapshot、Manifest。 |
+| 差異比對 | 基準 Snapshot。填入前次匯出的 `.snapshot.json` 後，本次匯出會一併產生 `.diff.json`；留空不比對。 |
+| 檔名與完成後動作 | 是否附加時間戳記與時間戳記格式、檔案已存在時的處理方式（覆寫、附加序號、停止匯出）、完成後是否開啟輸出資料夾。 |
 
-### 比對快照
+「將目前選項存為預設值」會把輸出資料夾、上述選項（基準 Snapshot 除外）以及目前選取的連線與 Profile 寫入設定檔。連線、Profile 與 Redaction 規則以設定檔最新內容為準，不會被覆寫。基準 Snapshot 只對單次匯出有效，每次載入都會清空。
 
-文字欄位，指定前次匯出的 `.snapshot.json` 絕對路徑。填入後，本次匯出完成時會產生 schema diff；留空時不進行比對。
+### 開始匯出與取消
 
----
+「開始匯出」在連線、Profile 與輸出資料夾都已填寫時才可按下。匯出期間表單鎖定、設定頁停用，按鈕改為「取消匯出」。取消後狀態區會提示輸出資料夾可能留有未完成的檔案。
 
-## 操作按鈕
+驗證、連線與輸出錯誤會以 Windows 對話框顯示，訊息中的連線字串密碼會先遮罩。
 
-### 匯出
+### 狀態、結果與診斷
 
-開始執行匯出。按下後畫面進入執行中狀態，連線、設定檔、輸出資料夾欄位鎖定，進度列與狀態訊息開始更新。
-
-此按鈕在以下情況下無法按下：
-
-- 正在執行匯出。
-- 尚未選擇連線或設定檔。
-- 輸出資料夾欄位為空。
-
-### 取消
-
-中止執行中的匯出作業。發送取消訊號後，狀態訊息會顯示「正在取消匯出作業…」，並等待目前步驟安全結束。此按鈕僅在匯出執行中時可按。
-
-### 開啟輸出資料夾
-
-以 Windows 檔案總管開啟輸出資料夾，無論是否剛完成匯出均可使用。若資料夾不存在，會先自動建立再開啟。此按鈕在匯出執行中時無法按下。
-
-### 儲存設定
-
-將主畫面目前的輸出資料夾、連線、匯出設定檔與輸出選項儲存至使用者設定檔。輸出資料夾為空白或匯出執行中時，此按鈕無法按下。
+- 狀態區顯示目前進度訊息與進度列；完成時依有無警告或錯誤顯示不同顏色。
+- 匯出結果列出本次產生的每個檔案與所在資料夾，可直接開啟輸出資料夾。
+- 診斷資訊顯示錯誤、警告、資訊數量；有警告或錯誤時自動展開明細表，欄位說明參閱 [diagnostics.md](diagnostics.md)。
 
 ---
 
-## 狀態區域
+## 設定頁
 
-### 狀態訊息
+設定頁有三個分頁。按下「儲存」會驗證後寫入設定檔並回到匯出頁；驗證失敗時不會寫入任何內容，錯誤訊息顯示在頁面下方。「取消」會捨棄尚未儲存的修改。
 
-顯示目前執行階段的進度訊息，或匯出結果的摘要說明（如「匯出完成，但有 2 個警告，請確認下方診斷資訊。」）。
+設定頁只寫入連線、Export Profile 與 Redaction，輸出資料夾與輸出選項以設定檔最新內容為準。
 
-### 進度列
-
-以百分比呈現目前匯出進度，從 0% 到 100%。
-
-### 輸出檔案路徑
-
-匯出完成後顯示此次產生的 Excel 檔案完整路徑。
-
-### Manifest 檔案路徑
-
-若本次匯出有啟用 `GenerateManifest`，完成後顯示 manifest 檔案的完整路徑。
-
----
-
-## 診斷資訊
-
-匯出完成後，畫面下方會列出本次匯出的診斷項目。每筆診斷包含以下欄位：
+### Connections
 
 | 欄位 | 說明 |
 | --- | --- |
-| 嚴重性 | `資訊`、`警告` 或 `錯誤`。資訊為一般提示，警告表示匯出結果可能不完整，錯誤表示已知問題或無法完成的項目。 |
-| 類別 | 診斷的來源分類。詳細說明參閱 [diagnostics.md](diagnostics.md)。 |
-| 支援層級 | 適用時顯示，說明目前連線資料庫對該功能的支援狀況（`完整支援`、`部分支援`、`不支援`）。 |
-| 受影響物件 | 若診斷與特定資料表或程序有關，顯示其名稱。 |
-| 訊息 | 描述診斷內容的詳細說明。 |
+| 連線名稱 | 顯示於匯出頁，也是 CLI `--connection` 使用的名稱。 |
+| 資料庫類型 | `SqlServer` 或 `Oracle`。 |
+| ConnectionString | 預設以遮罩顯示，按「顯示」才會顯示明文。 |
+| 預設 Export Profile | 從現有 Profile 選擇；選「使用第一個設定檔」則不指定。 |
+
+### Export Profiles
+
+| 欄位 | 說明 |
+| --- | --- |
+| 設定檔名稱 | 修改名稱時，參照舊名稱的連線會一併更新。刪除 Profile 時，參照它的連線會改為不指定。 |
+| View | 是否包含資料庫檢視表。 |
+| Include / Exclude Schemas、Objects | 每行一筆 pattern，空白行與重複項目會自動忽略。 |
+
+### Redaction
+
+| 欄位 | 說明 |
+| --- | --- |
+| 啟用 | 是否在寫出任何檔案前遮罩敏感 metadata。 |
+| 替代文字 | 遮罩後的文字，預設 `[REDACTED]`。 |
+| 敏感名稱 Pattern | 每行一筆 Regex，比對欄位與物件名稱。 |
+| 敏感內容 Pattern | 每行一筆 Regex，比對描述、預設值與程式定義。 |
 
 ---
 
-## 匯出完成對話框
+## 更新
 
-匯出成功後會彈出確認視窗，列出所有產生的檔案路徑，以及診斷資訊的計數摘要。點擊確定關閉視窗後，畫面仍保留診斷清單供查閱。
+啟動後會在背景檢查 GitHub Release 是否有新版本。有新版本時會詢問是否下載並重新啟動；選擇稍後時，側邊欄會顯示提示，下次啟動再詢問。更新不會覆蓋 `%LocalAppData%\SchemaExporter\appsettings.json`。
+
+## 與 CLI 的關係
+
+Desktop 執行檔不再提供 CLI 模式。帶任何命令列引數啟動時會直接以結束代碼 `1` 結束，不開啟視窗。自動化與 AI Agent 請改用 `tools\CloudyWing.SchemaExporter.Cli.exe`，參閱 [cli.md](cli.md)。

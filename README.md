@@ -2,15 +2,19 @@
 
 之前撰寫了好幾個版本的工具，用於從資料庫結構中生成 Schema，但因為認為可能用不到而沒有保留，結果後來又需要使用，所以現在重新撰寫了一個版本來做備份。
 
-目前這個版本整理成共用 Core、WPF 桌面程式和 CLI。平常手動匯出可以用桌面版，要做排程、自動化或 snapshot / diff 時就用 CLI。使用者設定會存放在 `%LocalAppData%\SchemaExporter\appsettings.json`，避免更新時覆蓋連線與匯出設定。
+目前這個版本整理成共用 Core、Blazor Hybrid 桌面程式和獨立的 CLI 執行檔。平常手動匯出可以用桌面版，要做排程、自動化、AI Agent 呼叫或 snapshot / diff 時就用 CLI。使用者設定會存放在 `%LocalAppData%\SchemaExporter\appsettings.json`，避免更新時覆蓋連線與匯出設定。
 
 ## 專案組成
 
-- `src\SchemaExporter`：WPF 桌面程式，帶命令列引數時切換為 CLI 模式
-- `src\SchemaExporter.Core`：核心函式庫，包含 provider、匯出流程、snapshot / diff 與診斷邏輯
+- `src\SchemaExporter.Core`：核心函式庫，包含 provider、匯出流程、snapshot / diff、comment SQL、redaction 與診斷邏輯
+- `src\SchemaExporter.Infrastructure`：Desktop 與 CLI 共用的使用者設定存取、出廠設定範本與開啟資料夾服務
+- `src\SchemaExporter.Desktop`：桌面程式 `CloudyWing.SchemaExporter.exe`，WPF Host 加 BlazorWebView（WebView2）與 Razor Components
+- `src\SchemaExporter.Cli`：命令列程式 `CloudyWing.SchemaExporter.Cli.exe`，不依賴 WPF 與 WebView2
 - `tests\SchemaExporter.Core.Tests`：Core 的 NUnit 測試
 - `tests\SchemaExporter.Core.IntegrationTests`：Provider integration tests，透過 Testcontainers 啟動資料庫 fixture
-- `tests\SchemaExporter.Tests`：WPF、CLI 與設定流程的 NUnit 測試
+- `tests\SchemaExporter.Infrastructure.Tests`：設定讀寫與相容性測試
+- `tests\SchemaExporter.Cli.Tests`：CLI 參數、命令與子處理程序層級的 EXE 測試
+- `tests\SchemaExporter.Desktop.Tests`：Desktop 匯出頁與設定頁狀態的測試
 - `tests\SchemaExporter.ProviderFixtures`：Provider integration tests 使用的 schema fixture scripts
 
 ## 主要功能
@@ -49,7 +53,7 @@
 ### 入門與操作
 
 - [快速入門](docs/getting-started.md)
-- [WPF 版操作說明](docs/wpf.md)
+- [Desktop 版操作說明](docs/desktop.md)
 - [CLI 版操作說明](docs/cli.md)
 - [設定檔說明](docs/configuration.md)
 
@@ -84,11 +88,17 @@ dotnet build .\SchemaExporter.slnx -v minimal
 dotnet test .\SchemaExporter.slnx -v minimal --no-build
 ```
 
-從原始碼直接執行 CLI：
+從原始碼直接執行 CLI 與 Desktop：
 
 ```powershell
-dotnet run --project .\src\SchemaExporter\SchemaExporter.csproj -- export --connection <name>
+dotnet run --project .\src\SchemaExporter.Cli\SchemaExporter.Cli.csproj -- export --connection <name>
 ```
+
+```powershell
+dotnet run --project .\src\SchemaExporter.Desktop\SchemaExporter.Desktop.csproj
+```
+
+安裝版的 CLI 位於安裝目錄的 `tools\CloudyWing.SchemaExporter.Cli.exe`，Release 也另外提供 CLI 專用 ZIP。
 
 若要驗證 provider 對實體資料庫的查詢行為，請執行 [Provider Fixture 資料庫](docs/provider-fixtures.md) 說明的 integration test 指令。Integration tests 會透過 Testcontainers 啟動資料庫 fixture。
 

@@ -4,7 +4,7 @@
 
 - .NET 10.0 SDK 或以上
 - 支援的資料庫：Microsoft SQL Server、Oracle Database
-- （WPF 版）Windows 10 或以上
+- （Desktop 版）Windows 10 或以上，以及 Microsoft Edge WebView2 Runtime
 
 ## 安裝
 
@@ -23,20 +23,22 @@ dotnet build .\SchemaExporter.slnx -v minimal
 
 詳細設定說明參閱 [configuration.md](configuration.md)。
 
-## 使用 WPF 版
+## 使用 Desktop 版
 
-啟動 `SchemaExporter.exe`，介面會自動載入 `appsettings.json` 中的連線與設定檔清單。
+啟動 `CloudyWing.SchemaExporter.exe`，介面會自動載入 `appsettings.json` 中的連線與設定檔清單。沒有連線時，先到「設定」頁新增。
 
-選擇連線與設定檔後，按下「匯出」即可開始。詳細欄位說明參閱 [wpf.md](wpf.md)。
+選擇連線、Export Profile 與輸出資料夾後，按下「開始匯出」即可。詳細欄位說明參閱 [desktop.md](desktop.md)。
 
 ## 使用 CLI 版
 
+CLI 執行檔為安裝目錄 `tools\` 下的 `CloudyWing.SchemaExporter.Cli.exe`，也可從 Release 下載 CLI ZIP。
+
 ```powershell
 # 匯出
-schemaexporter export --connection Key1
+& "<install>\tools\CloudyWing.SchemaExporter.Cli.exe" export --connection Key1
 
 # 比對兩份 snapshot
-schemaexporter diff --left old.snapshot.json --right new.snapshot.json
+& "<install>\tools\CloudyWing.SchemaExporter.Cli.exe" diff --left old.snapshot.json --right new.snapshot.json
 ```
 
 詳細參數說明參閱 [cli.md](cli.md)。
