@@ -78,6 +78,35 @@ public sealed class SchemaExportRequestResolverTests {
         }
     }
 
+    [TestCase("analytics", "Analytics")]
+    [TestCase("Missing", null)]
+    [TestCase("  ", null)]
+    public void FindConnection_WhenNameIsGiven_MatchesIgnoringCase(string name, string? expectedName) {
+        SchemaConnection? result = SchemaExportRequestResolver.FindConnection(CreateOptions(), name);
+
+        Assert.That(result?.Name, Is.EqualTo(expectedName));
+    }
+
+    [Test]
+    public void GetAvailableProfiles_WhenNoProfileIsConfigured_ReturnsDefaultProfile() {
+        SchemaOptions options = new() { ExportPath = @"C:\Exports" };
+
+        IReadOnlyList<ExportProfile> result = SchemaExportRequestResolver.GetAvailableProfiles(options);
+
+        Assert.That(result.Select(x => x.Name), Is.EqualTo(new[] { "Default" }));
+    }
+
+    [TestCase("Explicit", "FromConnection", "Explicit")]
+    [TestCase(" ", "FromConnection", "FromConnection")]
+    [TestCase(null, null, null)]
+    public void SelectProfileName_WhenCalled_PrefersExplicitName(string? requested, string? connectionProfile, string? expected) {
+        SchemaConnection connection = new() { Name = "A", ConnectionString = "x", ExportProfileName = connectionProfile };
+
+        string? result = SchemaExportRequestResolver.SelectProfileName(requested, connection);
+
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
     [Test]
     public void Resolve_WhenNamesAreOmitted_UsesLastSelectedConnectionAndConnectionProfile() {
         SchemaOptions options = CreateOptions();
