@@ -3,35 +3,31 @@
 @inject ExportWorkspace ExportWorkspace
 @inject UpdateWorkspace UpdateWorkspace
 
-<div class="shell">
-    <nav class="sidebar" aria-label="主要功能">
-        <div class="brand">
-            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-                <ellipse cx="14" cy="7" rx="10" ry="4" fill="#cfe0f2" />
-                <path d="M4 7v17c0 2.2 4.5 4 10 4s10-1.8 10-4V7c0 2.2-4.5 4-10 4S4 9.2 4 7z" fill="#f0f6fc" />
-                <path d="M4 13.5c0 2.2 4.5 4 10 4s10-1.8 10-4M4 19c0 2.2 4.5 4 10 4s10-1.8 10-4" fill="none" stroke="#1c5ca0" stroke-width="1.6" />
-                <path d="M21 30c1-6 4-10 10-12-1 6-4 10-10 12z" fill="#ffc43d" />
-            </svg>
-            <span class="brand-text">Schema Exporter</span>
-        </div>
-        <NavLink class="nav-item" href="" Match="NavLinkMatch.All">匯出</NavLink>
-        @if (ExportWorkspace.IsExporting) {
-            <span class="nav-item disabled" title="匯出進行中，完成後才能修改設定。">設定</span>
-        } else {
-            <NavLink class="nav-item" href="settings">設定</NavLink>
+<MudLayout Class="app-layout">
+    <MudAppBar Elevation="0" Color="Color.Default">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       aria-label="開啟或關閉導覽"
+                       OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="app-title">Schema Exporter</MudText>
+        <MudSpacer />
+        @if (!string.IsNullOrWhiteSpace(UpdateWorkspace.StatusMessage)) {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary update-status">@UpdateWorkspace.StatusMessage</MudText>
         }
-        <div class="sidebar-footer">
-            @if (!string.IsNullOrWhiteSpace(UpdateWorkspace.StatusMessage)) {
-                <p class="update-status">@UpdateWorkspace.StatusMessage</p>
-            }
-        </div>
-    </nav>
-    <main class="content">
-        @Body
-    </main>
-</div>
+    </MudAppBar>
+    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
+        <NavMenu IsExporting="@ExportWorkspace.IsExporting" />
+    </MudDrawer>
+    <MudMainContent Class="main-content">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="page-container">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
 @code {
+    private bool drawerOpen = true;
+
     protected override void OnInitialized() {
         ExportWorkspace.Changed += HandleChanged;
         UpdateWorkspace.Changed += HandleChanged;
@@ -47,6 +43,10 @@
     public void Dispose() {
         ExportWorkspace.Changed -= HandleChanged;
         UpdateWorkspace.Changed -= HandleChanged;
+    }
+
+    private void ToggleDrawer() {
+        drawerOpen = !drawerOpen;
     }
 
     private void HandleChanged() {

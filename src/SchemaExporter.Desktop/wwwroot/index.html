@@ -1,20 +1,22 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant-TW">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'" />
     <title>Schema Exporter</title>
     <base href="/" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
     <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
-    <div id="app"><p class="booting">正在啟動...</p></div>
+    <div id="app">正在啟動桌面介面…</div>
     <div id="blazor-error-ui" role="alert">
         畫面發生未預期的錯誤。
         <a href="" class="reload">重新載入</a>
         <button type="button" class="dismiss" aria-label="關閉">×</button>
     </div>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="_framework/blazor.webview.js"></script>
 </body>
 </html>
