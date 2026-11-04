@@ -8,6 +8,7 @@ using CloudyWing.SchemaExporter.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 Console.OutputEncoding = new UTF8Encoding(false);
 
@@ -36,6 +37,8 @@ try {
         });
         logging.SetMinimumLevel(LogLevel.Information);
     });
+    // stdout 只放進度與結果，錯誤等級的記錄改寫到 stderr，讓呼叫端能分開解析。
+    services.Configure<ConsoleLoggerOptions>(options => options.LogToStandardErrorThreshold = LogLevel.Error);
     services.AddSchemaExporterCore(configuration);
     services.AddSchemaExporterInfrastructure();
     services.AddSingleton<CliRunner>();

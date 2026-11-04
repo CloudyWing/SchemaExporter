@@ -106,6 +106,38 @@ public sealed class CliProcessTests {
         }
     }
 
+    [Test]
+    public async Task Run_WhenExportCannotConnect_WritesErrorsOnlyToStandardErrorWithoutPassword() {
+        string userConfigDirectory = Path.Combine(localAppDataDirectory, "SchemaExporter");
+        Directory.CreateDirectory(userConfigDirectory);
+        // 連到不存在的本機埠，連線會立即被拒，不需等待逾時。
+        await File.WriteAllTextAsync(Path.Combine(userConfigDirectory, "appsettings.json"), $$"""
+            {
+              "Schema": {
+                "ExportPath": {{System.Text.Json.JsonSerializer.Serialize(Path.Combine(temporaryDirectory, "exports"))}},
+                "Connections": [
+                  {
+                    "Name": "Broken",
+                    "DatabaseType": "SqlServer",
+                    "ConnectionString": "Server=tcp:127.0.0.1,1;Database=None;User Id=sa;Password=Secret123;Connect Timeout=2;TrustServerCertificate=True"
+                  }
+                ],
+                "ExportProfiles": [ { "Name": "Default" } ]
+              }
+            }
+            """);
+
+        CliProcessResult result = await RunCliAsync("export", "--connection", "Broken");
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ExitCode, Is.EqualTo((int)CliExitCode.WorkflowError));
+            Assert.That(result.Error, Does.Contain("Export failed:"));
+            Assert.That(result.Error, Does.Contain("fail:"));
+            Assert.That(result.Output, Does.Not.Contain("fail:"));
+            Assert.That(result.Output + result.Error, Does.Not.Contain("Secret123"));
+        }
+    }
+
     private async Task<CliProcessResult> RunCliAsync(params string[] args) {
         string cliAssemblyPath = Path.Combine(AppContext.BaseDirectory, "CloudyWing.SchemaExporter.Cli.dll");
         ProcessStartInfo startInfo = new() {
