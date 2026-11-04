@@ -4,6 +4,8 @@ namespace CloudyWing.SchemaExporter.Core.Exporting;
 /// 依應用程式設定與執行時覆寫值解析 schema 匯出請求。
 /// </summary>
 public sealed class SchemaExportRequestResolver {
+    private const string DefaultProfileName = "Default";
+
     /// <summary>
     /// 解析匯出請求所需的連線、設定檔、輸出路徑與輸出選項。
     /// </summary>
@@ -36,21 +38,75 @@ public sealed class SchemaExportRequestResolver {
         };
     }
 
+    /// <summary>
+    /// 依名稱（不分大小寫）尋找連線設定。
+    /// </summary>
+    /// <param name="schemaOptions">Schema 設定。</param>
+    /// <param name="connectionName">連線名稱；空白時回傳 <see langword="null"/>。</param>
+    /// <returns>符合名稱的連線設定；找不到時回傳 <see langword="null"/>。</returns>
+    public static SchemaConnection? FindConnection(SchemaOptions schemaOptions, string? connectionName) {
+        ArgumentNullException.ThrowIfNull(schemaOptions);
+
+        if (string.IsNullOrWhiteSpace(connectionName)) {
+            return null;
+        }
+
+        return schemaOptions.Connections.FirstOrDefault(x =>
+            string.Equals(x.Name, connectionName, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    /// <summary>
+    /// 取得可供選擇的匯出設定檔；設定檔沒有任何 Profile 時提供一個不篩選的 <c>Default</c>。
+    /// </summary>
+    /// <param name="schemaOptions">Schema 設定。</param>
+    /// <returns>可供選擇的匯出設定檔，至少一筆。</returns>
+    public static IReadOnlyList<ExportProfile> GetAvailableProfiles(SchemaOptions schemaOptions) {
+        ArgumentNullException.ThrowIfNull(schemaOptions);
+
+        return schemaOptions.ExportProfiles.Count > 0
+            ? schemaOptions.ExportProfiles
+            : [new ExportProfile { Name = DefaultProfileName }];
+    }
+
+    /// <summary>
+    /// 決定要套用的匯出設定檔名稱：明確指定的名稱優先，其次是連線設定的 <see cref="SchemaConnection.ExportProfileName"/>。
+    /// </summary>
+    /// <param name="requestedProfileName">明確指定的設定檔名稱。</param>
+    /// <param name="connection">目前的連線設定。</param>
+    /// <returns>要套用的設定檔名稱；兩者皆未指定時回傳 <see langword="null"/>，表示使用第一筆設定檔。</returns>
+    public static string? SelectProfileName(string? requestedProfileName, SchemaConnection? connection) {
+        return !string.IsNullOrWhiteSpace(requestedProfileName)
+            ? requestedProfileName
+            : connection?.ExportProfileName;
+    }
+
+    /// <summary>
+    /// 依名稱（不分大小寫）尋找匯出設定檔。
+    /// </summary>
+    /// <param name="profiles">可供選擇的匯出設定檔。</param>
+    /// <param name="profileName">設定檔名稱；空白時回傳 <see langword="null"/>。</param>
+    /// <returns>符合名稱的設定檔；找不到時回傳 <see langword="null"/>。</returns>
+    public static ExportProfile? FindProfile(IReadOnlyList<ExportProfile> profiles, string? profileName) {
+        ArgumentNullException.ThrowIfNull(profiles);
+
+        if (string.IsNullOrWhiteSpace(profileName)) {
+            return null;
+        }
+
+        return profiles.FirstOrDefault(x =>
+            string.Equals(x.Name, profileName, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
     private static SchemaConnection ResolveConnection(SchemaOptions schemaOptions, string? connectionName) {
         string? requestedConnectionName = !string.IsNullOrWhiteSpace(connectionName)
             ? connectionName
             : schemaOptions.LastSelectedConnectionName;
 
         if (!string.IsNullOrWhiteSpace(requestedConnectionName)) {
-            SchemaConnection? matchedConnection = schemaOptions.Connections.FirstOrDefault(x =>
-                string.Equals(x.Name, requestedConnectionName, StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (matchedConnection is not null) {
-                return matchedConnection;
-            }
-
-            throw new ExportValidationException($"找不到名稱為「{requestedConnectionName}」的連線設定。");
+            return FindConnection(schemaOptions, requestedConnectionName)
+                ?? throw new ExportValidationException($"找不到名稱為「{requestedConnectionName}」的連線設定。");
         }
 
         return schemaOptions.Connections.FirstOrDefault()
@@ -62,26 +118,14 @@ public sealed class SchemaExportRequestResolver {
         SchemaConnection connection,
         string? profileName
     ) {
-        string? requestedProfileName = !string.IsNullOrWhiteSpace(profileName)
-            ? profileName
-            : connection.ExportProfileName;
-
-        if (!string.IsNullOrWhiteSpace(requestedProfileName)) {
-            ExportProfile? matchedProfile = schemaOptions.ExportProfiles.FirstOrDefault(x =>
-                string.Equals(x.Name, requestedProfileName, StringComparison.OrdinalIgnoreCase)
-            );
-
-            if (matchedProfile is not null) {
-                return matchedProfile;
-            }
-
-            throw new ExportValidationException($"找不到名稱為「{requestedProfileName}」的匯出設定檔。");
+        IReadOnlyList<ExportProfile> profiles = GetAvailableProfiles(schemaOptions);
+        string? requestedProfileName = SelectProfileName(profileName, connection);
+        if (string.IsNullOrWhiteSpace(requestedProfileName)) {
+            return profiles[0];
         }
 
-        return schemaOptions.ExportProfiles.FirstOrDefault()
-            ?? new ExportProfile {
-                Name = "Default"
-            };
+        return FindProfile(profiles, requestedProfileName)
+            ?? throw new ExportValidationException($"找不到名稱為「{requestedProfileName}」的匯出設定檔。");
     }
 
     private static ExportResultOptions ResolveResultOptions(
