@@ -179,7 +179,7 @@ Desktop 專案使用 `Microsoft.NET.Sdk.Razor` SDK，並同時啟用 WPF：
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <!-- 沿用舊版主程式名稱，維持 Velopack 的 main-exe 與既有安裝的升級路徑。 -->
     <AssemblyName>CloudyWing.SchemaExporter</AssemblyName>
@@ -194,18 +194,21 @@ Desktop 專案使用 `Microsoft.NET.Sdk.Razor` SDK，並同時啟用 WPF：
 
 `AssemblyName` 維持 `CloudyWing.SchemaExporter`，Velopack 的 main exe 與 PackId 都不變，既有安裝可以直接升級。
 
+`TargetFramework` 指定 Windows SDK 版本 `10.0.17763.0`。`Microsoft.Web.WebView2.Wpf` 的 `WebView2CompositionControl` 參考 Windows SDK 投影組件 `Microsoft.Windows.SDK.NET` 與 `WinRT.Runtime`，TFM 只寫 `net10.0-windows` 時建置輸出不含這兩個組件，程式建立主視窗時會因找不到組件而結束。Desktop 的測試專案參考 Desktop 專案，TFM 使用相同的 Windows SDK 版本。
+
 ### WPF 主視窗承載 BlazorWebView
 
-`MainWindow.xaml` 只放一個 `BlazorWebView`，以 `wwwroot\index.html` 為 host page，並把根元件 `App` 掛到 `#app`：
+`MainWindow.xaml` 只放一個 `Grid`（`WebViewHost`），`BlazorWebView` 在 `MainWindow.xaml.cs` 以程式碼建立後加入，以 `wwwroot\index.html` 為 host page，並把根元件 `App` 掛到 `#app`。控制項不在 XAML 宣告，白屏防護需要時才能建立新的控制項取代舊的：
 
-```xml
-<blazor:BlazorWebView x:Name="BlazorWebView"
-                      HostPage="wwwroot\index.html">
-    <blazor:BlazorWebView.RootComponents>
-        <blazor:RootComponent Selector="#app"
-                              ComponentType="{x:Type components:App}" />
-    </blazor:BlazorWebView.RootComponents>
-</blazor:BlazorWebView>
+```csharp
+BlazorWebView view = new() {
+    HostPage = @"wwwroot\index.html",
+    Services = serviceProvider
+};
+view.RootComponents.Add(new RootComponent {
+    Selector = "#app",
+    ComponentType = typeof(Components.App)
+});
 ```
 
 `App.xaml.cs` 建立 DI 容器時註冊 `AddWpfBlazorWebView()`，`MainWindow` 再把同一個 `IServiceProvider` 指定給 `BlazorWebView.Services`，Razor Component 才能以 `@inject` 取得服務。開發者工具只在 DEBUG 組態註冊：
@@ -216,6 +219,43 @@ services.AddWpfBlazorWebView();
 services.AddBlazorWebViewDeveloperTools();
 #endif
 ```
+
+### 白屏防護
+
+.NET 10 的 WPF `BlazorWebView` 內部固定使用 `WebView2CompositionControl`，以 `GraphicsItemD3DImage` 擷取 WebView2 畫面再寫進 `D3DImage`。D3D 裝置遺失（鎖定畫面、螢幕休眠、遠端桌面、顯示設定變更或顯示卡驅動重設）後，擷取用的 back buffer 不會重建，WPF 只剩白底。此時 WebView2 子程序仍在執行，不會觸發 `CoreWebView2.ProcessFailed`。
+
+`Hosting/` 下的類別以公開 API 處理這個問題，條件與 AiAccountManager 一致：
+
+| 類別 | 職責 |
+| --- | --- |
+| `WebViewRecoveryCoordinator` | 訂閱 `SystemEvents.SessionSwitch`（解除鎖定）、`PowerModeChanged`（喚醒）與 `DisplaySettingsChanged`，以 `Dispatcher.BeginInvoke` 切回 UI 執行緒排程重建；視窗關閉時取消訂閱。 |
+| `WebViewRebuildScheduler` | 延遲 3 秒並以最後一次觸發重新計時；`ExportWorkspace.IsExporting` 為 true 時延後到匯出結束。持有重建中旗標，重建期間的觸發記為待處理，重建結束後才重新排程。 |
+| `WebViewReleaser` | 以 5 秒逾時等待舊控制項釋放，逾時或失敗時改為強制釋放，最後一律移除舊控制項。 |
+| `WebViewRoute` | 判定重建前擷取到的路由能否還原。 |
+| `WebViewRouteRestorer` | 在期限內重試把新控制項導回原本的路由，同一次還原只導覽一次。 |
+| `WebViewExceptionPolicy` | 判定 `DispatcherUnhandledException` 是否為 WebView2 圖形管線的已知例外（WebView2Feedback #5792）。 |
+| `WebViewRecoveryLog` | 記錄觸發、延後、重建各步驟的結果與被攔下的例外。 |
+
+`MainWindow.RebuildWebViewAsync` 依下列順序重建：
+
+1. 透過舊控制項的 `TryDispatchAsync` 讀取 `NavigationManager` 目前的相對路徑（含 query string），最多等 1 秒。取不到或為首頁時，重建後停在首頁。
+2. 建立新的 `BlazorWebView` 加入 `WebViewHost`，疊在舊控制項上方，再把舊控制項設為 `Collapsed`。畫面不會出現空檔。
+3. 以 5 秒逾時等待舊控制項的 `DisposeAsync()`。`BlazorWebView.DisposeAsync()` 在實機上常常不會完成，此時以 `VisualTreeHelper` 找出內部的 `WebView2CompositionControl` 直接呼叫 `Dispose()`，避免每次重建殘留一個 renderer 程序。
+4. 從 `WebViewHost` 移除舊控制項。
+5. 新控制項初始化完成後以 `NavigationManager.NavigateTo` 導回原本的路由。`TryDispatchAsync` 會等待 renderer 的前置工作，renderer 卡住時可能不會完成，因此整個還原以單一 10 秒期限計算，每次派送最多等 1 秒，間隔 100 毫秒重試，最多 50 次。逾時後才執行到的派送會先確認還原尚未結束、控制項仍是目前的控制項，同一次還原只導覽一次。
+
+重建中旗標涵蓋上述全部步驟，在 `finally` 解除。`ExportWorkspace` 等 State 類別以 Singleton 註冊，重建後畫面狀態不會遺失；元件自己的區域狀態會重設。
+
+未處理例外只在下列條件全部成立時才標記為已處理，並排程一次重建：
+
+- 例外本身或 `InnerException` 鏈中有 `ArgumentException` 或 `COMException`，且鏈中沒有 `FileNotFoundException`、`FileLoadException`、`TypeLoadException`、`BadImageFormatException`。組件載入失敗一律讓程式照常結束。
+- 該例外的堆疊略過 `System.Runtime.InteropServices.Marshal` 的 frame 後，第一個 frame 的最外層宣告型別是 `Microsoft.Web.WebView2.Wpf.GraphicsItemD3DImage` 或 `Microsoft.Web.WebView2.Wpf.Direct3DHelper`。
+- 畫面已經成功渲染過一次（`CoreWebView2.NavigationCompleted` 的 `IsSuccess` 為 true）。
+- 60 秒內攔下的次數未超過 3 次。
+
+記錄檔位於 `%LocalAppData%\SchemaExporter\logs\webview-recovery.log`，每行一筆 UTC 時間與事件，超過 1 MB 時改名為 `webview-recovery.log.1`。DEBUG 組態可在視窗內按 Ctrl+Shift+F12 手動觸發重建。
+
+拔除外接螢幕時 `WebView2CompositionControl` 可能在原生層卡住（WebView2Feedback #5774），這種情況 UI 執行緒無法執行重建，不在防護範圍內。上游修正後即可移除 `Hosting/` 下的白屏防護。
 
 ### Razor Component 結構
 
