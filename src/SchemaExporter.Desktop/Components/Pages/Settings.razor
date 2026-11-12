@@ -1,7 +1,9 @@
 @page "/settings"
+@implements IDisposable
 @inject SettingsWorkspace Workspace
 @inject ExportWorkspace ExportWorkspace
 @inject NavigationManager Navigation
+@inject ThemePreference ThemePreference
 
 <MudStack Spacing="4" Class="page-stack">
     <div class="page-heading">
@@ -11,6 +13,20 @@
             <MudText Typo="Typo.body2" Class="mud-text-secondary settings-file-hint" tabindex="0">Desktop 與命令列工具共用這份設定。</MudText>
         </MudTooltip>
     </div>
+
+    <MudPaper Elevation="0" Outlined="true" Class="content-card">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">外觀</MudText>
+            <MudSelect T="ThemeMode" Label="主題" Value="@ThemePreference.Mode" ValueChanged="ThemePreference.SetModeAsync" HelperText="選擇後立即套用，不需按「儲存」。">
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.System">跟隨系統</MudSelectItem>
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.Light">淺色</MudSelectItem>
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.Dark">深色</MudSelectItem>
+            </MudSelect>
+            @if (ThemePreference.ErrorMessage is not null) {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">@ThemePreference.ErrorMessage</MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
 
     @if (isLoading) {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
@@ -145,7 +161,16 @@
     private bool showConnectionString;
 
     protected override async Task OnInitializedAsync() {
+        ThemePreference.Changed += HandleThemeChanged;
         await LoadAsync();
+    }
+
+    public void Dispose() {
+        ThemePreference.Changed -= HandleThemeChanged;
+    }
+
+    private void HandleThemeChanged() {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadAsync() {

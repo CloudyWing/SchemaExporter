@@ -123,6 +123,19 @@ internal sealed class DesktopAppSession : IDisposable {
     }
 
     /// <summary>
+    /// 在主視窗中等待指定名稱與控制項類型的元素出現，用於同名的文字與控制項並存時。
+    /// </summary>
+    public AutomationElement WaitForElement(string name, FlaUI.Core.Definitions.ControlType controlType, TimeSpan? timeout = null) {
+        RetryResult<AutomationElement?> result = Retry.WhileNull(
+            () => MainWindow.FindFirstDescendant(Conditions.ByName(name).And(Conditions.ByControlType(controlType))),
+            timeout ?? DefaultTimeout,
+            TimeSpan.FromMilliseconds(250)
+        );
+
+        return result.Result ?? throw new AssertionException($"找不到名稱為「{name}」的 {controlType} 元素。");
+    }
+
+    /// <summary>
     /// 等待指定名稱的按鈕出現且可以按下。
     /// </summary>
     public Button WaitForEnabledButton(string name, TimeSpan? timeout = null) {

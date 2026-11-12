@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 
@@ -101,13 +102,14 @@ public sealed class DesktopSmokeTests {
     }
 
     [Test]
-    public void ThemeMenu_WhenDarkIsSelected_PersistsPreference() {
+    public void SettingsTheme_WhenDarkIsSelected_PersistsPreference() {
         Session.Launch();
+        Session.WaitForEnabledButton("開始匯出");
 
-        // MudMenu 的觸發按鈕在 UI Automation 只提供 ExpandCollapse 模式；改用模式操作而非滑鼠點擊，
-        // 滑鼠點擊在視窗不在前景時會落到其他視窗。
-        Session.WaitForEnabledButton("切換主題").Patterns.ExpandCollapse.Pattern.Expand();
-        Session.WaitForElement("深色").AsMenuItem().Invoke();
+        // 一律以 UI Automation 模式操作而非滑鼠或鍵盤輸入，輸入會在視窗不在前景時落到其他視窗。
+        Session.WaitForElement("設定", ControlType.Hyperlink).Patterns.Invoke.Pattern.Invoke();
+        Session.WaitForElement("主題", ControlType.ComboBox).Patterns.ExpandCollapse.Pattern.Expand();
+        Session.WaitForElement("深色", ControlType.ListItem).Patterns.Invoke.Pattern.Invoke();
 
         string preferencePath = Path.Combine(Session.UserConfigDirectory, "desktop.json");
         bool persisted = FlaUI.Core.Tools.Retry.WhileFalse(

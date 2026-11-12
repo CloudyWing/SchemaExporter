@@ -51,7 +51,9 @@ internal sealed class ComponentTestHost : IDisposable {
         ));
         Context.Services.AddSingleton(new SettingsWorkspace(SettingsService, Protector));
         Context.Services.AddSingleton(new UpdateWorkspace(Substitute.For<IUpdateService>(), DialogService));
-        Context.Services.AddSingleton(new ThemePreference(Path.Combine(directory.Path, "desktop.json")));
+        ThemePreferenceFilePath = Path.Combine(directory.Path, "desktop.json");
+        ThemePreference = new ThemePreference(ThemePreferenceFilePath);
+        Context.Services.AddSingleton(ThemePreference);
     }
 
     public BunitContext Context { get; }
@@ -63,6 +65,10 @@ internal sealed class ComponentTestHost : IDisposable {
     public IDialogService DialogService { get; }
 
     public IConnectionStringProtector Protector { get; }
+
+    public ThemePreference ThemePreference { get; }
+
+    public string ThemePreferenceFilePath { get; }
 
     public static SchemaOptions CreateOptions(string exportPath, params SchemaConnection[] connections) {
         return new SchemaOptions {
