@@ -1,8 +1,10 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using CloudyWing.SchemaExporter.Core;
 using CloudyWing.SchemaExporter.Core.Exporting;
+using CloudyWing.SchemaExporter.Desktop.Hosting;
 using CloudyWing.SchemaExporter.Desktop.Services;
 using CloudyWing.SchemaExporter.Desktop.State;
 using CloudyWing.SchemaExporter.Infrastructure;
@@ -20,6 +22,7 @@ namespace CloudyWing.SchemaExporter.Desktop;
 /// </summary>
 public partial class App : Application {
     private ServiceProvider? serviceProvider;
+    private WebViewRecoveryCoordinator? recoveryCoordinator;
 
     /// <summary>
     /// 初始化 <see cref="App"/> 類別的新執行個體，並啟動 Velopack 更新流程。
@@ -44,7 +47,20 @@ public partial class App : Application {
             IConfiguration configuration = SchemaExporterConfiguration.Build(requiresUserConfig: true);
             serviceProvider = BuildServiceProvider(configuration);
 
-            MainWindow mainWindow = new(serviceProvider);
+            ExportWorkspace exportWorkspace = serviceProvider.GetRequiredService<ExportWorkspace>();
+            WebViewRecoveryLog recoveryLog = new(
+                Path.Combine(AppPaths.UserConfigDirectory, "logs", "webview-recovery.log"),
+                TimeProvider.System
+            );
+            recoveryCoordinator = new WebViewRecoveryCoordinator(
+                Dispatcher,
+                recoveryLog,
+                () => exportWorkspace.IsExporting,
+                TimeProvider.System
+            );
+            DispatcherUnhandledException += HandleDispatcherUnhandledException;
+
+            MainWindow mainWindow = new(serviceProvider, recoveryCoordinator);
             MainWindow = mainWindow;
             mainWindow.Show();
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or JsonException) {
@@ -54,8 +70,17 @@ public partial class App : Application {
     }
 
     protected override void OnExit(ExitEventArgs e) {
+        DispatcherUnhandledException -= HandleDispatcherUnhandledException;
+        recoveryCoordinator?.Dispose();
         serviceProvider?.Dispose();
         base.OnExit(e);
+    }
+
+    private void HandleDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e) {
+        // 只吞 WebView2 圖形資源遺失造成的已知例外，其餘例外維持原本的未處理行為。
+        if (recoveryCoordinator?.TryHandleUnhandledException(e.Exception) == true) {
+            e.Handled = true;
+        }
     }
 
     private static ServiceProvider BuildServiceProvider(IConfiguration configuration) {
