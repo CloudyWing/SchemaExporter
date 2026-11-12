@@ -27,7 +27,7 @@ dotnet build .\SchemaExporter.slnx -v minimal
 
 啟動 `CloudyWing.SchemaExporter.exe`，介面會自動載入 `appsettings.json` 中的連線與設定檔清單。沒有連線時，先到「設定」頁新增。
 
-選擇連線、Export Profile 與輸出資料夾後，按下「開始匯出」即可。詳細欄位說明參閱 [desktop.md](desktop.md)。
+選擇連線、匯出設定檔與輸出資料夾後，按下「開始匯出」即可。詳細欄位說明參閱 [desktop.md](desktop.md)。
 
 ## 使用 CLI 版
 

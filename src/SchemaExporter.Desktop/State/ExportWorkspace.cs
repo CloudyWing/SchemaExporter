@@ -301,7 +301,7 @@ internal sealed class ExportWorkspace {
     /// </summary>
     public void BrowseDiffSourceSnapshot() {
         string? selectedPath = fileDialogService.PickFile(
-            "選擇基準 Snapshot 檔案",
+            "選擇比對基準快照檔案",
             "Schema Snapshot (*.snapshot.json)|*.snapshot.json|All Files (*.*)|*.*",
             string.IsNullOrWhiteSpace(DiffSourceSnapshotPath) ? OutputPath : DiffSourceSnapshotPath
         );

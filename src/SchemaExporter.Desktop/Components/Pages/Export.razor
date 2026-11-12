@@ -5,7 +5,6 @@
 <MudStack Spacing="4" Class="page-stack">
     <div class="page-heading">
         <MudText Typo="Typo.h4">匯出 Schema</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">選擇連線、Export Profile 與輸出資料夾後開始匯出。Excel 是主要產物，其他格式可在進階選項啟用。</MudText>
     </div>
 
     @if (Workspace.LoadError is not null) {
@@ -28,7 +27,7 @@
             </MudSelect>
 
             <MudSelect T="string"
-                       Label="Export Profile"
+                       Label="匯出設定檔"
                        Value="@Workspace.SelectedProfile?.Name"
                        ValueChanged="Workspace.SelectProfile"
                        Disabled="@Workspace.IsExporting">
@@ -80,7 +79,7 @@
                             <MudText Typo="Typo.subtitle2">差異比對</MudText>
                             <div class="field-with-actions">
                                 <MudTextField T="string"
-                                              Label="基準 Snapshot"
+                                              Label="比對基準快照"
                                               @bind-Value="Workspace.DiffSourceSnapshotPath"
                                               Immediate="true"
                                               HelperText="留空表示不比對；指定時輸出 .diff.json"

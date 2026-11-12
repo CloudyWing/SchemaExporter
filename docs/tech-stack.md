@@ -265,8 +265,8 @@ services.AddBlazorWebViewDeveloperTools();
 | `Components/Layout/MainLayout.razor` | 共用版面（`MudLayout`、AppBar 與可收合的 Drawer）；首次繪製後在背景觸發更新檢查。 |
 | `Components/Layout/NavMenu.razor` | 導覽選單；匯出期間停用設定頁。 |
 | `Components/Layout/ThemeMenu.razor` | AppBar 的主題切換選單。 |
-| `Components/Pages/Export.razor` | 匯出頁（`/`），包含連線、Export Profile、進階選項與診斷資訊。 |
-| `Components/Pages/Settings.razor` | 設定頁，分為 Connections、Export Profiles 與 Redaction 三個分頁。 |
+| `Components/Pages/Export.razor` | 匯出頁（`/`），包含連線、匯出設定檔、進階選項與診斷資訊。 |
+| `Components/Pages/Settings.razor` | 設定頁，分為「連線」「匯出設定檔」「敏感資料遮罩」三個分頁。 |
 
 ### UI 元件庫與主題
 

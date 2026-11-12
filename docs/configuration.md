@@ -159,7 +159,7 @@ Desktop 的兩個儲存入口各自只寫入負責的欄位，儲存前會重新
 
 ## Schema.Redaction
 
-控制敏感 metadata 遮罩規則，可在 Desktop 設定頁的 Redaction 分頁編輯。Redaction 預設停用；啟用後會在 Excel、snapshot、JSON sidecar、Markdown sidecar 與 Schema Summary 產生前套用。
+控制敏感 metadata 遮罩規則，可在 Desktop 設定頁的「敏感資料遮罩」分頁編輯。Redaction 預設停用；啟用後會在 Excel、snapshot、JSON sidecar、Markdown sidecar 與 Schema Summary 產生前套用。
 
 Redaction 只處理描述、預設值、routine 簽章與 routine 定義等 metadata 內容，不改寫 schema、object、column、index 或 routine 名稱。
 

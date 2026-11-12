@@ -6,7 +6,10 @@
 <MudStack Spacing="4" Class="page-stack">
     <div class="page-heading">
         <MudText Typo="Typo.h4">設定</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">設定儲存在 %LocalAppData%\SchemaExporter\appsettings.json，Desktop 與 CLI 共用。</MudText>
+        <MudTooltip Text="設定檔位置：%LocalAppData%\SchemaExporter\appsettings.json">
+            @* tabindex 讓鍵盤可以聚焦這段文字，MudTooltip 在聚焦時同樣會顯示設定檔位置。 *@
+            <MudText Typo="Typo.body2" Class="mud-text-secondary settings-file-hint" tabindex="0">Desktop 與命令列工具共用這份設定。</MudText>
+        </MudTooltip>
     </div>
 
     @if (isLoading) {
@@ -19,7 +22,7 @@
     } else {
         <MudPaper Elevation="0" Outlined="true">
             <MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="content-card" @bind-ActivePanelIndex="activeTabIndex">
-                <MudTabPanel Text="Connections" Icon="@Icons.Material.Filled.Storage">
+                <MudTabPanel Text="連線" Icon="@Icons.Material.Filled.Storage">
                     <div class="split">
                         <div class="list-pane">
                             <MudPaper Elevation="0" Outlined="true" Class="list-box">
@@ -44,7 +47,7 @@
                                         }
                                     </MudSelect>
                                     <MudTextField T="string"
-                                                  Label="ConnectionString"
+                                                  Label="連線字串"
                                                   @bind-Value="selected.ConnectionString"
                                                   InputType="@(showConnectionString ? InputType.Text : InputType.Password)"
                                                   Adornment="Adornment.End"
@@ -63,7 +66,7 @@
                                                  Disabled="@selected.IsEnvironmentReference">
                                         <span class="option-label">加密儲存<small>@(selected.IsEnvironmentReference ? "環境變數參照不需加密。" : "以 Windows DPAPI 加密，只有這台電腦的目前使用者能解開；複製設定檔到其他電腦需重新輸入。")</small></span>
                                     </MudCheckBox>
-                                    <MudSelect T="string" Label="預設 Export Profile" Value="@(selected.ExportProfileName ?? "")" ValueChanged="value => selected.ExportProfileName = string.IsNullOrWhiteSpace(value) ? null : value">
+                                    <MudSelect T="string" Label="預設匯出設定檔" Value="@(selected.ExportProfileName ?? "")" ValueChanged="value => selected.ExportProfileName = string.IsNullOrWhiteSpace(value) ? null : value">
                                         <MudSelectItem T="string" Value="@("")">（使用第一個設定檔）</MudSelectItem>
                                         @foreach (EditableExportProfile profile in Workspace.Profiles) {
                                             <MudSelectItem T="string" Value="@profile.Name">@profile.Name</MudSelectItem>
@@ -80,7 +83,7 @@
                     </div>
                 </MudTabPanel>
 
-                <MudTabPanel Text="Export Profiles" Icon="@Icons.Material.Filled.FilterList">
+                <MudTabPanel Text="匯出設定檔" Icon="@Icons.Material.Filled.FilterList">
                     <div class="split">
                         <div class="list-pane">
                             <MudPaper Elevation="0" Outlined="true" Class="list-box">
@@ -100,10 +103,10 @@
                                 <MudStack Spacing="3" @key="selected.Id">
                                     <MudTextField T="string" Label="設定檔名稱" Value="@selected.Name" ValueChanged="value => Workspace.RenameProfile(selected, value)" Immediate="true" />
                                     <MudCheckBox T="bool" @bind-Value="selected.IncludeViews" Color="Color.Primary" Label="包含資料庫檢視表（View）" />
-                                    <MudTextField T="string" Label="Include Schemas" @bind-Value="selected.IncludeSchemasText" Lines="3" HelperText="每行一筆 pattern；留空表示全部" />
-                                    <MudTextField T="string" Label="Exclude Schemas" @bind-Value="selected.ExcludeSchemasText" Lines="3" HelperText="每行一筆 pattern" />
-                                    <MudTextField T="string" Label="Include Objects" @bind-Value="selected.IncludeObjectsText" Lines="3" HelperText="每行一筆 pattern；留空表示全部" />
-                                    <MudTextField T="string" Label="Exclude Objects" @bind-Value="selected.ExcludeObjectsText" Lines="3" HelperText="每行一筆 pattern" />
+                                    <MudTextField T="string" Label="包含的 Schema" @bind-Value="selected.IncludeSchemasText" Lines="3" HelperText="每行一筆比對樣式；留空表示全部" />
+                                    <MudTextField T="string" Label="排除的 Schema" @bind-Value="selected.ExcludeSchemasText" Lines="3" HelperText="每行一筆比對樣式" />
+                                    <MudTextField T="string" Label="包含的物件" @bind-Value="selected.IncludeObjectsText" Lines="3" HelperText="每行一筆比對樣式；留空表示全部" />
+                                    <MudTextField T="string" Label="排除的物件" @bind-Value="selected.ExcludeObjectsText" Lines="3" HelperText="每行一筆比對樣式" />
                                 </MudStack>
                             } else {
                                 <MudText Typo="Typo.body2" Class="mud-text-secondary">尚未建立設定檔，匯出時會使用不篩選的 Default。</MudText>
@@ -112,13 +115,13 @@
                     </div>
                 </MudTabPanel>
 
-                <MudTabPanel Text="Redaction" Icon="@Icons.Material.Filled.Shield">
+                <MudTabPanel Text="敏感資料遮罩" Icon="@Icons.Material.Filled.Shield">
                     <MudStack Spacing="3">
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Redaction 在寫出任何檔案前遮罩敏感 metadata，Excel、Markdown、JSON 與 Snapshot 都會套用。</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">輸出任何檔案前，先遮罩符合規則的名稱與內容。</MudText>
                         <MudCheckBox T="bool" @bind-Value="Workspace.RedactionEnabled" Color="Color.Primary" Label="匯出前遮罩敏感資訊" />
                         <MudTextField T="string" Label="替代文字" @bind-Value="Workspace.RedactionReplacementText" />
-                        <MudTextField T="string" Label="敏感名稱 Pattern" @bind-Value="Workspace.SensitiveNamePatternsText" Lines="6" HelperText="每行一筆 Regex，比對欄位與物件名稱" />
-                        <MudTextField T="string" Label="敏感內容 Pattern" @bind-Value="Workspace.SensitiveTextPatternsText" Lines="4" HelperText="每行一筆 Regex，比對描述、預設值與程式定義" />
+                        <MudTextField T="string" Label="敏感名稱規則" @bind-Value="Workspace.SensitiveNamePatternsText" Lines="6" HelperText="每行一筆 Regex，比對欄位與物件名稱" />
+                        <MudTextField T="string" Label="敏感內容規則" @bind-Value="Workspace.SensitiveTextPatternsText" Lines="4" HelperText="每行一筆 Regex，比對描述、預設值與程式定義" />
                     </MudStack>
                 </MudTabPanel>
             </MudTabs>

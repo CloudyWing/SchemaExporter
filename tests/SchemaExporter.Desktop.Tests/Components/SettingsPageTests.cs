@@ -26,6 +26,15 @@ public sealed class SettingsPageTests {
     }
 
     [Test]
+    public void Render_SettingsFileHint_IsKeyboardFocusable() {
+        using ComponentTestHost host = new(ComponentTestHost.CreateOptions(@"C:\Exports"));
+
+        IRenderedComponent<Settings> cut = RenderLoaded(host);
+
+        Assert.That(cut.Find(".settings-file-hint").GetAttribute("tabindex"), Is.EqualTo("0"));
+    }
+
+    [Test]
     public void Render_WhenConnectionIsPlainText_EnablesEncryptionOption() {
         using ComponentTestHost host = new(ComponentTestHost.CreateOptions(@"C:\Exports"));
 
