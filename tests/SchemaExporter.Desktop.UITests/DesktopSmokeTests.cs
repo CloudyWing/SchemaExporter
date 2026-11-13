@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
-using FlaUI.Core.Input;
-using FlaUI.Core.WindowsAPI;
 
 namespace CloudyWing.SchemaExporter.Desktop.UITests;
 
@@ -78,7 +76,15 @@ public sealed class DesktopSmokeTests {
         Session.WaitForEnabledButton("瀏覽").Invoke();
         Window dialog = Session.WaitForModalWindow();
         Assert.That(dialog.Title, Does.Contain("選擇匯出資料夾"));
-        Keyboard.Press(VirtualKeyShort.ESCAPE);
+        // 以 UI Automation 關閉對話框（等同取消），不送出實體按鍵，避免視窗不在前景時按鍵落到其他程式。
+        dialog.Close();
+        bool closed = FlaUI.Core.Tools.Retry.WhileTrue(
+            () => Session.MainWindow.ModalWindows.Length > 0,
+            TimeSpan.FromSeconds(10),
+            TimeSpan.FromMilliseconds(250),
+            ignoreException: true
+        ).Result;
+        Assert.That(closed, Is.True, "資料夾選擇對話框應已關閉。");
 
         // 對話框關閉後主視窗仍可操作，且「開始匯出」維持可按（輸出資料夾未被清空）。
         Assert.That(Session.WaitForEnabledButton("開始匯出"), Is.Not.Null);
