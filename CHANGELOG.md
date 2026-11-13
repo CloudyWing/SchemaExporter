@@ -1,5 +1,51 @@
 # CHANGELOG
 
+## v0.5.0 (2026-11-13)
+
+### Breaking Changes
+
+- 命令列工具改為獨立的 `tools\CloudyWing.SchemaExporter.Cli.exe`。`CloudyWing.SchemaExporter.exe` 只啟動 Desktop，帶命令列引數啟動時以結束代碼 `1` 結束，不再執行命令列模式。
+
+### New Features
+
+- Desktop 改以 WPF 承載 Blazor Hybrid（`BlazorWebView`）重建，介面使用 MudBlazor，配色與 AiAccountManager 一致，並跟隨 Windows 淺色或深色模式。
+- 設定頁新增「外觀」區塊，可選擇跟隨系統、淺色或深色，選擇後立即套用並保存在 `%LocalAppData%\SchemaExporter\desktop.json`。
+- 連線字串支援 `${env:NAME}` 環境變數參照與 `dpapi:` 開頭的 Windows DPAPI 加密值，設定頁新增「加密儲存」選項。環境變數未設定或加密值無法解開時以驗證錯誤停止，錯誤訊息不含連線字串。
+- Desktop 的提示改在畫面內顯示：匯出驗證失敗、開啟資料夾與儲存預設值的結果以 Snackbar 顯示；連線、輸出與未預期錯誤以對話框顯示；更新以「立即更新」與「稍後」對話框詢問，下載完成後按「確定」才重新啟動。
+- 新增 WebView2 白屏防護，在解除螢幕鎖定、系統喚醒與顯示設定變更後重建 `BlazorWebView` 並回到原頁面，過程記錄於 `%LocalAppData%\SchemaExporter\logs\webview-recovery.log`。
+- `diff` 新增 `--fail-on-changes` 選項，兩份 snapshot 有差異時以結束代碼 `5` 結束。
+- 命令列工具支援 Ctrl+C 取消並以結束代碼 `4` 結束；只有指定 `--open-output-folder` 時才開啟輸出資料夾。
+
+### Changes
+
+- 命令列工具的 Error 等級記錄改寫至 stderr，stdout 只保留進度與執行結果。
+- Desktop 介面文字改為中文：設定頁分頁為「連線」「匯出設定檔」「敏感資料遮罩」，設定檔位置改以提示顯示，可用滑鼠停留或鍵盤聚焦查看。
+- Desktop 圖示更換為 app-icon-kit 的 sql-schema-exporter 圖示。
+- 應用程式啟動失敗時仍以 Windows 對話框顯示。
+
+### Bug Fixes
+
+- 修正儲存設定時遺失敏感資料遮罩設定與上次選取項目，儲存前改為重新讀取最新設定再合併。
+- 修正取消匯出時「正在取消」狀態可能蓋掉「匯出已取消」的結果。
+- 設定檔內容不符合規則時，設定頁仍可載入並修正。
+
+### Testing
+
+- 新增 Desktop 的 bUnit 元件測試，涵蓋匯出頁、設定頁、畫面內提示與更新流程。
+- 新增 `SchemaExporter.Desktop.UITests`，以 FlaUI 啟動實際的 Desktop 執行檔，驗證帶引數啟動、WebView2 內容、資料夾選擇對話框、連線錯誤對話框與主題保存；一律以 UI Automation 操作，不送出實體鍵盤或滑鼠輸入。
+- 新增以子處理程序執行命令列工具的測試，確認錯誤只寫入 stderr 且不含連線字串密碼。
+
+### Build and CI
+
+- Desktop、Desktop.Tests 與 Desktop.UITests 的目標框架改為 `net10.0-windows10.0.17763.0`，`BlazorWebView` 使用的 `WebView2CompositionControl` 需要 Windows SDK 版本。
+- 發佈流程分別建置 Desktop 與命令列工具，命令列工具以 self-contained single-file 封裝至 `tools` 目錄，另提供命令列工具專用 ZIP。
+
+### Documentation
+
+- 新增 `docs/desktop.md` 取代 WPF 版說明，`docs/cli.md` 改用 `CloudyWing.SchemaExporter.Cli.exe` 並補充結束代碼 `4`、`5` 與 `--open-output-folder`。
+- `docs/configuration.md` 補充連線字串的三種保存格式，CI 範例改用環境變數參照與 `--fail-on-changes`。
+- `docs/tech-stack.md` 改寫為 Blazor Hybrid、命令列工具、畫面內提示與 WebView2 白屏防護的說明。
+
 ## v0.4.0 (2026-10-20)
 
 ### New Features
