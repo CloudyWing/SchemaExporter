@@ -1,0 +1,54 @@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText>@Message</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm">@PrimaryText</MudButton>
+        @if (SecondaryText is not null) {
+            <MudButton Variant="Variant.Text" OnClick="Cancel">@SecondaryText</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance? MudDialog { get; set; }
+
+    /// <summary>
+    /// 取得或設定對話框標題。
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// 取得或設定訊息內容。
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// 取得或設定主要動作按鈕的文字；按下後對話框以確認結果關閉。
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string? PrimaryText { get; set; }
+
+    /// <summary>
+    /// 取得或設定次要動作按鈕的文字；<see langword="null"/> 表示只顯示主要動作按鈕。
+    /// </summary>
+    [Parameter]
+    public string? SecondaryText { get; set; }
+
+    private void Confirm() {
+        MudDialog?.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() {
+        MudDialog?.Cancel();
+    }
+}

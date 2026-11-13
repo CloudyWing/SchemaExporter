@@ -10,14 +10,14 @@ namespace CloudyWing.SchemaExporter.Desktop.State;
 /// 保存匯出頁的選取、輸出選項與執行狀態，並協調 Core 匯出流程。
 /// </summary>
 /// <remarks>
-/// 本類別不依賴 WPF 或 Razor，畫面以 <see cref="Changed"/> 事件重新繪製；原生對話框與 Shell 動作透過注入的服務完成。
+/// 本類別不依賴 WPF 或 Razor，畫面以 <see cref="Changed"/> 事件重新繪製；Snackbar 與錯誤對話框、原生檔案選擇對話框與 Shell 動作透過注入的服務完成。
 /// 公開方法應由 Blazor Renderer 執行緒呼叫，內部 await 不使用 <c>ConfigureAwait(false)</c>，讓狀態變更都回到 Renderer 執行緒。
 /// </remarks>
 internal sealed class ExportWorkspace {
     private readonly ISettingsService settingsService;
     private readonly SchemaExportOrchestrator exportOrchestrator;
     private readonly SchemaExportRequestResolver requestResolver;
-    private readonly IDialogService dialogService;
+    private readonly IPromptService promptService;
     private readonly IFileDialogService fileDialogService;
     private readonly IOutputFolderLauncher outputFolderLauncher;
     private SchemaOptions schemaOptions = new() { ExportPath = "" };
@@ -31,28 +31,28 @@ internal sealed class ExportWorkspace {
     /// <param name="settingsService">設定檔存取服務。</param>
     /// <param name="exportOrchestrator">匯出流程協調器。</param>
     /// <param name="requestResolver">匯出請求解析器。</param>
-    /// <param name="dialogService">原生訊息對話框服務。</param>
+    /// <param name="promptService">畫面內提示服務，負責 Snackbar 與錯誤對話框。</param>
     /// <param name="fileDialogService">原生檔案選擇對話框服務。</param>
     /// <param name="outputFolderLauncher">開啟輸出資料夾的 Shell 服務。</param>
     public ExportWorkspace(
         ISettingsService settingsService,
         SchemaExportOrchestrator exportOrchestrator,
         SchemaExportRequestResolver requestResolver,
-        IDialogService dialogService,
+        IPromptService promptService,
         IFileDialogService fileDialogService,
         IOutputFolderLauncher outputFolderLauncher
     ) {
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(exportOrchestrator);
         ArgumentNullException.ThrowIfNull(requestResolver);
-        ArgumentNullException.ThrowIfNull(dialogService);
+        ArgumentNullException.ThrowIfNull(promptService);
         ArgumentNullException.ThrowIfNull(fileDialogService);
         ArgumentNullException.ThrowIfNull(outputFolderLauncher);
 
         this.settingsService = settingsService;
         this.exportOrchestrator = exportOrchestrator;
         this.requestResolver = requestResolver;
-        this.dialogService = dialogService;
+        this.promptService = promptService;
         this.fileDialogService = fileDialogService;
         this.outputFolderLauncher = outputFolderLauncher;
     }
@@ -314,7 +314,7 @@ internal sealed class ExportWorkspace {
     }
 
     /// <summary>
-    /// 執行匯出作業。驗證、連線與輸出錯誤以對話框與狀態訊息回報，不向呼叫端擲回。
+    /// 執行匯出作業。驗證失敗以狀態訊息與警告 Snackbar 回報；連線、輸出與未預期錯誤以狀態訊息與錯誤對話框回報。例外都不向呼叫端擲回。
     /// </summary>
     /// <returns>代表非同步作業的工作。</returns>
     public async Task ExportAsync() {
@@ -340,6 +340,7 @@ internal sealed class ExportWorkspace {
         LastResult = null;
         SetStatus("正在準備匯出...", StatusKind.Info);
         string? connectionStringForRedaction = null;
+        (string Title, string Message)? errorDialog = null;
 
         try {
             ExportOptionOverrides overrides = new() {
@@ -398,25 +399,31 @@ internal sealed class ExportWorkspace {
             SetStatus("匯出已取消，輸出資料夾中可能留有未完成的檔案。", StatusKind.Warning);
         } catch (ExportValidationException ex) {
             SetStatus(ex.Message, StatusKind.Warning);
-            dialogService.ShowWarning("匯出驗證", ex.Message);
+            promptService.Notify(StatusKind.Warning, ex.Message);
         } catch (ExportConnectionException ex) {
             string message = SchemaExportOrchestrator.RedactException(ex, connectionStringForRedaction).Message;
             SetStatus(message, StatusKind.Error);
-            dialogService.ShowError("連線錯誤", message);
+            errorDialog = ("連線錯誤", message);
         } catch (ExportOutputException ex) {
             string message = SchemaExportOrchestrator.RedactException(ex, connectionStringForRedaction).Message;
             SetStatus(message, StatusKind.Error);
-            dialogService.ShowError("輸出錯誤", message);
+            errorDialog = ("輸出錯誤", message);
         } catch (Exception ex) {
             // 桌面程式的最外層互動入口：任何未預期例外都要回到可操作狀態，訊息先遮罩連線字串再顯示。
             string message = SchemaExportOrchestrator.RedactException(ex, connectionStringForRedaction).Message;
             SetStatus("匯出時發生未預期的錯誤。", StatusKind.Error);
-            dialogService.ShowError("未預期錯誤", $"匯出時發生未預期的錯誤：{message}");
+            errorDialog = ("未預期錯誤", $"匯出時發生未預期的錯誤：{message}");
         } finally {
             currentExportCancellation = null;
             IsExporting = false;
             IsCancellationRequested = false;
             NotifyChanged();
+        }
+
+        // 對話框在 IsExporting 重設之後才發出且不等待關閉；WebView 重建在匯出進行中會被延後，
+        // 若等使用者關閉對話框才結束匯出，畫面白屏時使用者無法關閉對話框，重建會被無限延後。
+        if (errorDialog is { } dialog) {
+            _ = promptService.ShowMessageAsync(dialog.Title, dialog.Message);
         }
     }
 
@@ -445,7 +452,7 @@ internal sealed class ExportWorkspace {
     /// </summary>
     public void OpenOutputFolder() {
         if (string.IsNullOrWhiteSpace(OutputPath)) {
-            dialogService.ShowWarning("輸出資料夾", "請先輸入匯出資料夾路徑。");
+            promptService.Notify(StatusKind.Warning, "請先輸入匯出資料夾路徑。");
             return;
         }
 
@@ -454,7 +461,7 @@ internal sealed class ExportWorkspace {
             Directory.CreateDirectory(normalizedPath);
             outputFolderLauncher.Open(normalizedPath);
         } catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception) {
-            dialogService.ShowError("輸出資料夾", $"無法開啟輸出資料夾：{ex.Message}");
+            promptService.Notify(StatusKind.Error, $"無法開啟輸出資料夾：{ex.Message}");
         }
     }
 
@@ -469,7 +476,7 @@ internal sealed class ExportWorkspace {
         try {
             outputFolderLauncher.Open(LastResult.OutputDirectoryPath);
         } catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) {
-            dialogService.ShowError("輸出資料夾", $"無法開啟輸出資料夾：{ex.Message}");
+            promptService.Notify(StatusKind.Error, $"無法開啟輸出資料夾：{ex.Message}");
         }
     }
 
@@ -483,7 +490,7 @@ internal sealed class ExportWorkspace {
         }
 
         if (string.IsNullOrWhiteSpace(OutputPath)) {
-            dialogService.ShowWarning("儲存預設值", "請先輸入匯出資料夾路徑。");
+            promptService.Notify(StatusKind.Warning, "請先輸入匯出資料夾路徑。");
             return false;
         }
 
@@ -516,12 +523,12 @@ internal sealed class ExportWorkspace {
 
             await settingsService.SaveAsync(optionsToSave);
             schemaOptions = optionsToSave;
-            SetStatus("已將目前選項儲存為預設值。", StatusKind.Success);
+            promptService.Notify(StatusKind.Success, "已將目前選項儲存為預設值。");
             return true;
         } catch (ExportValidationException ex) {
-            dialogService.ShowWarning("儲存預設值", ex.Message);
+            promptService.Notify(StatusKind.Warning, ex.Message);
         } catch (Exception ex) when (SettingsErrors.IsRecoverable(ex)) {
-            dialogService.ShowError("儲存預設值", $"無法儲存設定：{ex.Message}");
+            promptService.Notify(StatusKind.Error, $"無法儲存設定：{ex.Message}");
         }
 
         return false;
@@ -529,7 +536,7 @@ internal sealed class ExportWorkspace {
 
     private void ShowValidationWarning(string message) {
         SetStatus(message, StatusKind.Warning);
-        dialogService.ShowWarning("匯出驗證", message);
+        promptService.Notify(StatusKind.Warning, message);
     }
 
     private SchemaConnection? ResolveConnection(string? connectionName) {

@@ -151,7 +151,56 @@ internal sealed class DesktopAppSession : IDisposable {
     }
 
     /// <summary>
-    /// 等待主視窗出現原生的強制回應視窗（MessageBox 或檔案對話框）。
+    /// 等待指定名稱的元素從主視窗消失，例如 WebView 內的對話框被關閉。
+    /// </summary>
+    public void WaitForElementToDisappear(string name, TimeSpan? timeout = null) {
+        TimeSpan wait = timeout ?? DefaultTimeout;
+        RetryResult<bool> result = Retry.WhileNotNull(
+            () => MainWindow.FindFirstDescendant(Conditions.ByName(name)),
+            wait,
+            TimeSpan.FromMilliseconds(250),
+            ignoreException: true
+        );
+
+        if (!result.Result) {
+            throw new AssertionException($"等待 {wait.TotalSeconds:0} 秒後名稱為「{name}」的元素仍存在。");
+        }
+    }
+
+    /// <summary>
+    /// 收集主視窗全部子孫元素的名稱並串接，用於斷言畫面上不含指定字串（例如未遮罩的密碼）。
+    /// </summary>
+    public string CollectDescendantNames() {
+        return string.Join(" ", MainWindow.FindAllDescendants().Select(x => x.Name));
+    }
+
+    /// <summary>
+    /// 取得以指定標題顯示的 WebView 內對話框的文字內容；找不到對話框容器時回傳空清單。
+    /// </summary>
+    /// <remarks>
+    /// 對話框容器以「標題元素的祖先中第一個含名稱為「確定」之按鈕者」判定，最多往上找 8 層。
+    /// </remarks>
+    public IReadOnlyList<string> GetDialogTexts(string title) {
+        AutomationElement? current = MainWindow.FindFirstDescendant(Conditions.ByName(title))?.Parent;
+        for (int level = 0; level < 8 && current is not null; level++) {
+            AutomationElement? confirmButton = current.FindFirstDescendant(
+                Conditions.ByName("確定").And(Conditions.ByControlType(FlaUI.Core.Definitions.ControlType.Button))
+            );
+            if (confirmButton is not null) {
+                return current
+                    .FindAllDescendants(Conditions.ByControlType(FlaUI.Core.Definitions.ControlType.Text))
+                    .Select(x => x.Name)
+                    .ToList();
+            }
+
+            current = current.Parent;
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// 等待主視窗出現原生的強制回應視窗（檔案或資料夾選擇對話框）。
     /// </summary>
     public Window WaitForModalWindow(TimeSpan? timeout = null) {
         RetryResult<Window?> result = Retry.WhileNull(

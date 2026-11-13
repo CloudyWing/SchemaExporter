@@ -7,7 +7,7 @@ using FlaUI.Core.WindowsAPI;
 namespace CloudyWing.SchemaExporter.Desktop.UITests;
 
 /// <summary>
-/// 以 FlaUI 驗證 Desktop 的原生整合：視窗載入、WebView2 內容、原生對話框與啟動引數。
+/// 以 FlaUI 驗證 Desktop 的原生整合：視窗載入、WebView2 內容、WebView 內提示與原生檔案選擇對話框與啟動引數。
 /// </summary>
 /// <remarks>
 /// 需要 Windows 桌面 session 與 WebView2 Runtime，預設不執行，以
@@ -85,20 +85,50 @@ public sealed class DesktopSmokeTests {
     }
 
     [Test]
-    public void StartExport_WhenConnectionFails_ShowsRedactedErrorDialogAndRecovers() {
+    public void StartExport_WhenConnectionFails_ShowsRedactedMudDialogAndRecovers() {
         Session.Launch();
 
         Session.WaitForEnabledButton("開始匯出").Invoke();
-        Window dialog = Session.WaitForModalWindow(TimeSpan.FromSeconds(60));
-        string dialogText = string.Join(" ", dialog.FindAllDescendants().Select(x => x.Name));
+        // 標題與「確定」按鈕同時出現，代表 WebView 內的 MudDialog 已顯示。
+        Session.WaitForElement("連線錯誤");
+        Session.WaitForEnabledButton("確定", TimeSpan.FromSeconds(60));
+        IReadOnlyList<string> dialogTexts = Session.GetDialogTexts("連線錯誤");
+        string allNames = Session.CollectDescendantNames();
 
         using (Assert.EnterMultipleScope()) {
-            Assert.That(dialog.Title, Is.EqualTo("連線錯誤"));
-            Assert.That(dialogText, Does.Not.Contain("UiTestSecret"));
+            // WebView 內的 MudDialog 以 role=dialog 與 aria-modal 對應成 UIA 的強制回應視窗（FrameworkId 為 Chrome），
+            // 因此只檢查沒有來自原生視窗框架的強制回應視窗，確認沒有 WPF MessageBox。
+            Assert.That(
+                Session.MainWindow.ModalWindows.Where(x => !string.Equals(x.Properties.FrameworkId.ValueOrDefault, "Chrome", StringComparison.Ordinal)),
+                Is.Empty,
+                "錯誤應顯示在 WebView 內，不應出現原生 MessageBox。"
+            );
+            Assert.That(allNames, Does.Not.Contain("UiTestSecret"));
+            if (dialogTexts.Count > 0) {
+                Assert.That(string.Join(" ", dialogTexts), Does.Not.Contain("UiTestSecret"));
+                Assert.That(dialogTexts.Any(x => !string.IsNullOrWhiteSpace(x)), Is.True);
+            }
         }
 
-        dialog.Close();
+        Session.WaitForEnabledButton("確定").Invoke();
+        Session.WaitForElementToDisappear("連線錯誤");
         Assert.That(Session.WaitForEnabledButton("開始匯出"), Is.Not.Null, "關閉錯誤對話框後應回到可操作狀態。");
+
+        // 對話框關閉後，匯出頁的狀態區仍保留同一則錯誤訊息。
+        string? message = dialogTexts
+            .Where(x => !string.Equals(x, "連線錯誤", StringComparison.Ordinal))
+            .OrderByDescending(x => x.Length)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(message)) {
+            string prefix = message[..Math.Min(20, message.Length)];
+            bool kept = FlaUI.Core.Tools.Retry.WhileFalse(
+                () => Session.CollectDescendantNames().Contains(prefix, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(10),
+                TimeSpan.FromMilliseconds(250),
+                ignoreException: true
+            ).Result;
+            Assert.That(kept, Is.True, "狀態區應保留對話框顯示過的錯誤訊息。");
+        }
     }
 
     [Test]

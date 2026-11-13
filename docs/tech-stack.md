@@ -86,7 +86,7 @@ updateService.ApplyUpdateAndRestart(update);
 
 ### 完整更新流程（UpdateWorkspace.cs）
 
-`MainLayout.razor` 首次繪製後在背景呼叫 `UpdateWorkspace.CheckForUpdatesAsync()`，不阻擋畫面顯示。每次執行只檢查一次，確認對話框透過 `IDialogService` 顯示：
+`MainLayout.razor` 首次繪製後在背景呼叫 `UpdateWorkspace.CheckForUpdatesAsync()`，不阻擋畫面顯示。每次執行只檢查一次，確認與完成通知透過 `IPromptService` 以 MudDialog 顯示：
 
 ```csharp
 public async Task CheckForUpdatesAsync() {
@@ -100,10 +100,14 @@ public async Task CheckForUpdatesAsync() {
             return;
         }
 
-        if (!dialogService.Confirm(
+        // 詢問期間 WebView 重建時，對話框隨之消失並視同選擇「稍後」，不下載更新。
+        bool accepted = await promptService.ConfirmAsync(
             "有可用更新",
-            $"偵測到新版本 {update.TargetFullRelease.Version}，是否立即下載並重新啟動套用更新？"
-        )) {
+            $"偵測到新版本 {update.TargetFullRelease.Version}，是否立即下載並重新啟動套用更新？",
+            "立即更新",
+            "稍後"
+        );
+        if (!accepted) {
             SetStatus($"有可用更新：{update.TargetFullRelease.Version}，下次啟動時會再次提示。");
             return;
         }
@@ -116,7 +120,16 @@ public async Task CheckForUpdatesAsync() {
             new Progress<int>(percent => SetStatus($"正在下載更新... {percent}%"))
         );
 
-        dialogService.ShowInformation("準備更新", "更新已下載完成，應用程式將重新啟動以套用新版本。");
+        bool acknowledged = await promptService.ShowMessageAsync(
+            "準備更新",
+            "更新已下載完成，應用程式將重新啟動以套用新版本。"
+        );
+        if (!acknowledged) {
+            // 使用者按 ESC，或對話框因 WebView 重建而消失時不重新啟動，更新留待下次啟動再提示。
+            SetStatus($"更新 {update.TargetFullRelease.Version} 已下載，尚未套用，下次啟動時會再次提示。");
+            return;
+        }
+
         updateService.ApplyUpdateAndRestart(update);
     } catch (Exception ex) {
         // 更新檢查是背景輔助功能，網路或安裝狀態異常都不應影響匯出操作。
@@ -262,6 +275,8 @@ services.AddBlazorWebViewDeveloperTools();
 | 檔案 | 說明 |
 | --- | --- |
 | `Components/App.razor` | 根元件：MudBlazor 主題與 Provider、跟隨 Windows 淺色／深色模式，以及 Router（預設版面為 `MainLayout`）。 |
+| `Components/PromptBridge.razor` | 不繪製畫面的元件，放在 `App.razor` 的 MudBlazor Provider 之後；初始化時向 `PromptService` 登錄，把提示轉成 Snackbar 或 `PromptDialog`。 |
+| `Components/PromptDialog.razor` | `PromptBridge` 使用的 MudDialog，顯示標題、訊息，以及「確定」或確認與取消按鈕。 |
 | `Components/Layout/MainLayout.razor` | 共用版面（`MudLayout`、AppBar 與可收合的 Drawer）；首次繪製後在背景觸發更新檢查。 |
 | `Components/Layout/NavMenu.razor` | 導覽選單；匯出期間停用設定頁。 |
 | `Components/Pages/Export.razor` | 匯出頁（`/`），包含連線、匯出設定檔、進階選項與診斷資訊。 |
@@ -310,16 +325,24 @@ State 類別的公開方法由 Razor 事件在 Renderer 執行緒呼叫，內部
 
 元件在 `Dispose` 時務必取消訂閱，否則 Singleton 的 State 類別會一直持有已卸載的元件。
 
-### 原生對話框
+### 畫面內提示與檔案選擇對話框
 
-WebView 內的頁面不直接呼叫 WPF API。訊息框與檔案選擇透過介面注入，由 WPF 實作：
+WebView 內的頁面不直接呼叫 WPF API。畫面內提示與檔案選擇透過介面注入：
 
 | 介面 | 實作 | 用途 |
 | --- | --- | --- |
-| `IDialogService` | `WpfDialogService` | 以 `MessageBox` 顯示資訊、警告、錯誤與確認對話框。 |
+| `IPromptService` | `PromptService`（Singleton）與 `PromptBridge`（每個 BlazorWebView 一份） | 以 MudBlazor 顯示提示。`Notify` 顯示 Snackbar，`ShowMessageAsync` 顯示只有「確定」的 MudDialog，`ConfirmAsync` 顯示有確認與取消的 MudDialog。 |
 | `IFileDialogService` | `WpfFileDialogService` | 以 WPF `OpenFolderDialog` / `OpenFileDialog` 選擇資料夾與檔案。 |
 
-State 類別的延續已回到 Renderer 執行緒（在 BlazorWebView 中即 WPF UI 執行緒），`WpfDialogService` 與 `WpfFileDialogService` 仍透過 `Application.Current.Dispatcher.Invoke` 開啟對話框並以主視窗為擁有者，作為從背景執行緒呼叫時的防護；應用程式已結束、`Application.Current` 為 `null` 時則略過對話框。
+Singleton 的 State 類別無法直接使用 BlazorWebView 範圍內的 MudBlazor 服務。`PromptBridge` 在元件初始化時向 `PromptService` 登錄、釋放時登出，`PromptService` 把提示轉給最後登錄的 `PromptBridge`。
+
+WebView 重建時，舊 WebView 上等待中的對話框會隨之消失，`ShowMessageAsync` 與 `ConfirmAsync` 回傳 `false`。更新確認視同選擇「稍後」，更新完成通知不會重新啟動應用程式。沒有可用的 WebView 時，Snackbar 會被丟棄，對話框同樣回傳 `false`。
+
+匯出錯誤的對話框在匯出結束後才發出且不等待關閉，因此對話框不會延後 WebView 重建。連線與輸出錯誤的完整訊息仍保留在匯出頁的狀態區；未預期錯誤在狀態區只顯示概括訊息，例外內容顯示在對話框中。
+
+State 類別的延續已回到 Renderer 執行緒（在 BlazorWebView 中即 WPF UI 執行緒），`WpfFileDialogService` 仍透過 `Application.Current.Dispatcher.Invoke` 開啟對話框並以主視窗為擁有者，作為從背景執行緒呼叫時的防護；應用程式已結束、`Application.Current` 為 `null` 時則略過對話框。
+
+應用程式啟動流程（讀取設定、建立並顯示主視窗）失敗時沒有 Blazor 畫面可用，維持以 `MessageBox.Show` 顯示。
 
 ### 外部網址封鎖
 
@@ -335,7 +358,7 @@ private static void HandleUrlLoading(object? sender, UrlLoadingEventArgs e) {
 
 ### 為何不使用本機 Web 伺服器
 
-Blazor Server 或 ASP.NET Core 自架的方式需要在本機開啟 HTTP 連接埠，會帶來連接埠衝突、防火牆提示，以及同機其他處理序可以連入的風險。Blazor Hybrid 的元件與 .NET 服務在同一個處理序執行，WebView2 只負責呈現，不需要監聽任何連接埠，也能直接使用 WPF 的原生對話框與 Velopack 更新流程。
+Blazor Server 或 ASP.NET Core 自架的方式需要在本機開啟 HTTP 連接埠，會帶來連接埠衝突、防火牆提示，以及同機其他處理序可以連入的風險。Blazor Hybrid 的元件與 .NET 服務在同一個處理序執行，WebView2 只負責呈現，不需要監聽任何連接埠，也能直接使用 WPF 的檔案選擇對話框與 Velopack 更新流程。
 
 ### 啟動引數
 

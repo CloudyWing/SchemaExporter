@@ -97,7 +97,8 @@ public partial class App : Application {
 #endif
         services.AddSchemaExporterCore(configuration);
         services.AddSchemaExporterInfrastructure();
-        services.AddSingleton<IDialogService, WpfDialogService>();
+        services.AddSingleton<PromptService>();
+        services.AddSingleton<IPromptService>(provider => provider.GetRequiredService<PromptService>());
         services.AddSingleton<IFileDialogService, WpfFileDialogService>();
         services.AddSingleton<IUpdateService, VelopackUpdateService>();
         services.AddSingleton<ExportWorkspace>();

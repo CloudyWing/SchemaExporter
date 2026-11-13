@@ -25,7 +25,7 @@ internal sealed class ComponentTestHost : IDisposable {
         SettingsService.LoadAsync().Returns(_ => Task.FromResult(options));
         SettingsService.ReadAsync().Returns(_ => Task.FromResult(options));
         ProviderFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
-        DialogService = Substitute.For<IDialogService>();
+        Prompt = Substitute.For<IPromptService>();
         Protector = Substitute.For<IConnectionStringProtector>();
         Protector.Protect(Arg.Any<string>()).Returns(callInfo => "dpapi:" + callInfo.Arg<string>());
         IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
@@ -45,12 +45,12 @@ internal sealed class ComponentTestHost : IDisposable {
             SettingsService,
             orchestrator,
             new SchemaExportRequestResolver(),
-            DialogService,
+            Prompt,
             Substitute.For<IFileDialogService>(),
             launcher
         ));
         Context.Services.AddSingleton(new SettingsWorkspace(SettingsService, Protector));
-        Context.Services.AddSingleton(new UpdateWorkspace(Substitute.For<IUpdateService>(), DialogService));
+        Context.Services.AddSingleton(new UpdateWorkspace(Substitute.For<IUpdateService>(), Prompt));
         ThemePreferenceFilePath = Path.Combine(directory.Path, "desktop.json");
         ThemePreference = new ThemePreference(ThemePreferenceFilePath);
         Context.Services.AddSingleton(ThemePreference);
@@ -62,7 +62,7 @@ internal sealed class ComponentTestHost : IDisposable {
 
     public IDatabaseSchemaProviderFactory ProviderFactory { get; }
 
-    public IDialogService DialogService { get; }
+    public IPromptService Prompt { get; }
 
     public IConnectionStringProtector Protector { get; }
 

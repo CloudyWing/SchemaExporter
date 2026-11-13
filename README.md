@@ -15,7 +15,7 @@
 - `tests\SchemaExporter.Infrastructure.Tests`：設定讀寫與相容性測試
 - `tests\SchemaExporter.Cli.Tests`：CLI 參數、命令與子處理程序層級的 EXE 測試
 - `tests\SchemaExporter.Desktop.Tests`：Desktop 狀態類別的測試，以及以 bUnit 驗證 Razor 元件繪製與互動的測試
-- `tests\SchemaExporter.Desktop.UITests`：以 FlaUI 操作實際 Desktop 視窗、WebView2 內容與原生對話框的冒煙測試
+- `tests\SchemaExporter.Desktop.UITests`：以 FlaUI 操作實際 Desktop 視窗、WebView2 內容、WebView 內提示與原生檔案選擇對話框的冒煙測試
 - `tests\SchemaExporter.ProviderFixtures`：Provider integration tests 使用的 schema fixture scripts
 
 ## 主要功能

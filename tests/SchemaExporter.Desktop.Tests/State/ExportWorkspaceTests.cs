@@ -40,8 +40,11 @@ public sealed class ExportWorkspaceTests {
         settingsService.ReadAsync().Returns(Task.FromResult(loadedOptions));
         SchemaOptions? savedOptions = null;
         settingsService.SaveAsync(Arg.Do<SchemaOptions>(options => savedOptions = options)).Returns(Task.CompletedTask);
-        ExportWorkspace sut = CreateWorkspace(settingsService);
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, promptService: promptService);
         await sut.ReloadSettingsAsync();
+        string statusMessageBeforeSave = sut.StatusMessage;
+        StatusKind statusKindBeforeSave = sut.StatusKind;
 
         sut.OutputPath = "  C:\\Exports\\Today  ";
         sut.GenerateManifest = true;
@@ -77,7 +80,10 @@ public sealed class ExportWorkspaceTests {
             Assert.That(savedOptions.LastSelectedProfileName, Is.EqualTo("Compact"));
             Assert.That(savedOptions.Redaction.Enabled, Is.True);
             Assert.That(savedOptions.Redaction.ReplacementText, Is.EqualTo("[MASKED]"));
-            Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Success));
+            Assert.That(sut.StatusMessage, Is.EqualTo(statusMessageBeforeSave));
+            Assert.That(sut.StatusKind, Is.EqualTo(statusKindBeforeSave));
+            promptService.Received(1).Notify(StatusKind.Success, "已將目前選項儲存為預設值。");
+            promptService.Received(1).Notify(Arg.Any<StatusKind>(), Arg.Any<string>());
         }
     }
 
@@ -108,8 +114,8 @@ public sealed class ExportWorkspaceTests {
     public async Task SaveDefaultsAsync_WhenOutputPathIsWhitespace_DoesNotSaveAndWarns() {
         ISettingsService settingsService = Substitute.For<ISettingsService>();
         settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions())));
-        IDialogService dialogService = Substitute.For<IDialogService>();
-        ExportWorkspace sut = CreateWorkspace(settingsService, dialogService: dialogService);
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, promptService: promptService);
         await sut.ReloadSettingsAsync();
         sut.OutputPath = "   ";
 
@@ -118,8 +124,102 @@ public sealed class ExportWorkspaceTests {
         using (Assert.EnterMultipleScope()) {
             Assert.That(result, Is.False);
             await settingsService.DidNotReceive().SaveAsync(Arg.Any<SchemaOptions>());
-            dialogService.Received(1).ShowWarning(Arg.Any<string>(), Arg.Any<string>());
+            promptService.Received(1).Notify(StatusKind.Warning, "請先輸入匯出資料夾路徑。");
+            await promptService.DidNotReceive().ShowMessageAsync(Arg.Any<string>(), Arg.Any<string>());
         }
+    }
+
+    [Test]
+    public async Task SaveDefaultsAsync_WhenSaveFailsValidation_NotifiesWarning() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        SchemaOptions options = CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions());
+        settingsService.LoadAsync().Returns(Task.FromResult(options));
+        settingsService.ReadAsync().Returns(Task.FromResult(options));
+        settingsService.SaveAsync(Arg.Any<SchemaOptions>()).Returns(Task.FromException(new ExportValidationException("設定檔格式無效")));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+
+        bool result = await sut.SaveDefaultsAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            promptService.Received(1).Notify(StatusKind.Warning, "設定檔格式無效");
+            promptService.Received(1).Notify(Arg.Any<StatusKind>(), Arg.Any<string>());
+            await promptService.DidNotReceive().ShowMessageAsync(Arg.Any<string>(), Arg.Any<string>());
+        }
+    }
+
+    [Test]
+    public async Task SaveDefaultsAsync_WhenSaveFailsWithIOException_NotifiesError() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        SchemaOptions options = CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions());
+        settingsService.LoadAsync().Returns(Task.FromResult(options));
+        settingsService.ReadAsync().Returns(Task.FromResult(options));
+        settingsService.SaveAsync(Arg.Any<SchemaOptions>()).Returns(Task.FromException(new IOException("磁碟已滿")));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+
+        bool result = await sut.SaveDefaultsAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result, Is.False);
+            promptService.Received(1).Notify(StatusKind.Error, "無法儲存設定：磁碟已滿");
+            promptService.Received(1).Notify(Arg.Any<StatusKind>(), Arg.Any<string>());
+        }
+    }
+
+    [Test]
+    public async Task OpenOutputFolder_WhenOutputPathIsBlank_NotifiesWarning() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions())));
+        IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, launcher: launcher, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+        sut.OutputPath = " ";
+
+        sut.OpenOutputFolder();
+
+        using (Assert.EnterMultipleScope()) {
+            promptService.Received(1).Notify(StatusKind.Warning, "請先輸入匯出資料夾路徑。");
+            launcher.DidNotReceive().Open(Arg.Any<string>());
+        }
+    }
+
+    [Test]
+    public async Task OpenOutputFolder_WhenLauncherFails_NotifiesError() {
+        using TemporaryDirectory directory = new();
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(directory.Path, null, null, new ExportResultOptions())));
+        IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
+        launcher.When(x => x.Open(Arg.Any<string>())).Do(_ => throw new InvalidOperationException("找不到檔案總管"));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, launcher: launcher, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+
+        sut.OpenOutputFolder();
+
+        promptService.Received(1).Notify(StatusKind.Error, "無法開啟輸出資料夾：找不到檔案總管");
+    }
+
+    [Test]
+    public async Task OpenLastResultFolder_WhenLauncherFails_NotifiesError() {
+        using TemporaryDirectory directory = new();
+        SchemaConnection connection = CreateConnection("Primary", null);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(directory.Path, null, null, new ExportResultOptions(), connections: [connection])));
+        IOutputFolderLauncher launcher = Substitute.For<IOutputFolderLauncher>();
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, CreateProviderFactory(connection), launcher: launcher, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+        await sut.ExportAsync();
+        launcher.When(x => x.Open(Arg.Any<string>())).Do(_ => throw new InvalidOperationException("找不到檔案總管"));
+
+        sut.OpenLastResultFolder();
+
+        promptService.Received(1).Notify(StatusKind.Error, "無法開啟輸出資料夾：找不到檔案總管");
     }
 
     [Test]
@@ -227,7 +327,7 @@ public sealed class ExportWorkspaceTests {
     }
 
     [Test]
-    public async Task ExportAsync_WhenConnectionFails_ShowsRedactedErrorDialog() {
+    public async Task ExportAsync_WhenConnectionFails_ShowsRedactedErrorDialogAfterExportEnds() {
         using TemporaryDirectory directory = new();
         SchemaConnection connection = new() {
             Name = "Primary",
@@ -239,20 +339,122 @@ public sealed class ExportWorkspaceTests {
         IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
         providerFactory.LoadObjectsAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
             .Returns<Task<IReadOnlyList<DatabaseObjectSchema>>>(_ => throw new TimeoutException($"timeout for {connection.ConnectionString}"));
-        IDialogService dialogService = Substitute.For<IDialogService>();
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, providerFactory, promptService);
         string? shownMessage = null;
-        dialogService.ShowError(Arg.Any<string>(), Arg.Do<string>(message => shownMessage = message));
-        ExportWorkspace sut = CreateWorkspace(settingsService, providerFactory, dialogService);
+        bool isExportingWhenShown = true;
+        StatusKind? statusKindWhenShown = null;
+        promptService.ShowMessageAsync("連線錯誤", Arg.Any<string>()).Returns(callInfo => {
+            shownMessage = callInfo.ArgAt<string>(1);
+            isExportingWhenShown = sut.IsExporting;
+            statusKindWhenShown = sut.StatusKind;
+            return Task.FromResult(true);
+        });
         await sut.ReloadSettingsAsync();
 
         await sut.ExportAsync();
 
         using (Assert.EnterMultipleScope()) {
+            await promptService.Received(1).ShowMessageAsync("連線錯誤", Arg.Any<string>());
             Assert.That(shownMessage, Is.Not.Null);
             Assert.That(shownMessage, Does.Not.Contain("Secret123"));
+            Assert.That(isExportingWhenShown, Is.False);
+            Assert.That(statusKindWhenShown, Is.EqualTo(StatusKind.Error));
+            Assert.That(sut.StatusMessage, Does.Not.Contain("Secret123"));
             Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Error));
             Assert.That(sut.IsExporting, Is.False);
             Assert.That(sut.LastResult, Is.Null);
+        }
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenOutputFileAlreadyExistsAndOverwriteFails_ShowsOutputErrorDialog() {
+        using TemporaryDirectory directory = new();
+        SchemaConnection connection = CreateConnection("Primary", null);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions(directory.Path, null, null, new ExportResultOptions(), connections: [connection])));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, CreateProviderFactory(connection), promptService);
+        await sut.ReloadSettingsAsync();
+        sut.UseTimestamp = false;
+        await sut.ExportAsync();
+        promptService.ClearReceivedCalls();
+        sut.OverwriteStrategy = OverwriteStrategy.Fail;
+
+        await sut.ExportAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            await promptService.Received(1).ShowMessageAsync("輸出錯誤", Arg.Is<string>(message => message.Contains("輸出檔案已存在", StringComparison.Ordinal)));
+            Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Error));
+            Assert.That(sut.IsExporting, Is.False);
+        }
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenUnexpectedExceptionOccurs_ShowsUnexpectedErrorDialog() {
+        using TemporaryDirectory directory = new();
+        SchemaConnection connection = new() {
+            Name = "Primary",
+            ConnectionString = "Server=db;Database=App;Password=Secret123;"
+        };
+        SchemaOptions loadedOptions = CreateSchemaOptions(directory.Path, null, null, new ExportResultOptions(), connections: [connection]);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(loadedOptions));
+        IDatabaseSchemaProviderFactory providerFactory = Substitute.For<IDatabaseSchemaProviderFactory>();
+        providerFactory.LoadObjectsAsync(connection.DatabaseType, connection.ConnectionString, Arg.Any<CancellationToken>())
+            .Returns<Task<IReadOnlyList<DatabaseObjectSchema>>>(_ => throw new FormatException($"unexpected {connection.ConnectionString}"));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, providerFactory, promptService);
+        await sut.ReloadSettingsAsync();
+
+        await sut.ExportAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            await promptService.Received(1).ShowMessageAsync(
+                "未預期錯誤",
+                Arg.Is<string>(message => message.StartsWith("匯出時發生未預期的錯誤：", StringComparison.Ordinal) && !message.Contains("Secret123"))
+            );
+            Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Error));
+            Assert.That(sut.StatusMessage, Is.EqualTo("匯出時發生未預期的錯誤。"));
+            Assert.That(sut.IsExporting, Is.False);
+        }
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenOutputPathIsBlank_NotifiesWarningWithoutDialog() {
+        SchemaConnection connection = CreateConnection("Primary", null);
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        settingsService.LoadAsync().Returns(Task.FromResult(CreateSchemaOptions("", null, null, new ExportResultOptions(), connections: [connection])));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, CreateProviderFactory(connection), promptService);
+        await sut.ReloadSettingsAsync();
+        sut.OutputPath = " ";
+
+        await sut.ExportAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Warning));
+            Assert.That(sut.StatusMessage, Is.EqualTo("請輸入匯出資料夾路徑。"));
+            promptService.Received(1).Notify(StatusKind.Warning, "請輸入匯出資料夾路徑。");
+            await promptService.DidNotReceive().ShowMessageAsync(Arg.Any<string>(), Arg.Any<string>());
+        }
+    }
+
+    [Test]
+    public async Task ExportAsync_WhenNoConnectionIsSelected_NotifiesWarningWithoutDialog() {
+        ISettingsService settingsService = Substitute.For<ISettingsService>();
+        SchemaOptions options = CreateSchemaOptions(@"C:\Exports", null, null, new ExportResultOptions(), connections: []);
+        settingsService.LoadAsync().Returns(Task.FromResult(options));
+        IPromptService promptService = Substitute.For<IPromptService>();
+        ExportWorkspace sut = CreateWorkspace(settingsService, promptService: promptService);
+        await sut.ReloadSettingsAsync();
+
+        await sut.ExportAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(sut.StatusKind, Is.EqualTo(StatusKind.Warning));
+            promptService.Received(1).Notify(StatusKind.Warning, "請先選擇連線設定。");
+            await promptService.DidNotReceive().ShowMessageAsync(Arg.Any<string>(), Arg.Any<string>());
         }
     }
 
@@ -337,7 +539,7 @@ public sealed class ExportWorkspaceTests {
     private static ExportWorkspace CreateWorkspace(
         ISettingsService settingsService,
         IDatabaseSchemaProviderFactory? providerFactory = null,
-        IDialogService? dialogService = null,
+        IPromptService? promptService = null,
         IOutputFolderLauncher? launcher = null
     ) {
         IOutputFolderLauncher resolvedLauncher = launcher ?? Substitute.For<IOutputFolderLauncher>();
@@ -352,7 +554,7 @@ public sealed class ExportWorkspaceTests {
             settingsService,
             exportOrchestrator,
             new SchemaExportRequestResolver(),
-            dialogService ?? Substitute.For<IDialogService>(),
+            promptService ?? Substitute.For<IPromptService>(),
             Substitute.For<IFileDialogService>(),
             resolvedLauncher
         );
