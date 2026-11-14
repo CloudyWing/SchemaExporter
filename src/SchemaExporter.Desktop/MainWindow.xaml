@@ -1,0 +1,14 @@
+<Window x:Class="CloudyWing.SchemaExporter.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Schema Exporter"
+        Icon="pack://application:,,,/Assets/SchemaExporter.ico"
+        Width="1100"
+        Height="760"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+    <!-- BlazorWebView 由 MainWindow 的程式碼建立並加入此 Grid，才能在 D3D 裝置遺失後整個重建，
+         重建時新舊控制項會暫時疊在同一儲存格。 -->
+    <Grid x:Name="WebViewHost" />
+</Window>

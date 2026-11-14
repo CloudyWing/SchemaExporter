@@ -4,7 +4,7 @@ using CloudyWing.SchemaExporter.Core.Exporting;
 namespace CloudyWing.SchemaExporter.Core;
 
 /// <summary>
-/// 驗證 schema 匯出設定內容是否可供 WPF、CLI 與 Core 共用流程使用。
+/// 驗證 schema 匯出設定內容是否可供 Desktop、CLI 與 Core 共用流程使用。
 /// </summary>
 public static class SchemaOptionsValidator {
     /// <summary>

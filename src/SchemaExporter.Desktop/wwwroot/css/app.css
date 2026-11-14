@@ -1,0 +1,223 @@
+/* 版面與基礎樣式沿用 CloudyWing 桌面工具（AiAccountManager）的 MudBlazor 慣例。 */
+html,
+body,
+#app {
+    width: 100%;
+    min-width: 320px;
+    min-height: 100%;
+    margin: 0;
+}
+
+body {
+    font-family: Roboto, Helvetica, Arial, "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+}
+
+.app-layout {
+    min-height: 100vh;
+}
+
+.app-title {
+    margin-inline-start: 0.5rem;
+}
+
+.main-content {
+    min-height: 100vh;
+}
+
+.page-container {
+    padding-block: 1.5rem;
+}
+
+.page-stack {
+    width: 100%;
+}
+
+.page-heading {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.content-card {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.navigation-menu {
+    padding: 0.5rem;
+}
+
+.app-theme-light,
+.app-theme-dark {
+    --se-nav-icon: #64748b;
+}
+
+.app-theme-dark {
+    --se-nav-icon: #94a3b8;
+}
+
+.navigation-menu {
+    --mud-palette-drawer-icon: var(--se-nav-icon);
+}
+
+.mud-button-root,
+.mud-icon-button,
+.mud-nav-link {
+    min-height: 44px;
+}
+
+.mud-button-root {
+    min-width: 44px;
+}
+
+.update-status {
+    max-width: 40ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 欄位旁的操作按鈕與輸入框底線對齊。 */
+.field-with-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.field-with-actions > .mud-input-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    width: 100%;
+}
+
+.option-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0.5rem 1.5rem;
+    align-items: start;
+}
+
+.option-label {
+    display: grid;
+}
+
+.option-label small {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.75rem;
+}
+
+.primary-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid var(--mud-palette-divider);
+}
+
+.card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.artifact-label {
+    width: 9rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.artifact-name {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+.path {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+.diagnostic-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.diagnostics-table .mud-table-container {
+    max-height: 22rem;
+    overflow: auto;
+}
+
+.diagnostics-table .mud-table-head th {
+    white-space: nowrap;
+}
+
+.nowrap {
+    white-space: nowrap;
+}
+
+.sev-error {
+    color: var(--mud-palette-error);
+    font-weight: 600;
+}
+
+.sev-warning {
+    color: var(--mud-palette-warning);
+    font-weight: 600;
+}
+
+.split {
+    display: grid;
+    grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+.list-pane {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+}
+
+.list-box {
+    min-height: 12rem;
+    max-height: 26rem;
+    overflow: auto;
+}
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 2000;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    background: var(--mud-palette-error, #b42318);
+}
+
+#blazor-error-ui .reload {
+    margin-inline-start: 0.5rem;
+    color: inherit;
+}
+
+#blazor-error-ui .dismiss {
+    float: right;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+@media (max-width: 760px) {
+    .split {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

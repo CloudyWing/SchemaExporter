@@ -1,0 +1,209 @@
+@page "/settings"
+@implements IDisposable
+@inject SettingsWorkspace Workspace
+@inject ExportWorkspace ExportWorkspace
+@inject NavigationManager Navigation
+@inject ThemePreference ThemePreference
+
+<MudStack Spacing="4" Class="page-stack">
+    <div class="page-heading">
+        <MudText Typo="Typo.h4">設定</MudText>
+        <MudTooltip Text="設定檔位置：%LocalAppData%\SchemaExporter\appsettings.json">
+            @* tabindex 讓鍵盤可以聚焦這段文字，MudTooltip 在聚焦時同樣會顯示設定檔位置。 *@
+            <MudText Typo="Typo.body2" Class="mud-text-secondary settings-file-hint" tabindex="0">Desktop 與命令列工具共用這份設定。</MudText>
+        </MudTooltip>
+    </div>
+
+    <MudPaper Elevation="0" Outlined="true" Class="content-card">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">外觀</MudText>
+            <MudSelect T="ThemeMode" Label="主題" Value="@ThemePreference.Mode" ValueChanged="ThemePreference.SetModeAsync" HelperText="選擇後立即套用，不需按「儲存」。">
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.System">跟隨系統</MudSelectItem>
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.Light">淺色</MudSelectItem>
+                <MudSelectItem T="ThemeMode" Value="@ThemeMode.Dark">深色</MudSelectItem>
+            </MudSelect>
+            @if (ThemePreference.ErrorMessage is not null) {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">@ThemePreference.ErrorMessage</MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+
+    @if (isLoading) {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    } else if (!Workspace.IsLoaded) {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+            @(Workspace.ErrorMessage ?? "無法載入設定。")
+            <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="LoadAsync">重新讀取</MudButton>
+        </MudAlert>
+    } else {
+        <MudPaper Elevation="0" Outlined="true">
+            <MudTabs Elevation="0" ApplyEffectsToContainer="true" TabPanelsClass="content-card" @bind-ActivePanelIndex="activeTabIndex">
+                <MudTabPanel Text="連線" Icon="@Icons.Material.Filled.Storage">
+                    <div class="split">
+                        <div class="list-pane">
+                            <MudPaper Elevation="0" Outlined="true" Class="list-box">
+                                <MudList T="EditableConnection" SelectedValue="@Workspace.SelectedConnection" SelectedValueChanged="SelectConnection" Dense="true">
+                                    @foreach (EditableConnection connection in Workspace.Connections) {
+                                        <MudListItem @key="connection.Id" T="EditableConnection" Value="@connection" Text="@DisplayName(connection.Name)" SecondaryText="@connection.DatabaseType.ToString()" />
+                                    }
+                                </MudList>
+                            </MudPaper>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="Workspace.AddConnection">新增</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Workspace.RemoveSelectedConnection" Disabled="@(Workspace.SelectedConnection is null)">刪除</MudButton>
+                            </MudStack>
+                        </div>
+                        <div class="detail-pane">
+                            @if (Workspace.SelectedConnection is EditableConnection selected) {
+                                <MudStack Spacing="3" @key="selected.Id">
+                                    <MudTextField T="string" Label="連線名稱" @bind-Value="selected.Name" Immediate="true" />
+                                    <MudSelect T="DatabaseType" Label="資料庫類型" @bind-Value="selected.DatabaseType">
+                                        @foreach (DatabaseType databaseType in Workspace.DatabaseTypes) {
+                                            <MudSelectItem T="DatabaseType" Value="@databaseType">@databaseType</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudTextField T="string"
+                                                  Label="連線字串"
+                                                  @bind-Value="selected.ConnectionString"
+                                                  InputType="@(showConnectionString ? InputType.Text : InputType.Password)"
+                                                  Adornment="Adornment.End"
+                                                  AdornmentIcon="@(showConnectionString ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                                  AdornmentAriaLabel="@(showConnectionString ? "隱藏連線字串" : "顯示連線字串")"
+                                                  OnAdornmentClick="() => showConnectionString = !showConnectionString"
+                                                  HelperText="可輸入 ${env:變數名稱} 改從環境變數讀取，設定檔不保存實際連線字串。" />
+                                    @if (selected.UnreadableProtectedValue is not null && string.IsNullOrWhiteSpace(selected.ConnectionString)) {
+                                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                                            這筆連線字串是在其他電腦或 Windows 使用者加密的，無法解開，請重新輸入。未輸入時會保留原本的加密值。
+                                        </MudAlert>
+                                    }
+                                    <MudCheckBox T="bool"
+                                                 @bind-Value="selected.IsEncrypted"
+                                                 Color="Color.Primary"
+                                                 Disabled="@selected.IsEnvironmentReference">
+                                        <span class="option-label">加密儲存<small>@(selected.IsEnvironmentReference ? "環境變數參照不需加密。" : "以 Windows DPAPI 加密，只有這台電腦的目前使用者能解開；複製設定檔到其他電腦需重新輸入。")</small></span>
+                                    </MudCheckBox>
+                                    <MudSelect T="string" Label="預設匯出設定檔" Value="@(selected.ExportProfileName ?? "")" ValueChanged="value => selected.ExportProfileName = string.IsNullOrWhiteSpace(value) ? null : value">
+                                        <MudSelectItem T="string" Value="@("")">（使用第一個設定檔）</MudSelectItem>
+                                        @foreach (EditableExportProfile profile in Workspace.Profiles) {
+                                            <MudSelectItem T="string" Value="@profile.Name">@profile.Name</MudSelectItem>
+                                        }
+                                        @if (selected.ExportProfileName is not null && !Workspace.Profiles.Any(x => string.Equals(x.Name, selected.ExportProfileName, StringComparison.OrdinalIgnoreCase))) {
+                                            <MudSelectItem T="string" Value="@selected.ExportProfileName">@selected.ExportProfileName（不存在）</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudStack>
+                            } else {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">尚未建立連線，請按「新增」。</MudText>
+                            }
+                        </div>
+                    </div>
+                </MudTabPanel>
+
+                <MudTabPanel Text="匯出設定檔" Icon="@Icons.Material.Filled.FilterList">
+                    <div class="split">
+                        <div class="list-pane">
+                            <MudPaper Elevation="0" Outlined="true" Class="list-box">
+                                <MudList T="EditableExportProfile" @bind-SelectedValue="Workspace.SelectedProfile" Dense="true">
+                                    @foreach (EditableExportProfile profile in Workspace.Profiles) {
+                                        <MudListItem @key="profile.Id" T="EditableExportProfile" Value="@profile" Text="@DisplayName(profile.Name)" SecondaryText="@(profile.IncludeViews ? "含 View" : "不含 View")" />
+                                    }
+                                </MudList>
+                            </MudPaper>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="Workspace.AddProfile">新增</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Workspace.RemoveSelectedProfile" Disabled="@(Workspace.SelectedProfile is null)">刪除</MudButton>
+                            </MudStack>
+                        </div>
+                        <div class="detail-pane">
+                            @if (Workspace.SelectedProfile is EditableExportProfile selected) {
+                                <MudStack Spacing="3" @key="selected.Id">
+                                    <MudTextField T="string" Label="設定檔名稱" Value="@selected.Name" ValueChanged="value => Workspace.RenameProfile(selected, value)" Immediate="true" />
+                                    <MudCheckBox T="bool" @bind-Value="selected.IncludeViews" Color="Color.Primary" Label="包含資料庫檢視表（View）" />
+                                    <MudTextField T="string" Label="包含的 Schema" @bind-Value="selected.IncludeSchemasText" Lines="3" HelperText="每行一筆比對樣式；留空表示全部" />
+                                    <MudTextField T="string" Label="排除的 Schema" @bind-Value="selected.ExcludeSchemasText" Lines="3" HelperText="每行一筆比對樣式" />
+                                    <MudTextField T="string" Label="包含的物件" @bind-Value="selected.IncludeObjectsText" Lines="3" HelperText="每行一筆比對樣式；留空表示全部" />
+                                    <MudTextField T="string" Label="排除的物件" @bind-Value="selected.ExcludeObjectsText" Lines="3" HelperText="每行一筆比對樣式" />
+                                </MudStack>
+                            } else {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">尚未建立設定檔，匯出時會使用不篩選的 Default。</MudText>
+                            }
+                        </div>
+                    </div>
+                </MudTabPanel>
+
+                <MudTabPanel Text="敏感資料遮罩" Icon="@Icons.Material.Filled.Shield">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">輸出任何檔案前，先遮罩符合規則的名稱與內容。</MudText>
+                        <MudCheckBox T="bool" @bind-Value="Workspace.RedactionEnabled" Color="Color.Primary" Label="匯出前遮罩敏感資訊" />
+                        <MudTextField T="string" Label="替代文字" @bind-Value="Workspace.RedactionReplacementText" />
+                        <MudTextField T="string" Label="敏感名稱規則" @bind-Value="Workspace.SensitiveNamePatternsText" Lines="6" HelperText="每行一筆 Regex，比對欄位與物件名稱" />
+                        <MudTextField T="string" Label="敏感內容規則" @bind-Value="Workspace.SensitiveTextPatternsText" Lines="4" HelperText="每行一筆 Regex，比對描述、預設值與程式定義" />
+                    </MudStack>
+                </MudTabPanel>
+            </MudTabs>
+        </MudPaper>
+
+        @if (Workspace.ErrorMessage is not null) {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@Workspace.ErrorMessage</MudAlert>
+        }
+
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+            <MudButton Variant="Variant.Text" OnClick="CancelAsync" Disabled="@isSaving">取消</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="@isSaving">儲存</MudButton>
+        </MudStack>
+    }
+</MudStack>
+
+@code {
+    private int activeTabIndex;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool showConnectionString;
+
+    protected override async Task OnInitializedAsync() {
+        ThemePreference.Changed += HandleThemeChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose() {
+        ThemePreference.Changed -= HandleThemeChanged;
+    }
+
+    private void HandleThemeChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync() {
+        isLoading = true;
+        await Workspace.LoadAsync();
+        isLoading = false;
+    }
+
+    private void SelectConnection(EditableConnection? connection) {
+        Workspace.SelectedConnection = connection;
+        showConnectionString = false;
+    }
+
+    private async Task SaveAsync() {
+        isSaving = true;
+        try {
+            if (!await Workspace.SaveAsync()) {
+                return;
+            }
+
+            await ExportWorkspace.ReloadSettingsAsync();
+            Navigation.NavigateTo("");
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    private async Task CancelAsync() {
+        await Workspace.LoadAsync();
+        Navigation.NavigateTo("");
+    }
+
+    private static string DisplayName(string name) {
+        return string.IsNullOrWhiteSpace(name) ? "（未命名）" : name;
+    }
+}

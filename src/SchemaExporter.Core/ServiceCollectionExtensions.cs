@@ -4,6 +4,7 @@ using CloudyWing.SchemaExporter.Core.Exporting.Snapshots;
 using CloudyWing.SchemaExporter.Core.SchemaProviders;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace CloudyWing.SchemaExporter.Core;
 
@@ -27,12 +28,20 @@ public static class ServiceCollectionExtensions {
         services.AddSingleton<IDatabaseSchemaProvider, SqlServerDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProvider, OracleDatabaseSchemaProvider>();
         services.AddSingleton<IDatabaseSchemaProviderFactory, DatabaseSchemaProviderFactory>();
-        services.AddSingleton<SchemaExportRequestResolver>();
+        // 連線字串的環境變數參照與解密由 Host 註冊 IConnectionStringResolver；未註冊時照設定檔原值使用。
+        services.AddSingleton(sp => new SchemaExportRequestResolver(sp.GetService<IConnectionStringResolver>()));
         services.AddSingleton<SchemaSnapshotBuilder>();
         services.AddSingleton<SchemaSnapshotDiffService>();
         services.AddSingleton<CommentSqlGenerator>();
         services.AddSingleton<CommentSqlService>();
-        services.AddSingleton<SchemaExportOrchestrator>();
+        // 開啟輸出資料夾屬 Host 行為，由 Host 註冊 IOutputFolderLauncher；未註冊時 Core 只記錄警告。
+        services.AddSingleton(sp => new SchemaExportOrchestrator(
+            sp.GetRequiredService<IDatabaseSchemaProviderFactory>(),
+            sp.GetRequiredService<ILogger<SchemaExportOrchestrator>>(),
+            sp.GetRequiredService<SchemaSnapshotBuilder>(),
+            sp.GetRequiredService<SchemaSnapshotDiffService>(),
+            sp.GetService<IOutputFolderLauncher>()
+        ));
 
         return services;
     }

@@ -1,4 +1,5 @@
 using CloudyWing.SchemaExporter.Core.Exporting;
+using NSubstitute;
 
 namespace CloudyWing.SchemaExporter.Core.Tests.Exporting;
 
@@ -48,6 +49,80 @@ public sealed class SchemaExportRequestResolverTests {
             Assert.That(result.Redaction.SensitiveNamePatterns, Is.EqualTo(new[] { "token" }));
             Assert.That(result.Redaction.SensitiveTextPatterns, Is.EqualTo(new[] { "AKIA[0-9A-Z]+" }));
         }
+    }
+
+    [Test]
+    public void Resolve_WhenTimestampFormatAndOverwriteStrategyAreOverridden_UsesOverrideValues() {
+        SchemaExportRequestResolver sut = new();
+        ExportOptionOverrides overrides = new() {
+            TimestampFormat = "  yyyy-MM-dd  ",
+            OverwriteStrategy = OverwriteStrategy.Fail
+        };
+
+        SchemaExportRequest result = sut.Resolve(CreateOptions(), "Analytics", "Compact", overrides);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyy-MM-dd"));
+            Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.Fail));
+        }
+    }
+
+    [Test]
+    public void Resolve_WhenTimestampFormatOverrideIsBlank_KeepsConfiguredValue() {
+        SchemaExportRequestResolver sut = new();
+
+        SchemaExportRequest result = sut.Resolve(CreateOptions(), "Analytics", "Compact", new ExportOptionOverrides { TimestampFormat = "  " });
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.ResultOptions.TimestampFormat, Is.EqualTo("yyyyMMdd"));
+            Assert.That(result.ResultOptions.OverwriteStrategy, Is.EqualTo(OverwriteStrategy.AppendSuffix));
+        }
+    }
+
+    [Test]
+    public void Resolve_WhenConnectionStringResolverIsProvided_UsesResolvedValueWithoutChangingOptions() {
+        SchemaOptions options = CreateOptions();
+        string storedValue = options.Connections.Single(x => x.Name == "Analytics").ConnectionString;
+        IConnectionStringResolver connectionStringResolver = Substitute.For<IConnectionStringResolver>();
+        connectionStringResolver.Resolve(Arg.Any<SchemaConnection>()).Returns("Server=resolved;");
+        SchemaExportRequestResolver sut = new(connectionStringResolver);
+
+        SchemaExportRequest result = sut.Resolve(options, "Analytics", null);
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result.Connection.ConnectionString, Is.EqualTo("Server=resolved;"));
+            Assert.That(result.Connection.Name, Is.EqualTo("Analytics"));
+            Assert.That(options.Connections.Single(x => x.Name == "Analytics").ConnectionString, Is.EqualTo(storedValue));
+        }
+    }
+
+    [TestCase("analytics", "Analytics")]
+    [TestCase("Missing", null)]
+    [TestCase("  ", null)]
+    public void FindConnection_WhenNameIsGiven_MatchesIgnoringCase(string name, string? expectedName) {
+        SchemaConnection? result = SchemaExportRequestResolver.FindConnection(CreateOptions(), name);
+
+        Assert.That(result?.Name, Is.EqualTo(expectedName));
+    }
+
+    [Test]
+    public void GetAvailableProfiles_WhenNoProfileIsConfigured_ReturnsDefaultProfile() {
+        SchemaOptions options = new() { ExportPath = @"C:\Exports" };
+
+        IReadOnlyList<ExportProfile> result = SchemaExportRequestResolver.GetAvailableProfiles(options);
+
+        Assert.That(result.Select(x => x.Name), Is.EqualTo(new[] { "Default" }));
+    }
+
+    [TestCase("Explicit", "FromConnection", "Explicit")]
+    [TestCase(" ", "FromConnection", "FromConnection")]
+    [TestCase(null, null, null)]
+    public void SelectProfileName_WhenCalled_PrefersExplicitName(string? requested, string? connectionProfile, string? expected) {
+        SchemaConnection connection = new() { Name = "A", ConnectionString = "x", ExportProfileName = connectionProfile };
+
+        string? result = SchemaExportRequestResolver.SelectProfileName(requested, connection);
+
+        Assert.That(result, Is.EqualTo(expected));
     }
 
     [Test]

@@ -45,6 +45,16 @@ public sealed class ExportOptionOverrides {
     public bool? UseTimestamp { get; init; }
 
     /// <summary>
+    /// 取得或設定時間戳記格式覆寫值；<see langword="null"/> 或空白表示沿用設定檔。
+    /// </summary>
+    public string? TimestampFormat { get; init; }
+
+    /// <summary>
+    /// 取得或設定輸出檔案已存在時的處理策略覆寫值；<see langword="null"/> 表示沿用設定檔。
+    /// </summary>
+    public OverwriteStrategy? OverwriteStrategy { get; init; }
+
+    /// <summary>
     /// 取得或設定差異比對基準 snapshot 路徑的覆寫值。
     /// </summary>
     public string? DiffSourceSnapshotPath { get; init; }

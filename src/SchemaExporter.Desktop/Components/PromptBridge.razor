@@ -1,0 +1,71 @@
+@using CloudyWing.SchemaExporter.Desktop.Services
+@implements IPromptPresenter
+@implements IDisposable
+@inject PromptService PromptService
+@inject ISnackbar Snackbar
+@inject MudBlazor.IDialogService DialogService
+
+@code {
+    private static readonly DialogOptions Options = new() {
+        CloseButton = false,
+        CloseOnEscapeKey = true,
+        BackdropClick = false,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    private IDisposable? registration;
+
+    protected override void OnInitialized() {
+        // 每個 BlazorWebView 各有一份元件，登錄後成為作用中的 presenter；元件釋放時登出。
+        registration = PromptService.Attach(this);
+    }
+
+    public void Dispose() {
+        registration?.Dispose();
+        registration = null;
+    }
+
+    /// <inheritdoc/>
+    public void ShowSnackbar(StatusKind kind, string message) {
+        Severity severity = kind switch {
+            StatusKind.Success => Severity.Success,
+            StatusKind.Warning => Severity.Warning,
+            StatusKind.Error => Severity.Error,
+            _ => Severity.Info
+        };
+        _ = InvokeAsync(() => {
+            Snackbar.Add(message, severity);
+        });
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> ShowMessageAsync(string title, string message) {
+        return ShowDialogAsync(title, message, "確定", null);
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> ConfirmAsync(string title, string message, string confirmText, string cancelText) {
+        return ShowDialogAsync(title, message, confirmText, cancelText);
+    }
+
+    private async Task<bool> ShowDialogAsync(string title, string message, string primaryText, string? secondaryText) {
+        DialogParameters<PromptDialog> parameters = new() {
+            { x => x.Title, title },
+            { x => x.Message, message },
+            { x => x.PrimaryText, primaryText },
+            { x => x.SecondaryText, secondaryText }
+        };
+        IDialogReference? reference = null;
+        await InvokeAsync(async () => {
+            reference = await DialogService.ShowAsync<PromptDialog>(title, parameters, Options);
+        });
+        if (reference is null) {
+            return false;
+        }
+
+        DialogResult? result = await reference.Result;
+
+        return result is { Canceled: false };
+    }
+}

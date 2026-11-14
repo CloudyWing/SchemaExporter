@@ -4,7 +4,7 @@
 
 診斷資訊會出現在以下位置：
 
-- WPF 版：匯出完成後的診斷清單。
+- Desktop 版：匯出頁在匯出完成後顯示的診斷資訊表格。
 - CLI 版：匯出完成後的 console 輸出。
 - Manifest 檔案：`diagnostics` 陣列。
 - Snapshot 檔案：`diagnostics` 陣列。
@@ -25,7 +25,7 @@
 
 | 值 | 顯示文字 | 說明 |
 | --- | --- | --- |
-| `General` | 一般 | 不屬於其他類別的一般性診斷。 |
+| `General` | 一般 | 不屬於其他類別的一般性診斷，例如匯出完成但無法自動開啟輸出資料夾。 |
 | `Filtering` | 篩選 | 與篩選條件相關，如某個物件被排除、篩選結果為空等。 |
 | `Naming` | 命名 | 與物件或欄位命名相關，如命名衝突或無效字元。 |
 | `ViewSupport` | 檢視表支援 | 關於特定資料庫對檢視表的支援狀況。 |
@@ -52,12 +52,25 @@
 
 ## 診斷欄位對照
 
-WPF 版診斷清單與 CLI / 檔案輸出的對照：
+Desktop 匯出頁診斷資訊表格與 CLI / 檔案輸出的對照：
 
-| WPF 欄位 | JSON 欄位 | CLI 顯示 |
+| Desktop 欄位 | JSON 欄位 | CLI 顯示 |
 | --- | --- | --- |
 | 嚴重性 | `severity` | `[嚴重性/類別]` 前綴 |
 | 類別 | `category` | `[嚴重性/類別]` 前綴 |
 | 支援層級 | `supportLevel` | 包含在訊息中 |
-| 受影響物件 | `affectedObject` | 包含在訊息中 |
+| 影響物件 | `affectedObject` | 包含在訊息中 |
 | 訊息 | `message` | 訊息本文 |
+
+---
+
+## 開啟輸出資料夾的警告
+
+要求匯出完成後開啟輸出資料夾（Desktop 勾選對應選項，或 CLI 指定 `--open-output-folder`）時，若無法開啟，匯出仍視為成功，只會加入一筆 `Warning` / `General` 診斷：
+
+| 情況 | 訊息 |
+| --- | --- |
+| Host 未註冊 `IOutputFolderLauncher` | `匯出完成，但目前執行環境未提供開啟資料夾功能。` |
+| 作業系統無法開啟資料夾 | `匯出完成，但無法自動開啟輸出資料夾：<原因>` |
+
+Desktop 與 CLI 都透過 `AddSchemaExporterInfrastructure()` 註冊 `ShellOutputFolderLauncher`，第一種訊息只會出現在未註冊 launcher 的 Host。開啟資料夾發生在 Manifest 與 Snapshot 寫出之後，因此這類診斷只會出現在 Desktop 診斷資訊表格與 CLI console 輸出，不會寫入 Manifest 或 Snapshot 的 `diagnostics` 陣列。

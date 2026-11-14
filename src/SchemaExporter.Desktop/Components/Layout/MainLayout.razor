@@ -1,0 +1,55 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject ExportWorkspace ExportWorkspace
+@inject UpdateWorkspace UpdateWorkspace
+
+<MudLayout Class="app-layout">
+    <MudAppBar Elevation="0" Color="Color.Default">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       aria-label="開啟或關閉導覽"
+                       OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="app-title">Schema Exporter</MudText>
+        <MudSpacer />
+        @if (!string.IsNullOrWhiteSpace(UpdateWorkspace.StatusMessage)) {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary update-status">@UpdateWorkspace.StatusMessage</MudText>
+        }
+    </MudAppBar>
+    <MudDrawer @bind-Open="drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
+        <NavMenu IsExporting="@ExportWorkspace.IsExporting" />
+    </MudDrawer>
+    <MudMainContent Class="main-content">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="page-container">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool drawerOpen = true;
+
+    protected override void OnInitialized() {
+        ExportWorkspace.Changed += HandleChanged;
+        UpdateWorkspace.Changed += HandleChanged;
+    }
+
+    protected override void OnAfterRender(bool firstRender) {
+        if (firstRender) {
+            // 更新檢查在背景進行，不阻擋第一次畫面顯示。
+            _ = UpdateWorkspace.CheckForUpdatesAsync();
+        }
+    }
+
+    public void Dispose() {
+        ExportWorkspace.Changed -= HandleChanged;
+        UpdateWorkspace.Changed -= HandleChanged;
+    }
+
+    private void ToggleDrawer() {
+        drawerOpen = !drawerOpen;
+    }
+
+    private void HandleChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}

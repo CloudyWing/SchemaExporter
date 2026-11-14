@@ -1,0 +1,264 @@
+@page "/"
+@implements IDisposable
+@inject ExportWorkspace Workspace
+
+<MudStack Spacing="4" Class="page-stack">
+    <div class="page-heading">
+        <MudText Typo="Typo.h4">匯出 Schema</MudText>
+    </div>
+
+    @if (Workspace.LoadError is not null) {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+            @Workspace.LoadError
+            <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="Workspace.ReloadSettingsAsync">重新讀取</MudButton>
+            <MudButton Variant="Variant.Text" Href="settings">前往設定</MudButton>
+        </MudAlert>
+    } else {
+        <MudPaper Elevation="0" Outlined="true" Class="content-card">
+            <MudSelect T="string"
+                       Label="資料庫連線"
+                       Value="@Workspace.SelectedConnection?.Name"
+                       ValueChanged="Workspace.SelectConnection"
+                       Disabled="@(Workspace.IsExporting || Workspace.Connections.Count == 0)"
+                       HelperText="@(Workspace.Connections.Count == 0 ? "尚未建立連線，請到「設定」新增。" : null)">
+                @foreach (SchemaConnection connection in Workspace.Connections) {
+                    <MudSelectItem T="string" Value="@connection.Name">@connection.Name（@connection.DatabaseType）</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="string"
+                       Label="匯出設定檔"
+                       Value="@Workspace.SelectedProfile?.Name"
+                       ValueChanged="Workspace.SelectProfile"
+                       Disabled="@Workspace.IsExporting">
+                @foreach (ExportProfile profile in Workspace.ExportProfiles) {
+                    <MudSelectItem T="string" Value="@profile.Name">@profile.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <div class="field-with-actions">
+                <MudTextField T="string"
+                              Label="輸出資料夾"
+                              @bind-Value="Workspace.OutputPath"
+                              Immediate="true"
+                              Placeholder="例如 D:\SchemaExports"
+                              Disabled="@Workspace.IsExporting" />
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Workspace.BrowseOutputPath" Disabled="@Workspace.IsExporting">瀏覽</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="Workspace.OpenOutputFolder" Disabled="@(Workspace.IsExporting || string.IsNullOrWhiteSpace(Workspace.OutputPath))">開啟</MudButton>
+            </div>
+
+            <MudExpansionPanels Elevation="0" Outlined="true">
+                <MudExpansionPanel>
+                    <TitleContent>
+                        <div class="panel-title">
+                            <MudText Typo="Typo.subtitle1">進階選項</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@AdvancedSummary</MudText>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.subtitle2">額外輸出</MudText>
+                            <div class="option-grid">
+                                <MudCheckBox T="bool" @bind-Value="Workspace.GenerateSchemaSummary" Color="Color.Primary" Disabled="@Workspace.IsExporting">
+                                    <span class="option-label">Schema Summary<small>.schema-summary.md，供 AI Agent 快速檢索</small></span>
+                                </MudCheckBox>
+                                <MudCheckBox T="bool" @bind-Value="Workspace.GenerateMarkdownSidecar" Color="Color.Primary" Disabled="@Workspace.IsExporting">
+                                    <span class="option-label">Markdown Sidecar<small>.schema.md，完整可讀的 Schema 文件</small></span>
+                                </MudCheckBox>
+                                <MudCheckBox T="bool" @bind-Value="Workspace.GenerateJsonSidecar" Color="Color.Primary" Disabled="@Workspace.IsExporting">
+                                    <span class="option-label">JSON Sidecar<small>.schema.json，供程式處理</small></span>
+                                </MudCheckBox>
+                                <MudCheckBox T="bool" @bind-Value="Workspace.GenerateSchemaSnapshot" Color="Color.Primary" Disabled="@Workspace.IsExporting">
+                                    <span class="option-label">Schema Snapshot<small>.snapshot.json，作為下次比對的基準</small></span>
+                                </MudCheckBox>
+                                <MudCheckBox T="bool" @bind-Value="Workspace.GenerateManifest" Color="Color.Primary" Disabled="@Workspace.IsExporting">
+                                    <span class="option-label">Manifest<small>.manifest.json，記錄設定、數量與診斷</small></span>
+                                </MudCheckBox>
+                            </div>
+
+                            <MudText Typo="Typo.subtitle2">差異比對</MudText>
+                            <div class="field-with-actions">
+                                <MudTextField T="string"
+                                              Label="比對基準快照"
+                                              @bind-Value="Workspace.DiffSourceSnapshotPath"
+                                              Immediate="true"
+                                              HelperText="留空表示不比對；指定時輸出 .diff.json"
+                                              Clearable="true"
+                                              Disabled="@Workspace.IsExporting" />
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FileOpen" OnClick="Workspace.BrowseDiffSourceSnapshot" Disabled="@Workspace.IsExporting">瀏覽</MudButton>
+                            </div>
+
+                            <MudText Typo="Typo.subtitle2">檔名與完成後動作</MudText>
+                            <div class="option-grid">
+                                <MudCheckBox T="bool" @bind-Value="Workspace.UseTimestamp" Color="Color.Primary" Label="檔名附加時間戳記" Disabled="@Workspace.IsExporting" />
+                                <MudTextField T="string" Label="時間戳記格式" @bind-Value="Workspace.TimestampFormat" Disabled="@(Workspace.IsExporting || !Workspace.UseTimestamp)" />
+                                <MudSelect T="OverwriteStrategy" Label="檔案已存在時" @bind-Value="Workspace.OverwriteStrategy" Disabled="@Workspace.IsExporting">
+                                    <MudSelectItem T="OverwriteStrategy" Value="@OverwriteStrategy.Overwrite">覆寫</MudSelectItem>
+                                    <MudSelectItem T="OverwriteStrategy" Value="@OverwriteStrategy.AppendSuffix">附加序號</MudSelectItem>
+                                    <MudSelectItem T="OverwriteStrategy" Value="@OverwriteStrategy.Fail">停止匯出</MudSelectItem>
+                                </MudSelect>
+                                <MudCheckBox T="bool" @bind-Value="Workspace.OpenOutputFolderAfterExport" Color="Color.Primary" Label="完成後開啟輸出資料夾" Disabled="@Workspace.IsExporting" />
+                            </div>
+
+                            <div>
+                                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Save" OnClick="Workspace.SaveDefaultsAsync" Disabled="@Workspace.IsExporting">將目前選項存為預設值</MudButton>
+                            </div>
+                        </MudStack>
+                    </ChildContent>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            <div class="primary-actions">
+                @if (Workspace.IsExporting) {
+                    <MudButton Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Stop" OnClick="Workspace.CancelExport" Disabled="@Workspace.IsCancellationRequested">取消匯出</MudButton>
+                } else {
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="Workspace.ExportAsync" Disabled="@(!Workspace.CanExport)">開始匯出</MudButton>
+                }
+            </div>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="content-card">
+            <MudText Typo="Typo.h6">狀態</MudText>
+            <MudAlert Severity="@ToSeverity(Workspace.StatusKind)" Variant="Variant.Text" Dense="true">@Workspace.StatusMessage</MudAlert>
+            @if (Workspace.IsExporting || Workspace.LastResult is not null) {
+                <MudProgressLinear Color="Color.Primary" Value="@Workspace.ProgressPercent" Rounded="true" Size="Size.Medium" />
+            }
+        </MudPaper>
+
+        @if (Workspace.LastResult is ExportResult result) {
+            <MudPaper Elevation="0" Outlined="true" Class="content-card">
+                <div class="card-heading">
+                    <MudText Typo="Typo.h6">匯出結果</MudText>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Workspace.OpenLastResultFolder">開啟輸出資料夾</MudButton>
+                </div>
+                <MudSimpleTable Dense="true" Outlined="true" Elevation="0">
+                    <tbody>
+                        @foreach ((string Label, string Path) artifact in GetArtifacts(result)) {
+                            <tr>
+                                <td class="artifact-label">@artifact.Label</td>
+                                <td class="artifact-name" title="@artifact.Path">@System.IO.Path.GetFileName(artifact.Path)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary path" title="@result.OutputDirectoryPath">@result.OutputDirectoryPath</MudText>
+            </MudPaper>
+
+            <MudExpansionPanels Elevation="0" Outlined="true">
+                <MudExpansionPanel Expanded="@HasProblems(result)">
+                    <TitleContent>
+                        <div class="panel-title">
+                            <MudText Typo="Typo.h6">診斷資訊</MudText>
+                            <div class="diagnostic-counts">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">@Count(result, DiagnosticSeverity.Error) 錯誤</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@Count(result, DiagnosticSeverity.Warning) 警告</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Count(result, DiagnosticSeverity.Info) 資訊</MudChip>
+                            </div>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        @if (result.Diagnostics.Count == 0) {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">沒有診斷資訊。</MudText>
+                        } else {
+                            <MudTable T="ExportDiagnostic" Items="@result.Diagnostics.OrderByDescending(x => x.Severity)" Dense="true" Hover="true" Elevation="0" Class="diagnostics-table">
+                                <HeaderContent>
+                                    <MudTh>嚴重性</MudTh>
+                                    <MudTh>類別</MudTh>
+                                    <MudTh>支援層級</MudTh>
+                                    <MudTh>影響物件</MudTh>
+                                    <MudTh>訊息</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd Class="@($"nowrap sev-{context.Severity.ToString().ToLowerInvariant()}")">@context.SeverityText</MudTd>
+                                    <MudTd Class="nowrap">@context.CategoryText</MudTd>
+                                    <MudTd Class="nowrap">@context.SupportLevelText</MudTd>
+                                    <MudTd>@context.AffectedObjectDisplay</MudTd>
+                                    <MudTd>@context.Message</MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                    </ChildContent>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    }
+</MudStack>
+
+@code {
+    private string AdvancedSummary {
+        get {
+            List<string> enabled = [];
+            if (Workspace.GenerateSchemaSummary) {
+                enabled.Add("Summary");
+            }
+
+            if (Workspace.GenerateMarkdownSidecar) {
+                enabled.Add("Markdown");
+            }
+
+            if (Workspace.GenerateJsonSidecar) {
+                enabled.Add("JSON");
+            }
+
+            if (Workspace.GenerateSchemaSnapshot) {
+                enabled.Add("Snapshot");
+            }
+
+            if (Workspace.GenerateManifest) {
+                enabled.Add("Manifest");
+            }
+
+            if (!string.IsNullOrWhiteSpace(Workspace.DiffSourceSnapshotPath)) {
+                enabled.Add("Diff");
+            }
+
+            return enabled.Count == 0 ? "只輸出 Excel" : $"Excel + {string.Join("、", enabled)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() {
+        Workspace.Changed += HandleChanged;
+        await Workspace.InitializeAsync();
+    }
+
+    public void Dispose() {
+        Workspace.Changed -= HandleChanged;
+    }
+
+    private void HandleChanged() {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static Severity ToSeverity(StatusKind kind) {
+        return kind switch {
+            StatusKind.Success => Severity.Success,
+            StatusKind.Warning => Severity.Warning,
+            StatusKind.Error => Severity.Error,
+            _ => Severity.Info
+        };
+    }
+
+    private static IEnumerable<(string Label, string Path)> GetArtifacts(ExportResult result) {
+        (string Label, string? Path)[] candidates = [
+            ("Excel", result.OutputFilePath),
+            ("Schema Summary", result.SchemaSummaryFilePath),
+            ("Markdown", result.MarkdownSidecarFilePath),
+            ("JSON", result.JsonSidecarFilePath),
+            ("Snapshot", result.SnapshotFilePath),
+            ("Diff", result.DiffFilePath),
+            ("Manifest", result.ManifestFilePath)
+        ];
+
+        return candidates
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+            .Select(x => (x.Label, x.Path!));
+    }
+
+    private static int Count(ExportResult result, DiagnosticSeverity severity) {
+        return result.Diagnostics.Count(x => x.Severity == severity);
+    }
+
+    private static bool HasProblems(ExportResult result) {
+        return result.Diagnostics.Any(x => x.Severity is DiagnosticSeverity.Warning or DiagnosticSeverity.Error);
+    }
+}
